@@ -23,9 +23,20 @@ impl ThreadContext {
     }
 }
 
+fn main() {
+    let filename = String::from("A-Christmas-Carol.txt");
+    let ctx = ThreadContext { thread_id: 0, pll_degree: 6 };
+
+    let op = TextFileOp {ctx: ctx, filename: filename} . 
+            map(|line| line);    
+}
+
 trait DataOp<T> {
-    fn map<U, F>(&self, mapfn: F) -> U
-        where F: Fn(T) -> U;
+    fn map<U, F>(&self, mapfn: F) -> MapOp<T, U, F> where F: Fn(T) -> U {
+        MapOp {mapfn: mapfn, phantom_t: None, phantom_u: None}
+    }
+
+    fn next() -> Option<Box<T>>;
 }
 
 struct TextFileOp {
@@ -34,24 +45,27 @@ struct TextFileOp {
 }
 
 impl DataOp<String> for TextFileOp {
-    fn map<U, F>(&self, mapfn: F) -> U
-        where F: Fn(String) -> U {
-        mapfn(String::from("Hello"))
+    fn next() -> Option<Box<String>> {
+        Some(Box::new(String::from("Hello")))
     }
 }
 
-fn main() {
-    let filename = String::from("A-Christmas-Carol.txt");
-    let ctx = ThreadContext { thread_id: 0, pll_degree: 6 };
+use std::marker::PhantomData;
 
-    //     auto            tf = (new TextFileOp(ctx, filename)) -> map(strlen);
-
-    let strlen = Box::new ( |line: String| line );
-
-    let op = TextFileOp {ctx: ctx, filename: filename} . 
-        map(|line| line);
-    
+struct MapOp<T, U, F> where F: Fn(T) -> U {
+    mapfn: F,
+    phantom_t: Option<PhantomData<T>>,
+    phantom_u: Option<PhantomData<U>>,
 }
+
+/*
+impl<T,U,F> DataOp<T> for MapOp<T,U,F> {
+
+    fn next() -> Option<Box<U>> {
+        None
+    }
+}
+*/
 
 fn compute_splits(filename: &str, nsplits: u64) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
     let f = fs::File::open(&filename)?;
