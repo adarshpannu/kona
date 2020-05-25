@@ -1,4 +1,5 @@
 // main.rs
+
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_mut)]
@@ -7,108 +8,58 @@
 #[derive(Debug)]
 struct TextFileSplit(u64, u64);
 
-use std::io::prelude::*;
 use std::error::Error;
 use std::fs;
-use std::io::SeekFrom;
+use std::io::{self, prelude::*, BufReader};
 
-/*
-fn get_splits(filename: &str, nsplits: i32) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
-    let metadata = fs::metadata(filename)?;
-    let mut f = fs::File::open(&filename)?;
-    let split_size = metadata.len() / (nsplits as u64);
-    let mut begin_offset = 0;
-    let mut cur_offset = 0;
-    let mut splits: Vec<TextFileSplit> = Vec::new();
-
-    for i in 0..nsplits {
-        begin_offset = cur_offset;
-        cur_offset += split_size;
-        if cur_offset > metadata.len() {
-            cur_offset =  metadata.len();
-        }
-        f.seek(SeekFrom::Start(cur_offset))?;
-        let nl_offset = find_end_of_split(&f);
-    }
-    Ok(splits)
+struct ThreadContext {
+    thread_id:  i32,
+    pll_degree: i32
 }
-*/
 
-fn find_end_of_split(f: &mut fs::File) -> Result<u64, Box<dyn Error>> {
-    // Read from current file position, and return offset of newline or EOF.
-    let mut buffer: [u8; 64] = [0; 64];
-    let mut total_len = 0;
-
-    loop {
-        let len = f.read(&mut buffer)?;
-        if len == 0 { 
-            return Ok(total_len as u64);           // EOF
-        } else if let Some(index) = buffer.iter().position(|&ch| ch == '\n' as u8) {
-            return Ok((total_len + index) as u64);   // Found newline
-        } else {
-             total_len += len;              // Not found
-        }
+impl ThreadContext {
+    fn new(thread_id: i32, pll_degree: i32) -> ThreadContext {
+        ThreadContext {thread_id, pll_degree}
     }
 }
 
-fn get_splits(filename: &str, nsplits: i32) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
-    let metadata = fs::metadata(filename)?;
-    let mut f = fs::File::open(&filename)?;
-    let split_size = metadata.len() / (nsplits as u64);
-
-    let mut begin_offset = 0;
-    let mut cur_offset = 0;
-    let mut splits: Vec<TextFileSplit> = Vec::new();
-
-    for i in 0..nsplits {
-        f.seek(SeekFrom::Start(cur_offset))?;
-        let end_offset = find_end_of_split(&mut f)?;
-
-
-    }
-
-    Ok(splits)
+trait DataOp<T> {
+    fn map<U, F>(&self, mapfn: F) -> U
+        where F: Fn(T) -> U;
 }
 
-#[test]
-fn test_find_end_of_split() {
-    let filename = "test.txt";
-    let mut f = fs::File::open(&filename).unwrap();
+struct TextFileOp {
+    ctx:        ThreadContext, 
+    filename:   String
+}
 
-    let position = find_end_of_split(&mut f).unwrap();
-    assert_eq!(position, 5);
-
-    f.seek(SeekFrom::Start(position + 1)).unwrap();
-    let position = find_end_of_split(&mut f).unwrap();
-    assert_eq!(position, 2);
-
-    f.seek(SeekFrom::Start(position + 1)).unwrap();
-    let position = find_end_of_split(&mut f).unwrap();
-    println!("position = {}", position);
-
+impl DataOp<String> for TextFileOp {
+    fn map<U, F>(&self, mapfn: F) -> U
+        where F: Fn(String) -> U {
+        mapfn(String::from("Hello"))
+    }
 }
 
 fn main() {
-    let filename = "A-Christmas-Carol.txt";
+    let filename = String::from("A-Christmas-Carol.txt");
+    let ctx = ThreadContext { thread_id: 0, pll_degree: 6 };
 
-    for s in compute_splits(&filename, 2) {
-        println!("split = {:?}", s);
-    }
+    //     auto            tf = (new TextFileOp(ctx, filename)) -> map(strlen);
 
-    println!("Done");
+    let strlen = Box::new ( |line: String| line );
+
+    let op = TextFileOp {ctx: ctx, filename: filename} . 
+        map(|line| line);
+    
 }
 
-use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
-
 fn compute_splits(filename: &str, nsplits: u64) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
-    let mut f = fs::File::open(&filename)?;
+    let f = fs::File::open(&filename)?;
     let mut reader = BufReader::new(f);
 
     let metadata = fs::metadata(filename)?;
     let sz = metadata.len();
     let blk_size = sz / nsplits;
-    //let blk_size = 50;
 
     let mut begin = 0;
     let mut end = 0;
@@ -120,14 +71,14 @@ fn compute_splits(filename: &str, nsplits: u64) -> Result<Vec<TextFileSplit>, Bo
         if end > sz {
             end = sz;
         } else {
-            reader.seek(SeekFrom::Start(end))?;
+            reader.seek(io::SeekFrom::Start(end))?;
             line.clear();
             reader.read_line(&mut line)?;
             end += line.len() as u64 + 1;
         }
         splits.push(TextFileSplit(begin, end));
-        println!("begin = {}, end = {}", begin, end);
         begin = end;
     }
     Ok(splits)
 }
+
