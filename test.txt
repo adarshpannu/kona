@@ -1,2 +1,7 @@
-hello
-hi
+hello there
+my name is adarsh
+what is your's
+this is just a test file
+to see how splits
+work in my code.
+

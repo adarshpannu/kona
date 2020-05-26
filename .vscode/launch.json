@@ -40,6 +40,18 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "run flare",
+            "program": "${workspaceRoot}/target/debug/flare",
+            "args": [],
+            "cwd": "${workspaceRoot}",
+            "sourceMap": {},
+            "sourceLanguages": [
+                "rust"
+            ]
         }
     ]
 }
