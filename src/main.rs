@@ -36,7 +36,7 @@ trait DataOp<T> {
         MapOp {mapfn: mapfn, phantom_t: None, phantom_u: None}
     }
 
-    fn next() -> Option<Box<T>>;
+    //fn next() -> Option<Box<T>>;
 }
 
 struct TextFileOp {
@@ -45,9 +45,11 @@ struct TextFileOp {
 }
 
 impl DataOp<String> for TextFileOp {
+    /*
     fn next() -> Option<Box<String>> {
         Some(Box::new(String::from("Hello")))
     }
+    */
 }
 
 use std::marker::PhantomData;
@@ -58,14 +60,9 @@ struct MapOp<T, U, F> where F: Fn(T) -> U {
     phantom_u: Option<PhantomData<U>>,
 }
 
-/*
-impl<T,U,F> DataOp<T> for MapOp<T,U,F> {
-
-    fn next() -> Option<Box<U>> {
-        None
-    }
+impl<T, U, F> DataOp<U> for MapOp<T, U, F> where F: Fn(T) -> U {
 }
-*/
+
 
 fn compute_splits(filename: &str, nsplits: u64) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
     let f = fs::File::open(&filename)?;
