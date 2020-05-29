@@ -29,33 +29,38 @@ impl ThreadContext {
 }
 
 trait DataOp<T> {
-    /*
     fn map<U, F>(&self, mapfn: F) -> MapOp<T, U, F>
     where
         F: Fn(T) -> U,
     {
         MapOp {
             mapfn: mapfn,
+            //parent: Box::new(self),
             phantom_t: None,
             phantom_u: None,
         }
     }
-    */
 
-    fn has_next(&self) -> bool;
+    fn open(&mut self) -> Result<(), Box<dyn Error>> {
+        Err(Box::new(FlareError {}))
+    }
+
+    fn has_next(&self) -> bool { 
+        false
+    }
     fn next(&mut self) -> Result<Box<T>, Box<dyn Error>>;
 }
 
-/*
 use std::marker::PhantomData;
 
 struct MapOp<T, U, F>
 where
     F: Fn(T) -> U,
 {
-    mapfn: F,
-    phantom_t: Option<PhantomData<T>>,
-    phantom_u: Option<PhantomData<U>>,
+    mapfn:          F,
+    parent:         Box<dyn DataOp<T>>,  // Cannot do this in Rust! Ok, bail out for now...
+    phantom_t:      Option<PhantomData<T>>,
+    phantom_u:      Option<PhantomData<U>>,
 }
 
 impl<T, U, F> DataOp<U> for MapOp<T, U, F>
@@ -63,10 +68,9 @@ where
     F: Fn(T) -> U,
 {
     fn next(&mut self) -> Result<Box<U>, Box<dyn Error>> {
-        Err("Please use a vector with at least one element")
+        Err(Box::new(FlareError {}))
     }
 }
-*/
 
 #[derive(Debug, Clone)]
 struct TextFileSplit(u64, u64);
@@ -81,8 +85,6 @@ struct TextFileOp {
     cur_offset:     u64,
     end_offset:     u64,
 }
-
-use std::ops::DerefMut;
 
 impl DataOp<String> for TextFileOp {
     fn has_next(&self) -> bool {
@@ -168,9 +170,8 @@ fn main() {
         pll_degree: 1000,
     };
 
-    let op = TextFileOp::new(ctx.clone(), filename);
-        //.map(|line| line)
-        //.map(|line| line);
+    let op = TextFileOp::new(ctx.clone(), filename)
+        .map(|line| line);
 
     let mut op = TextFileOp::new(ctx.clone(), filename);
     let e = op.open();
