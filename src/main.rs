@@ -26,9 +26,14 @@ impl ThreadContext {
             pll_degree,
         }
     }
+    fn read_text_file(&self, filename: &str) -> Dataset<String> {
+        let opnode = Box::new(TextFileOp::new(self.clone(), filename));
+        Dataset {opnode}
+    }
 }
-
-trait DataOp<T> {
+struct Dataset<T> {
+    opnode:     Box<dyn DataOp<T>>,
+    /*
     fn map<U, F>(&self, mapfn: F) -> MapOp<T, U, F>
     where
         F: Fn(T) -> U,
@@ -40,17 +45,28 @@ trait DataOp<T> {
             phantom_u: None,
         }
     }
+    */
+}
 
+impl<T> Dataset<T> {
+}
+
+trait DataOp<T> {
     fn open(&mut self) -> Result<(), Box<dyn Error>> {
         Err(Box::new(FlareError {}))
     }
-
     fn has_next(&self) -> bool { 
         false
     }
     fn next(&mut self) -> Result<Box<T>, Box<dyn Error>>;
+
+    fn close(&mut self) -> Result<(), Box<dyn Error>> {
+        Err(Box::new(FlareError {}))
+    }
+
 }
 
+/*
 use std::marker::PhantomData;
 
 struct MapOp<T, U, F>
@@ -71,6 +87,7 @@ where
         Err(Box::new(FlareError {}))
     }
 }
+*/
 
 #[derive(Debug, Clone)]
 struct TextFileSplit(u64, u64);
@@ -87,6 +104,19 @@ struct TextFileOp {
 }
 
 impl DataOp<String> for TextFileOp {
+    fn open(&mut self) -> Result<(), Box<dyn Error>> {
+        let fp = fs::File::open(&self.filename)?;
+        let mut buf_reader = BufReader::new(fp);
+        let split = &self.splits[self.ctx.thread_id as usize];
+        let (cur_offset, end_offset) = (split.0, split.1);
+        buf_reader.seek(io::SeekFrom::Start(cur_offset))?;
+
+        self.buf_reader = Some(buf_reader);
+        self.cur_offset = cur_offset;
+        self.end_offset = end_offset;
+        Ok(())
+    }
+
     fn has_next(&self) -> bool {
         self.cur_offset < self.end_offset
     }
@@ -112,19 +142,6 @@ impl TextFileOp {
         let filename = String::from(filename);
         let splits = Self::compute_splits(&filename, ctx.pll_degree as u64).unwrap();
         TextFileOp {ctx, filename, splits, buf_reader: None, cur_offset: 0, end_offset: 0}
-    }
-
-    fn open(&mut self) -> Result<(), Box<dyn Error>> {
-        let fp = fs::File::open(&self.filename)?;
-        let mut buf_reader = BufReader::new(fp);
-        let split = &self.splits[self.ctx.thread_id as usize];
-        let (cur_offset, end_offset) = (split.0, split.1);
-        buf_reader.seek(io::SeekFrom::Start(cur_offset))?;
-
-        self.buf_reader = Some(buf_reader);
-        self.cur_offset = cur_offset;
-        self.end_offset = end_offset;
-        Ok(())
     }
 
     fn compute_splits(filename: &String, nsplits: u64) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
@@ -170,10 +187,11 @@ fn main() {
         pll_degree: 1000,
     };
 
-    let op = TextFileOp::new(ctx.clone(), filename)
-        .map(|line| line);
+    let op = TextFileOp::new(ctx.clone(), filename);
+        //.map(|line| line);
 
-    let mut op = TextFileOp::new(ctx.clone(), filename);
+    let mut dset = ctx.read_text_file(filename);
+    let mut op = dset.opnode;
     let e = op.open();
     while op.has_next() {
         let tpl = op.next().unwrap();
