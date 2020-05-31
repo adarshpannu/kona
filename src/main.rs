@@ -31,24 +31,46 @@ impl ThreadContext {
         Dataset {opnode}
     }
 }
+
+
 struct Dataset<T> {
     opnode:     Box<dyn DataOp<T>>,
-    /*
-    fn map<U, F>(&self, mapfn: F) -> MapOp<T, U, F>
+}
+
+impl<T: 'static> Dataset<T> {
+    fn map<F: 'static, U: 'static>(&self, mapfn: F) -> Dataset<U>
     where
         F: Fn(T) -> U,
     {
-        MapOp {
-            mapfn: mapfn,
-            //parent: Box::new(self),
-            phantom_t: None,
-            phantom_u: None,
-        }
+        let mapop = MapOp::<T,F,U> { mapfn, 
+            //parent: &self.opnode, 
+            phantom_t: None, phantom_u: None };
+        Dataset {opnode: Box::new(mapop)}
     }
-    */
 }
 
-impl<T> Dataset<T> {
+type DataOpId = usize;
+
+struct DataOpArena<T> {
+    id:     DataOpId,
+    ops:    Vec<Box<dyn DataOp<T>>>
+}
+
+impl<T> DataOpArena<T>
+{
+    fn new() -> DataOpArena<T> {
+        DataOpArena {id: 0, ops: vec!()}
+    }
+
+    fn add(&mut self, op: Box<dyn DataOp<T>>) -> &DataOpId {
+        self.ops.push(op);
+        self.id += 1;
+        &self.id
+    }
+
+    fn get_op(&self, id: DataOpId) -> &Box<dyn DataOp<T>> {
+        &self.ops[self.id]
+    }
 }
 
 trait DataOp<T> {
@@ -66,20 +88,19 @@ trait DataOp<T> {
 
 }
 
-/*
 use std::marker::PhantomData;
 
-struct MapOp<T, U, F>
+struct MapOp<T, F, U>
 where
     F: Fn(T) -> U,
 {
     mapfn:          F,
-    parent:         Box<dyn DataOp<T>>,  // Cannot do this in Rust! Ok, bail out for now...
+    //parent:         Box<dyn DataOp<T>>,
     phantom_t:      Option<PhantomData<T>>,
     phantom_u:      Option<PhantomData<U>>,
 }
 
-impl<T, U, F> DataOp<U> for MapOp<T, U, F>
+impl<T, F, U> DataOp<U> for MapOp<T, F, U>
 where
     F: Fn(T) -> U,
 {
@@ -87,7 +108,6 @@ where
         Err(Box::new(FlareError {}))
     }
 }
-*/
 
 #[derive(Debug, Clone)]
 struct TextFileSplit(u64, u64);
@@ -141,7 +161,9 @@ impl TextFileOp {
     fn new(ctx: ThreadContext, filename: &str) -> TextFileOp {
         let filename = String::from(filename);
         let splits = Self::compute_splits(&filename, ctx.pll_degree as u64).unwrap();
-        TextFileOp {ctx, filename, splits, buf_reader: None, cur_offset: 0, end_offset: 0}
+        
+        let op = TextFileOp {ctx, filename, splits, buf_reader: None, cur_offset: 0, end_offset: 0};
+        op
     }
 
     fn compute_splits(filename: &String, nsplits: u64) -> Result<Vec<TextFileSplit>, Box<dyn Error>> {
