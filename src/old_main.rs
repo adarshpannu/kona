@@ -198,7 +198,7 @@ impl TextFileOp {
     }
 }
 
-fn main() {
+fn old_main() {
     println!("\n------- flare --------");
 
     let filename = "A-Christmas-Carol.txt";
