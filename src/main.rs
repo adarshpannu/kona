@@ -1,4 +1,4 @@
-pub mod netmgr;
+pub mod net;
 
 use clp::CLParser;
 
@@ -15,6 +15,6 @@ fn main() -> Result<(), String> {
         .define("--workers_per_host int")
         .parse()?;
 
-    clpr.get("rank");
+    dbg!(clpr.get("rank"));
     Ok(())
 }

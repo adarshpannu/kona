@@ -1,10 +1,11 @@
 [package]
-name = "flare"
-version = "0.1.0"
 authors = ["Adarsh Pannu <13154869+adarshpannu@users.noreply.github.com>"]
 edition = "2018"
+name = "flare"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clp = { git = "https://github.com/adarshpannu/clp" }
+clp = {git = "https://github.com/adarshpannu/clp"}
+mio = {version = "0.7" , features = ["os-poll", "os-util", "tcp", "udp", "uds"]}
