@@ -1,4 +1,4 @@
-pub mod netmgr;
+pub mod net;
 
 use clp::CLParser;
 
