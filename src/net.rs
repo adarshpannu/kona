@@ -26,7 +26,6 @@ fn test() -> Result<(), Box<dyn std::error::Error>> {
         Interest::READABLE | Interest::WRITABLE,
     )?;
 
-    
     // Wait for the socket to become ready. This has to happens in a loop to
     // handle spurious wakeups.
     loop {
