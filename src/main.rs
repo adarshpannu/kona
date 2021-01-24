@@ -31,3 +31,17 @@ fn first_word(s: &str) -> &str {
     let ix = s.chars().position(|ch| ch == '.').unwrap_or(s.len());
     &s[..ix]
 }
+
+struct A {
+    b: B
+}
+
+#[derive(Clone, Copy)]
+struct B {
+    c: C
+}
+
+#[derive(Clone, Copy)]
+struct C<'a> {
+    _s: &'a str
+}
