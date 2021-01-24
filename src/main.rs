@@ -21,4 +21,13 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
+#[test]
+fn test() {
+    dbg!(first_word("hello world. how are you?"));
+    dbg!(first_word("hello world how are you?"));
+}
 
+fn first_word(s: &str) -> &str {
+    let ix = s.chars().position(|ch| ch == '.').unwrap_or(s.len());
+    &s[..ix]
+}
