@@ -6,7 +6,6 @@ use mio::net::{TcpListener, TcpStream};
 use mio::{Events, Interest, Poll, Token};
 use std::net::{self, SocketAddr};
 
-
 #[test]
 fn test() -> Result<(), Box<dyn std::error::Error>> {
     // Bind a server socket to connect to.
