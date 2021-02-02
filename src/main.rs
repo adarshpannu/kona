@@ -1,6 +1,7 @@
 // flare
 
 pub mod net;
+pub mod api;
 
 use clp::CLParser;
 
