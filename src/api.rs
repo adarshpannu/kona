@@ -14,7 +14,7 @@ trait RDD {
     fn map<F, U>(self, mapfn: F) -> MapRDD<F, Self>
     where
         Self: Sized,
-        F: FnMut(Self::Item) -> U
+        F: FnMut(Self::Item) -> U,
     {
         MapRDD {
             parent: self,
@@ -34,14 +34,13 @@ impl RDD for TextFileRDD {
     }
 }
 
-struct MapRDD<F, R>
-{
+struct MapRDD<F, R> {
     parent: R,
-    mapfn: F
+    mapfn: F,
 }
 
 #[test]
 fn test() {
     let fc = FlareContext {};
-    let rdd = fc.textFile("./foo.txt".to_owned());
+    let rdd = fc.textFile("./foo.txt".to_owned()).map(|e| e.len());
 }
