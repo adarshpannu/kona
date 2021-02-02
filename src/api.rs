@@ -1,17 +1,25 @@
 #![allow(warnings)]
-struct FlareContext {
-
-}
-
-trait RDD<T> {
-    fn next() -> Option<T>;
-    //fn map<U>(mapfn: Fn(T) -> U);
-    //fn filter(filterfn: Fn(T) -> bool);
-}
-
+struct FlareContext {}
 impl FlareContext {
     fn textFile(&self, name: String) -> TextFileRDD {
         TextFileRDD { name }
+    }
+}
+
+trait RDD {
+    type Item;
+
+    fn next(&mut self) -> Option<Self::Item>;
+
+    fn map<F, U>(self, mapfn: F) -> MapRDD<F, Self>
+    where
+        Self: Sized,
+        F: FnMut(Self::Item) -> U
+    {
+        MapRDD {
+            parent: self,
+            mapfn,
+        }
     }
 }
 
@@ -19,16 +27,21 @@ struct TextFileRDD {
     name: String,
 }
 
-impl RDD<String> for TextFileRDD {
-    fn next() -> Option<String> {
+impl RDD for TextFileRDD {
+    type Item = String;
+    fn next(&mut self) -> Option<String> {
         None
     }
 }
 
-#[test] 
+struct MapRDD<F, R>
+{
+    parent: R,
+    mapfn: F
+}
+
+#[test]
 fn test() {
     let fc = FlareContext {};
     let rdd = fc.textFile("./foo.txt".to_owned());
-
 }
-
