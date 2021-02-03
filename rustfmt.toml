@@ -1,1 +1,3 @@
 fn_args_layout = "Compressed"
+brace_style = "PreferSameLine"
+use_field_init_shorthand = true
