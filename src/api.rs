@@ -37,6 +37,17 @@ trait RDDBase {
             source: self,
         }
     }
+
+    fn filter<F>(self, filterfn: F) -> FilterRDD<F, Self>
+    where
+        Self: Sized,
+        F: FnMut(&Self::Item) -> bool,
+    {
+        FilterRDD {
+            filterfn,
+            source: self,
+        }
+    }
 }
 
 struct MapRDD<F, R> {
@@ -57,6 +68,28 @@ where
         } else {
             None
         }
+    }
+}
+
+struct FilterRDD<F, R> {
+    filterfn: F,
+    source: R,
+}
+
+impl<F, R> RDDBase for FilterRDD<F, R>
+where
+    R: RDDBase,
+    F: FnMut(&R::Item) -> bool,
+{
+    type Item = R::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(e) = self.source.next() {
+            if (self.filterfn)(&e) {
+                return Some(e);
+            }
+        }
+        return None;
     }
 }
 
@@ -90,7 +123,9 @@ fn test() {
 
     let mut rdd = fc
         .textFile("/Users/adarshrp/.bashrc".to_owned())
-        .map(|e| e.len());
+        .map(|e| e.len())
+        .filter(|&e| e > 100)
+        .map(|e| e * 1);
 
     while let Some(line) = rdd.next() {
         println!("-- {:?}", line);
