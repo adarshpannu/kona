@@ -52,7 +52,11 @@ where
     type Item = U;
 
     fn next(&mut self) -> Option<U> {
-        unimplemented!()
+        if let Some(mut e) = self.source.next() {
+            Some((self.mapfn)(e))
+        } else {
+            None
+        }
     }
 }
 
@@ -92,5 +96,3 @@ fn test() {
         println!("-- {:?}", line);
     }
 }
-
-fn foo(a: i32, b: i32) {}
