@@ -2,6 +2,7 @@
 
 pub mod net;
 pub mod api;
+pub mod node;
 
 use clp::CLParser;
 
