@@ -61,6 +61,4 @@ impl<T> Node for FilterNode<T> {}
 #[test]
 fn test() {
     let node = CSVScanNode::new("c:/").select(vec![0, 1]);
-
-    COL(10);
 }

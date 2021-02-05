@@ -3,6 +3,7 @@
 pub mod net;
 pub mod api;
 pub mod node;
+pub mod expr;
 
 use clp::CLParser;
 
