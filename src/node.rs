@@ -1,12 +1,43 @@
-trait Node {}
+#![allow(warnings)]
 
-struct ScanNode {}
+use std::cell::RefCell;
+use std::rc::Rc;
 
-struct MapNode {}
+/***************************************************************************************************/
+trait Node {
+    //fn children(&self) -> Option<Vec<Rc<RefCell<Node>>>>;
+}
 
-struct FilterNode {}
+/***************************************************************************************************/
+struct CSVScanNode<'a> {
+    filename: &'a str,
+}
 
-struct AggNode {}
+impl<'a> Node for CSVScanNode<'a> {}
 
-struct JoinNode {}
+impl<'a> CSVScanNode<'a> {
+    fn new(filename: &str) -> CSVScanNode {
+        CSVScanNode { filename }
+    }
+}
 
+/***************************************************************************************************/
+struct SelectNode<T> {
+    child: T,
+}
+
+impl<T> SelectNode<T>
+where
+    T: Node,
+{
+    fn new(child: T) -> SelectNode<T> {
+        SelectNode {child}
+    }
+}
+
+/***************************************************************************************************/
+#[test]
+fn test() {
+    let scan_node = CSVScanNode::new("c:/");
+    let sel_node = SelectNode::new(scan_node);
+}
