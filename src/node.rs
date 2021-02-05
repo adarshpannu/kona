@@ -6,6 +6,12 @@ use std::rc::Rc;
 /***************************************************************************************************/
 trait Node {
     //fn children(&self) -> Option<Vec<Rc<RefCell<Node>>>>;
+    fn select(self, cols: Vec<usize>) -> SelectNode<Self>
+    where
+        Self: Sized,
+    {
+        SelectNode::new(self, cols)
+    }
 }
 
 /***************************************************************************************************/
@@ -22,22 +28,39 @@ impl<'a> CSVScanNode<'a> {
 }
 
 /***************************************************************************************************/
+
 struct SelectNode<T> {
+    cols: Vec<usize>,
     child: T,
 }
 
-impl<T> SelectNode<T>
-where
-    T: Node,
-{
-    fn new(child: T) -> SelectNode<T> {
-        SelectNode {child}
+impl<T> SelectNode<T> {
+    fn new(child: T, cols: Vec<usize>) -> SelectNode<T> {
+        SelectNode { child, cols }
     }
 }
+
+impl<T> Node for SelectNode<T> {}
+
+/***************************************************************************************************/
+
+struct FilterNode<T> {
+    child: T,
+}
+
+impl<T> FilterNode<T> {
+    fn new(child: T) -> FilterNode<T> {
+        FilterNode { child }
+    }
+}
+
+impl<T> Node for FilterNode<T> {}
+
 
 /***************************************************************************************************/
 #[test]
 fn test() {
-    let scan_node = CSVScanNode::new("c:/");
-    let sel_node = SelectNode::new(scan_node);
+    let node = CSVScanNode::new("c:/").select(vec![0, 1]);
+
+    COL(10);
 }
