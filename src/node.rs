@@ -6,6 +6,7 @@ use std::fmt;
 use std::rc::Rc;
 
 use super::expr::{Expr::*, *};
+use super::row::*;
 
 /***************************************************************************************************/
 trait Node {
@@ -23,6 +24,11 @@ trait Node {
     {
         FilterNode::new(self, expr)
     }
+
+    fn next(&mut self) -> Option<Row> {
+        None
+    }
+
 }
 
 /***************************************************************************************************/
@@ -32,13 +38,25 @@ struct CSVScanNode<'a> {
     iter: io::Lines<io::BufReader<File>>,
 }
 
-impl<'a> Node for CSVScanNode<'a> {}
+impl<'a> Node for CSVScanNode<'a> {
+    fn next(&mut self) -> Option<Row> {
+        if let Some(line) = self.iter.next() {
+            let line = line.ok().unwrap();
+            Some(Row::from_csv_line(&line))
+        } else {
+            None
+        }
+    }
+}
 
 impl<'a> CSVScanNode<'a> {
     fn new(filename: &str) -> CSVScanNode {
         let iter = read_lines(&filename).unwrap();
 
         CSVScanNode { filename, iter }
+    }
+
+    fn infer_datatypes(&self, filename: &String) {
     }
 }
 
@@ -118,19 +136,24 @@ where
 }
 
 /***************************************************************************************************/
-#[test]
-fn test() {
-    let expr = RelExpr(
-        Box::new(CID(1)),
-        RelOp::Gt,
-        Box::new(IntegerLiteral(20)),
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test() {
+        let expr = RelExpr(Box::new(CID(1)), RelOp::Gt, Box::new(IntegerLiteral(20)));
 
-    let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
-    let node = CSVScanNode::new(filename)
-        .select(vec![0, 1])
-        .filter(expr)
-        .select(vec![0, 1]);
+        let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
+        let node = CSVScanNode::new(filename)
+            .select(vec![0, 1])
+            .filter(expr)
+            .select(vec![0, 1]);
 
-    println!("{}", node);
+        println!("{}", node);
+
+        let mut node = CSVScanNode::new(filename);
+        while let Some(row) = node.next() {
+            println!("-- {}", row);
+        }
+    }
 }

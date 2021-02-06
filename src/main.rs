@@ -4,6 +4,7 @@ pub mod net;
 pub mod api;
 pub mod node;
 pub mod expr;
+pub mod row;
 
 use clp::CLParser;
 
@@ -15,7 +16,6 @@ fn main() -> Result<(), String> {
 
     let mut clpr = CLParser::new(&args);
 
-    
     clpr.define("--rank int")
         .define("--host_list string")
         .define("--workers_per_host int")

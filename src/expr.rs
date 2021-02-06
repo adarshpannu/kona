@@ -62,8 +62,7 @@ impl fmt::Display for RelOp {
             RelOp::Gt => ">",
             RelOp::Ge => ">=",
             RelOp::Lt => "<",
-            RelOp::Le => "<="
-
+            RelOp::Le => "<=",
         };
         write!(f, "{}", display_str)
     }
@@ -130,12 +129,16 @@ impl ops::Div for Expr {
     }
 }
 
-#[test]
-fn test() {
-    let e: Expr = RelExpr(
-        Box::new(CID(0) + CN("abc".to_owned())),
-        RelOp::Gt,
-        Box::new(IntegerLiteral(30)),
-    );
-    println!("{}", e)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test() {
+        let e: Expr = RelExpr(
+            Box::new(CID(0) + CN("abc".to_owned())),
+            RelOp::Gt,
+            Box::new(IntegerLiteral(30)),
+        );
+        println!("{}", e)
+    }
 }
