@@ -132,7 +132,7 @@ impl ops::Div for Expr {
 
 #[test]
 fn test() {
-    let e = RelExpr(
+    let e: Expr = RelExpr(
         Box::new(CID(0) + CN("abc".to_owned())),
         RelOp::Gt,
         Box::new(IntegerLiteral(30)),
