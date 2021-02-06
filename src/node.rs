@@ -2,6 +2,9 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::expr;
+
+use super::expr::*;
 
 /***************************************************************************************************/
 trait Node {
@@ -46,11 +49,16 @@ impl<T> Node for SelectNode<T> {}
 
 struct FilterNode<T> {
     child: T,
+    expr: Expr
 }
 
 impl<T> FilterNode<T> {
-    fn new(child: T) -> FilterNode<T> {
-        FilterNode { child }
+    fn new(child: T, expr: Expr) -> FilterNode<T> {
+        if let Expr::RelExpr(..) = expr {
+            FilterNode { child, expr }
+        } else {
+            panic!("Invalid filter expression")
+        }
     }
 }
 

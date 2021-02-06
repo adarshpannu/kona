@@ -2,20 +2,20 @@
 
 use std::ops;
 
-enum ArithOp {
+pub enum ArithOp {
     Add,
     Sub,
     Mul,
     Div,
 }
 
-enum LogOp {
+pub enum LogOp {
     And,
     Or,
     Not,
 }
 
-enum RelOp {
+pub enum RelOp {
     Eq,
     Ne,
     Gt,
@@ -25,7 +25,7 @@ enum RelOp {
 }
 
 /***************************************************************************************************/
-enum Expr {
+pub enum Expr {
     CID(usize),
     CN(String),
     IntegerLiteral(usize),
