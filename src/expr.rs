@@ -1,7 +1,9 @@
 #![allow(warnings)]
 
+use std::fmt;
 use std::ops;
 
+#[derive(Debug)]
 pub enum ArithOp {
     Add,
     Sub,
@@ -9,12 +11,39 @@ pub enum ArithOp {
     Div,
 }
 
+impl fmt::Display for ArithOp {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            ArithOp::Add => '+',
+            ArithOp::Sub => '-',
+            ArithOp::Mul => '*',
+            ArithOp::Div => '/',
+        };
+        write!(f, "{}", display_str)
+    }
+}
+
+#[derive(Debug)]
 pub enum LogOp {
     And,
     Or,
     Not,
 }
 
+impl fmt::Display for LogOp {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            LogOp::And => "&&",
+            LogOp::Or => "||",
+            LogOp::Not => "!",
+        };
+        write!(f, "{}", display_str)
+    }
+}
+
+#[derive(Debug)]
 pub enum RelOp {
     Eq,
     Ne,
@@ -24,7 +53,24 @@ pub enum RelOp {
     Le,
 }
 
+impl fmt::Display for RelOp {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            RelOp::Eq => "==",
+            RelOp::Ne => "!=",
+            RelOp::Gt => ">",
+            RelOp::Ge => ">=",
+            RelOp::Lt => "<",
+            RelOp::Le => "<="
+
+        };
+        write!(f, "{}", display_str)
+    }
+}
+
 /***************************************************************************************************/
+#[derive(Debug)]
 pub enum Expr {
     CID(usize),
     CN(String),
@@ -32,6 +78,21 @@ pub enum Expr {
     StringLiteral(String),
     ArithExpr(Box<Expr>, ArithOp, Box<Expr>),
     RelExpr(Box<Expr>, RelOp, Box<Expr>),
+}
+
+impl fmt::Display for Expr {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CID(cid) => write!(f, "#{}", cid),
+            CN(cn) => write!(f, "${}", cn),
+            IntegerLiteral(il) => write!(f, "{}", il),
+            StringLiteral(sl) => write!(f, "{}", sl),
+            ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
+            RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
+        }
+        //write!(f, "{}", self.0)
+    }
 }
 
 use Expr::*;
@@ -72,8 +133,9 @@ impl ops::Div for Expr {
 #[test]
 fn test() {
     let e = RelExpr(
-        Box::new(CID(10) + CID(20)),
+        Box::new(CID(0) + CN("abc".to_owned())),
         RelOp::Gt,
         Box::new(IntegerLiteral(30)),
     );
+    println!("{}", e)
 }

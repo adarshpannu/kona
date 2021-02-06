@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use crate::expr;
 
-use super::expr::*;
+use super::expr::{*, Expr::*};
 
 /***************************************************************************************************/
 trait Node {
@@ -15,6 +15,14 @@ trait Node {
     {
         SelectNode::new(self, cols)
     }
+
+    fn filter(self, expr: Expr) -> FilterNode<Self>
+    where
+        Self: Sized,
+    {
+        FilterNode::new(self, expr)
+    }
+
 }
 
 /***************************************************************************************************/
@@ -68,5 +76,12 @@ impl<T> Node for FilterNode<T> {}
 /***************************************************************************************************/
 #[test]
 fn test() {
-    let node = CSVScanNode::new("c:/").select(vec![0, 1]);
+    let expr = RelExpr(
+        Box::new(CID(10) + CID(20)),
+        RelOp::Gt,
+        Box::new(IntegerLiteral(30)),
+    );
+
+    println!("{}", expr);
+    let node = CSVScanNode::new("c:/").select(vec![0, 1]).filter(expr);
 }
