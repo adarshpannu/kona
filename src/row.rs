@@ -1,21 +1,26 @@
 #![allow(warnings)]
 
 use std::fmt;
+use std::rc::Rc;
 
-#[derive(Debug)]
-pub enum Column {
-    IntegerLiteral(usize),
-    StringLiteral(String),
+#[derive(Debug, Clone)]
+pub enum Datum {
+    INT(isize),
+    STR(Rc<String>),
+    BOOL(bool),
 }
 
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Column::IntegerLiteral(il) => write!(f, "{}", il),
-            Column::StringLiteral(sl) => write!(f, "{}", sl),
+            Column::INT(il) => write!(f, "{}", il),
+            Column::STR(sl) => write!(f, "{}", sl),
+            Column::BOOL(bl) => write!(f, "{}", bl),
         }
     }
 }
+
+type Column = Datum;
 
 #[derive(Debug)]
 pub struct Row {
@@ -26,9 +31,13 @@ impl Row {
     pub fn from_csv_line(line: &String) -> Row {
         let cols: Vec<Column> = line
             .split(",")
-            .map(|e| Column::StringLiteral(e.to_owned()))
+            .map(|e| Column::STR(Rc::new(e.to_owned())))
             .collect();
         Row { cols }
+    }
+    
+    pub fn get_column(&self, ix: usize) -> &Column {
+        &self.cols[ix]
     }
 }
 

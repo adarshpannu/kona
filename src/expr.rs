@@ -1,7 +1,10 @@
 #![allow(warnings)]
 
+use crate::row::{Row, Datum};
+use core::panic;
 use std::fmt;
 use std::ops;
+use Expr::*;
 
 #[derive(Debug)]
 pub enum ArithOp {
@@ -12,7 +15,6 @@ pub enum ArithOp {
 }
 
 impl fmt::Display for ArithOp {
-    // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let display_str = match self {
             ArithOp::Add => '+',
@@ -72,29 +74,21 @@ impl fmt::Display for RelOp {
 #[derive(Debug)]
 pub enum Expr {
     CID(usize),
-    CN(String),
-    IntegerLiteral(usize),
-    StringLiteral(String),
+    Literal(Datum),
     ArithExpr(Box<Expr>, ArithOp, Box<Expr>),
     RelExpr(Box<Expr>, RelOp, Box<Expr>),
 }
 
 impl fmt::Display for Expr {
-    // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CID(cid) => write!(f, "#{}", cid),
-            CN(cn) => write!(f, "${}", cn),
-            IntegerLiteral(il) => write!(f, "{}", il),
-            StringLiteral(sl) => write!(f, "{}", sl),
+            CID(cid) => write!(f, "${}", cid),
+            Literal(v) => write!(f, "{}", v),
             ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
             RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
         }
-        //write!(f, "{}", self.0)
     }
 }
-
-use Expr::*;
 
 /***************************************************************************************************/
 impl ops::Add for Expr {
@@ -129,15 +123,41 @@ impl ops::Div for Expr {
     }
 }
 
+impl Expr {
+    fn eval<'a>(&'a self, row: &'a Row) -> Datum {
+        match self {
+            CID(cid) => row.get_column(*cid).clone(),
+            Literal(lit) => lit.clone(),
+            ArithExpr(b1, op, b2) => {
+                let b1 = b1.eval(row);
+                let b2 = b2.eval(row);
+                match (b1, b2) {
+                    (Datum::INT(i1), Datum::INT(i2)) => {
+                        let res = match op {
+                            ArithOp::Add => i1 + i2,
+                            ArithOp::Sub => i1 - i2,
+                            ArithOp::Mul => i1 * i2,
+                            ArithOp::Div => i1 / i2,
+                        };
+                        Datum::INT(res)
+                    }
+                    _ => panic!("Internal error: Operands of ArithOp not resolved yet."),
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn test() {
         let e: Expr = RelExpr(
-            Box::new(CID(0) + CN("abc".to_owned())),
+            Box::new(CID(0) + CID(1)),
             RelOp::Gt,
-            Box::new(IntegerLiteral(30)),
+            Box::new(Literal(Datum::INT(30))),
         );
         println!("{}", e)
     }

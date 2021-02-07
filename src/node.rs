@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-use super::expr::{Expr::*, *};
-use super::row::*;
+use crate::expr::{*, Expr::*};
+use crate::row::{*, Datum, Row};
 
 /***************************************************************************************************/
 trait Node {
@@ -141,7 +141,7 @@ mod tests {
     use super::*;
     #[test]
     fn test() {
-        let expr = RelExpr(Box::new(CID(1)), RelOp::Gt, Box::new(IntegerLiteral(20)));
+        let expr = RelExpr(Box::new(CID(1)), RelOp::Gt, Box::new(Literal(Datum::INT(30))));
 
         let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
         let node = CSVScanNode::new(filename)
