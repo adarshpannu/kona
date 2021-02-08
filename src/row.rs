@@ -5,9 +5,16 @@ use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub enum Datum {
-    INT(isize),
     STR(Rc<String>),
+    INT(isize),
     BOOL(bool),
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum DataType {
+    STR,
+    INT,
+    BOOL,
 }
 
 impl fmt::Display for Column {
@@ -52,6 +59,12 @@ impl fmt::Display for Row {
 
 #[cfg(test)]
 mod tests {
+    use super::DataType;
+
     #[test]
-    fn test() {}
+    fn test() {
+        let d1 = DataType::STR;
+        let d2 = DataType::STR;
+        println!("{}", d1 > d2);
+    }
 }
