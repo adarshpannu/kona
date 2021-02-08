@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Datum {
     STR(Rc<String>),
     INT(isize),
@@ -29,7 +29,7 @@ impl fmt::Display for Column {
 
 type Column = Datum;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Row {
     cols: Vec<Column>,
 }
@@ -43,7 +43,7 @@ impl Row {
         Row { cols }
     }
 
-    pub fn select(&self, colids: &Vec<usize>) -> Row {
+    pub fn project(&self, colids: &Vec<usize>) -> Row {
         let cols = colids.iter().map(|&ix| self.cols[ix].clone()).collect::<Vec<Column>>();
         Row::from(cols)
     }

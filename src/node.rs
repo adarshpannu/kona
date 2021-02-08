@@ -1,22 +1,22 @@
 #![allow(dead_code)]
 
-use crate::expr::{*, Expr::*};
+use crate::expr::{Expr::*, *};
 use crate::row::*;
 use fmt::Display;
-use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::rc::Rc;
+use std::{collections::HashMap, fmt};
 
 /***************************************************************************************************/
 trait Node {
     //fn children(&self) -> Option<Vec<Rc<RefCell<Node>>>>;
-    fn select(self, cols: Vec<usize>) -> SelectNode<Self>
+    fn project(self, cols: Vec<usize>) -> ProjectNode<Self>
     where
         Self: Sized,
     {
-        SelectNode::new(self, cols)
+        ProjectNode::new(self, cols)
     }
 
     fn filter(self, expr: Expr) -> FilterNode<Self>
@@ -24,6 +24,13 @@ trait Node {
         Self: Sized,
     {
         FilterNode::new(self, expr)
+    }
+
+    fn agg(self, keycolids: Vec<usize>, aggcolids: Vec<(AggType, usize)>) -> AggNode<Self>
+    where
+        Self: Sized,
+    {
+        AggNode::new(self, keycolids, aggcolids)
     }
 
     fn next(&mut self) -> Option<Row> {
@@ -137,40 +144,42 @@ where
 
 /***************************************************************************************************/
 #[derive(Debug)]
-struct SelectNode<T> {
+struct ProjectNode<T> {
     colids: Vec<usize>,
     child: T,
 }
 
-impl<T> SelectNode<T> {
-    fn new(child: T, cols: Vec<usize>) -> SelectNode<T> {
+impl<T> ProjectNode<T> {
+    fn new(child: T, cols: Vec<usize>) -> ProjectNode<T> {
         println!("New cols {:?}", cols);
 
-        SelectNode { child, colids: cols }
+        ProjectNode {
+            child,
+            colids: cols,
+        }
     }
 }
 
-impl<T> Node for SelectNode<T>
+impl<T> Node for ProjectNode<T>
 where
     T: Node,
 {
     fn next(&mut self) -> Option<Row> {
         if let Some(row) = self.child.next() {
-            return Some(row.select(&self.colids))
+            return Some(row.project(&self.colids));
         } else {
             return None;
         }
     }
 }
 
-
-impl<T> fmt::Display for SelectNode<T>
+impl<T> fmt::Display for ProjectNode<T>
 where
     T: Display,
 {
     // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SelectNode({:?}, {})", &self.colids, &self.child)
+        write!(f, "ProjectNode({:?}, {})", &self.colids, &self.child)
     }
 }
 
@@ -218,6 +227,85 @@ where
 }
 
 /***************************************************************************************************/
+#[derive(Debug, Clone, Copy)]
+enum AggType {
+    COUNT,
+    MIN,
+    MAX,
+    //AVG,
+    //SUM,
+}
+
+#[derive(Debug)]
+struct AggNode<T> {
+    keycolids: Vec<usize>,
+    aggcolids: Vec<(AggType, usize)>,
+    child: T,
+}
+
+impl<T> AggNode<T>
+where
+    T: Node,
+{
+    fn new(child: T, keycols: Vec<usize>, aggcols: Vec<(AggType, usize)>) -> AggNode<T> {
+        AggNode {
+            child,
+            keycolids: keycols,
+            aggcolids: aggcols,
+        }
+    }
+
+    fn run_one_agg(&mut self, acc: &mut Row, currow: &Row) {}
+
+    fn run_agg(&mut self) {
+        let mut htable: HashMap<Row, Row> = HashMap::new();
+
+        while let Some(currow) = self.child.next() {
+            // build key
+            let key = currow.project(&self.keycolids);
+            let acc = htable.entry(key).or_insert_with(|| {
+                let acc_cols: Vec<Datum> = self
+                    .aggcolids
+                    .iter()
+                    .map(|&(aggtype, ix)| {
+                        // Build an empty accumumator Row
+                        match aggtype {
+                            AggType::COUNT => Datum::INT(0),
+                            _ => currow.get_column(ix).clone(),
+                        }
+                    })
+                    .collect();
+                Row::from(acc_cols)
+            });
+            AggNode::run_one_agg(self, acc, &currow)
+        }
+    }
+}
+
+impl<T> Node for AggNode<T>
+where
+    T: Node,
+{
+    fn next(&mut self) -> Option<Row> {
+        if let Some(row) = self.child.next() {
+            return Some(row.project(&self.keycolids));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl<T> fmt::Display for AggNode<T>
+where
+    T: Display,
+{
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AggNode({:?}, {})", &self.keycolids, &self.child)
+    }
+}
+
+/***************************************************************************************************/
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,7 +320,7 @@ mod tests {
         let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
         let mut node = CSVScanNode::new(filename)
             .filter(expr)
-            .select(vec![2, 0]);
+            .project(vec![2, 1, 0]);
 
         println!("{}", node);
 
