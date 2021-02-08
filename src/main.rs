@@ -21,6 +21,5 @@ fn main() -> Result<(), String> {
         .define("--workers_per_host int")
         .parse()?;
 
-    dbg!(clpr.get("rank"));
     Ok(())
 }

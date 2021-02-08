@@ -1,7 +1,7 @@
-#![allow(warnings)]
+#![allow(dead_code)]
 
 use std::rc::Rc;
-use std::{collections::HashSet, fmt};
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub enum Datum {
@@ -52,7 +52,7 @@ impl Row {
 impl fmt::Display for Row {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.cols.iter().for_each(|col| {
-            write!(f, "{}, ", col);
+            let _ = write!(f, "{}, ", col);
         });
         write!(f, "")
     }

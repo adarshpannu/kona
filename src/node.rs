@@ -1,9 +1,8 @@
-#![allow(warnings)]
+#![allow(dead_code)]
 
-use crate::expr::{Expr::*, *};
+use crate::expr::*;
 use crate::row::*;
 use fmt::Display;
-use io::BufReader;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead};
