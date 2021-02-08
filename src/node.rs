@@ -139,17 +139,31 @@ where
 /***************************************************************************************************/
 #[derive(Debug)]
 struct SelectNode<T> {
-    cols: Vec<usize>,
+    colids: Vec<usize>,
     child: T,
 }
 
 impl<T> SelectNode<T> {
     fn new(child: T, cols: Vec<usize>) -> SelectNode<T> {
-        SelectNode { child, cols }
+        println!("New cols {:?}", cols);
+
+        SelectNode { child, colids: cols }
     }
 }
 
-impl<T> Node for SelectNode<T> {}
+impl<T> Node for SelectNode<T>
+where
+    T: Node,
+{
+    fn next(&mut self) -> Option<Row> {
+        if let Some(row) = self.child.next() {
+            return Some(row.select(&self.colids))
+        } else {
+            return None;
+        }
+    }
+}
+
 
 impl<T> fmt::Display for SelectNode<T>
 where
@@ -157,7 +171,7 @@ where
 {
     // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SelectNode({:?}, {})", &self.cols, &self.child)
+        write!(f, "SelectNode({:?}, {})", &self.colids, &self.child)
     }
 }
 
@@ -218,8 +232,8 @@ mod tests {
 
         let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
         let mut node = CSVScanNode::new(filename)
-            //.select(vec![0, 1])
-            .filter(expr);
+            .filter(expr)
+            .select(vec![2, 0]);
 
         println!("{}", node);
 

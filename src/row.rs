@@ -1,7 +1,7 @@
 #![allow(warnings)]
 
-use std::fmt;
 use std::rc::Rc;
+use std::{collections::HashSet, fmt};
 
 #[derive(Debug, Clone)]
 pub enum Datum {
@@ -34,12 +34,18 @@ pub struct Row {
     cols: Vec<Column>,
 }
 
-impl Row {    
+impl Row {
     pub fn get_column(&self, ix: usize) -> &Column {
         &self.cols[ix]
     }
+
     pub fn from(cols: Vec<Datum>) -> Row {
         Row { cols }
+    }
+
+    pub fn select(&self, colids: &Vec<usize>) -> Row {
+        let cols = colids.iter().map(|&ix| self.cols[ix].clone()).collect::<Vec<Column>>();
+        Row::from(cols)
     }
 }
 
