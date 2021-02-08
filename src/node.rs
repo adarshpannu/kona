@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::expr::*;
+use crate::expr::{*, Expr::*};
 use crate::row::*;
 use fmt::Display;
 use std::fmt;
