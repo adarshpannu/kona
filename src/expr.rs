@@ -1,6 +1,6 @@
 #![allow(warnings)]
 
-use crate::row::{Row, Datum};
+use crate::row::{Datum, Row};
 use core::panic;
 use std::fmt;
 use std::ops;
@@ -124,25 +124,35 @@ impl ops::Div for Expr {
 }
 
 impl Expr {
-    fn eval<'a>(&'a self, row: &'a Row) -> Datum {
+    pub fn eval<'a>(&'a self, row: &'a Row) -> Datum {
         match self {
             CID(cid) => row.get_column(*cid).clone(),
             Literal(lit) => lit.clone(),
             ArithExpr(b1, op, b2) => {
                 let b1 = b1.eval(row);
                 let b2 = b2.eval(row);
-                match (b1, b2) {
-                    (Datum::INT(i1), Datum::INT(i2)) => {
-                        let res = match op {
-                            ArithOp::Add => i1 + i2,
-                            ArithOp::Sub => i1 - i2,
-                            ArithOp::Mul => i1 * i2,
-                            ArithOp::Div => i1 / i2,
-                        };
-                        Datum::INT(res)
-                    }
+                let res = match (b1, op, b2) {
+                    (Datum::INT(i1), ArithOp::Add, Datum::INT(i2)) => i1 + i2,
+                    (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
+                    (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
+                    (Datum::INT(i1), ArithOp::Div, Datum::INT(i2)) => i1 / i2,
                     _ => panic!("Internal error: Operands of ArithOp not resolved yet."),
-                }
+                };
+                Datum::INT(res)
+            }
+            RelExpr(b1, op, b2) => {
+                let b1 = b1.eval(row);
+                let b2 = b2.eval(row);
+                let res = match (b1, op, b2) {
+                    (Datum::INT(i1), RelOp::Eq, Datum::INT(i2)) => i1 == i2,
+                    (Datum::INT(i1), RelOp::Ne, Datum::INT(i2)) => i1 != i2,
+                    (Datum::INT(i1), RelOp::Le, Datum::INT(i2)) => i1 <= i2,
+                    (Datum::INT(i1), RelOp::Lt, Datum::INT(i2)) => i1 < i2,
+                    (Datum::INT(i1), RelOp::Ge, Datum::INT(i2)) => i1 >= i2,
+                    (Datum::INT(i1), RelOp::Gt, Datum::INT(i2)) => i1 > i2,
+                    _ => panic!("Internal error: Operands of RelOp not resolved yet."),
+                };
+                Datum::BOOL(res)
             }
             _ => unimplemented!(),
         }

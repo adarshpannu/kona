@@ -8,6 +8,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::rc::Rc;
 
 /***************************************************************************************************/
 trait Node {
@@ -35,6 +36,7 @@ trait Node {
 #[derive(Debug)]
 struct CSVScanNode<'a> {
     filename: &'a str,
+    colnames: Vec<String>,
     coltypes: Vec<DataType>,
     iter: io::Lines<io::BufReader<File>>,
 }
@@ -42,8 +44,20 @@ struct CSVScanNode<'a> {
 impl<'a> Node for CSVScanNode<'a> {
     fn next(&mut self) -> Option<Row> {
         if let Some(line) = self.iter.next() {
-            let line = line.ok().unwrap();
-            Some(Row::from_csv_line(&line))
+            let line = line.unwrap();
+            let cols = line
+                .split(',')
+                .enumerate()
+                .map(|(ix, col)| match self.coltypes[ix] {
+                    DataType::INT => {
+                        let ival = col.parse::<isize>().unwrap();
+                        Datum::INT(ival)
+                    }
+                    DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                    _ => unimplemented!(),
+                })
+                .collect::<Vec<Datum>>();
+            Some(Row::from(cols))
         } else {
             None
         }
@@ -52,10 +66,15 @@ impl<'a> Node for CSVScanNode<'a> {
 
 impl<'a> CSVScanNode<'a> {
     fn new(filename: &str) -> CSVScanNode {
-        let iter = read_lines(&filename).unwrap();
-        let coltypes = Self::infer_datatypes(&filename);
+        let mut iter = read_lines(&filename).unwrap();
+        let (colnames, coltypes) = Self::infer_metadata(&filename);
+
+        // Consume the header row
+        iter.next();
+
         CSVScanNode {
             filename,
+            colnames,
             coltypes,
             iter,
         }
@@ -72,7 +91,7 @@ impl<'a> CSVScanNode<'a> {
         }
     }
 
-    fn infer_datatypes(filename: &str) -> Vec<DataType> {
+    fn infer_metadata(filename: &str) -> (Vec<String>, Vec<DataType>) {
         let mut iter = read_lines(&filename).unwrap();
         let mut colnames: Vec<String> = vec![];
         let mut coltypes: Vec<DataType> = vec![];
@@ -96,8 +115,9 @@ impl<'a> CSVScanNode<'a> {
                 first_row = false;
             }
         }
-        dbg!(&coltypes);
-        coltypes
+        //dbg!(&colnames);
+        //dbg!(&coltypes);
+        (colnames, coltypes)
     }
 }
 
@@ -158,7 +178,21 @@ impl<T> FilterNode<T> {
     }
 }
 
-impl<T> Node for FilterNode<T> {}
+impl<T> Node for FilterNode<T>
+where
+    T: Node,
+{
+    fn next(&mut self) -> Option<Row> {
+        while let Some(e) = self.child.next() {
+            if let Datum::BOOL(b) = self.expr.eval(&e) {
+                if b {
+                    return Some(e);
+                }
+            }
+        }
+        return None;
+    }
+}
 
 impl<T> fmt::Display for FilterNode<T>
 where
@@ -179,18 +213,17 @@ mod tests {
         let expr = RelExpr(
             Box::new(CID(1)),
             RelOp::Gt,
-            Box::new(Literal(Datum::INT(30))),
+            Box::new(Literal(Datum::INT(15))),
         );
 
         let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
-        let node = CSVScanNode::new(filename)
-            .select(vec![0, 1])
-            .filter(expr)
-            .select(vec![0, 1]);
+        let mut node = CSVScanNode::new(filename)
+            //.select(vec![0, 1])
+            .filter(expr);
 
         println!("{}", node);
 
-        let mut node = CSVScanNode::new(filename);
+        //let mut node = CSVScanNode::new(filename);
 
         while let Some(row) = node.next() {
             println!("-- {}", row);

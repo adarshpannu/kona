@@ -34,17 +34,12 @@ pub struct Row {
     cols: Vec<Column>,
 }
 
-impl Row {
-    pub fn from_csv_line(line: &String) -> Row {
-        let cols: Vec<Column> = line
-            .split(",")
-            .map(|e| Column::STR(Rc::new(e.to_owned())))
-            .collect();
-        Row { cols }
-    }
-    
+impl Row {    
     pub fn get_column(&self, ix: usize) -> &Column {
         &self.cols[ix]
+    }
+    pub fn from(cols: Vec<Datum>) -> Row {
+        Row { cols }
     }
 }
 
