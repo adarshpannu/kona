@@ -1,13 +1,14 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports, unused_variables, warnings)]
 
 use crate::expr::{Expr::*, *};
 use crate::row::*;
 use fmt::Display;
-use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::rc::Rc;
 use std::{collections::HashMap, fmt};
+use std::{fs::File, hash::Hash};
+use  std::collections::hash_map::Values;
 
 /***************************************************************************************************/
 trait Node {
@@ -26,7 +27,7 @@ trait Node {
         FilterNode::new(self, expr)
     }
 
-    fn agg(self, keycolids: Vec<usize>, aggcolids: Vec<(AggType, usize)>) -> AggNode<Self>
+    fn agg<'b>(self, keycolids: Vec<usize>, aggcolids: Vec<(AggType, usize)>) -> AggNode<'b, Self>
     where
         Self: Sized,
     {
@@ -237,32 +238,49 @@ enum AggType {
 }
 
 #[derive(Debug)]
-struct AggNode<T> {
+struct AggNode<'a, T> {
     keycolids: Vec<usize>,
     aggcolids: Vec<(AggType, usize)>,
     child: T,
+    run_agg: bool,
+    htable: HashMap<Row, Row>,
+    agg_iter: Option<Values<'a, Row, Row>>
 }
 
-impl<T> AggNode<T>
+impl<'a, T> AggNode<'a, T>
 where
     T: Node,
 {
-    fn new(child: T, keycols: Vec<usize>, aggcols: Vec<(AggType, usize)>) -> AggNode<T> {
+    fn new<'b>(child: T, keycols: Vec<usize>, aggcols: Vec<(AggType, usize)>) -> AggNode<'b, T> {
         AggNode {
             child,
             keycolids: keycols,
             aggcolids: aggcols,
+            run_agg: false,
+            htable: HashMap::new(),
+            agg_iter: None
         }
     }
 
-    fn run_one_agg(&mut self, acc: &mut Row, currow: &Row) {}
+    fn run_one_agg(&mut self, acc: &mut Row, currow: &Row) {
+        for ix in 0..acc.len() {
+            match self.aggcolids[ix].0 {
+                AggType::COUNT => {
+                    let mut col = acc.get_column_mut(ix);
+                    *col = Datum::INT(99);
+                }
+                _ => {}
+            }
+        }
+    }
 
     fn run_agg(&mut self) {
         let mut htable: HashMap<Row, Row> = HashMap::new();
-
-        while let Some(currow) = self.child.next() {
+        while let Some(mut currow) = self.child.next() {
             // build key
             let key = currow.project(&self.keycolids);
+            println!("-- key = {}", key);
+
             let acc = htable.entry(key).or_insert_with(|| {
                 let acc_cols: Vec<Datum> = self
                     .aggcolids
@@ -277,25 +295,35 @@ where
                     .collect();
                 Row::from(acc_cols)
             });
+            println!("-- acc = {}", acc);
             AggNode::run_one_agg(self, acc, &currow)
         }
+        self.htable = htable;
+        self.agg_iter = Some(self.htable.values().into_iter());
     }
 }
 
-impl<T> Node for AggNode<T>
+impl<'a, T> Node for AggNode<'a, T>
 where
     T: Node,
 {
     fn next(&mut self) -> Option<Row> {
+        if !self.run_agg {
+            self.run_agg();
+            self.run_agg = true;
+        }
+        /*
         if let Some(row) = self.child.next() {
             return Some(row.project(&self.keycolids));
         } else {
             return None;
         }
+        */
+        None
     }
 }
 
-impl<T> fmt::Display for AggNode<T>
+impl<'a, T> fmt::Display for AggNode<'a, T>
 where
     T: Display,
 {
@@ -320,7 +348,8 @@ mod tests {
         let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
         let mut node = CSVScanNode::new(filename)
             .filter(expr)
-            .project(vec![2, 1, 0]);
+            .project(vec![2, 1, 0])
+            .agg(vec![0], vec![(AggType::COUNT, 1)]);
 
         println!("{}", node);
 

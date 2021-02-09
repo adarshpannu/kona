@@ -35,6 +35,10 @@ pub struct Row {
 }
 
 impl Row {
+    pub fn get_column_mut(&mut self, ix: usize) -> &mut Column {
+        &mut self.cols[ix]
+    }
+
     pub fn get_column(&self, ix: usize) -> &Column {
         &self.cols[ix]
     }
@@ -46,6 +50,10 @@ impl Row {
     pub fn project(&self, colids: &Vec<usize>) -> Row {
         let cols = colids.iter().map(|&ix| self.cols[ix].clone()).collect::<Vec<Column>>();
         Row::from(cols)
+    }
+
+    pub fn len(&self) -> usize {
+        self.cols.len()
     }
 }
 
