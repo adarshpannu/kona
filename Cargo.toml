@@ -9,3 +9,4 @@ version = "0.1.0"
 [dependencies]
 clp = {git = "https://github.com/adarshpannu/clp"}
 mio = {version = "0.7" , features = ["os-poll", "os-util", "tcp", "udp", "uds"]}
+typed-arena = "2.0.1"

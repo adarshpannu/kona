@@ -1,5 +1,7 @@
 #![allow(warnings)]
 
+// OLD CODE - OBSOLETE
+
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
