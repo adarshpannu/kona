@@ -1,0 +1,11 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=LR;
+    splines=polyline;
+    nodesep=0.5;
+    Node0[label="CSVNode-0|0"];
+    Node1[label="ProjectNode-1|1"];
+    Node0 -> Node1;
+    Node2[label="AggNode-2|2"];
+    Node1 -> Node2;
+}
