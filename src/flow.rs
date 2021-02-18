@@ -1,33 +1,226 @@
-#![allow(warnings)]
+#![allow(dead_code, unused_imports, unused_variables, warnings)]
 
-use crate::consts::*;
-use typed_arena::Arena;
+use crate::expr::{Expr::*, *};
+use crate::row::*;
+use fmt::Display;
+use std::collections::hash_map::{Iter, Values};
+use std::io::{self, BufRead};
+use std::path::Path;
+use std::rc::Rc;
+use std::{collections::HashMap, fmt};
+use std::{fs::File, hash::Hash};
 
-type node_id = usize;
-type col_id = usize;
+/***************************************************************************************************/
+trait Node {
+    //fn children(&self) -> Option<Vec<Rc<RefCell<Node>>>>;
+    fn project(&self, cols: Vec<usize>) -> &dyn Node
+    {
+        &ProjectNode::new(self, cols)
+    }
 
-#[derive(Debug)]
-struct Flow {
-    nodes: Vec<Node>,
-}
+/*
+    fn filter(self, expr: Expr) -> FilterNode<Self>
+    where
+        Self: Sized, {
+        FilterNode::new(self, expr)
+    }
 
-impl Flow {
-    fn get_node(&self, node_id: node_id) -> &Node {
-        &self.nodes[node_id]
+    fn agg(
+        self, keycolids: Vec<usize>, aggcolids: Vec<(AggType, usize)>,
+    ) -> AggNode<Self>
+    where
+        Self: Sized, {
+        AggNode::new(self, keycolids, aggcolids)
+    }
+    */
+
+    fn next(&mut self) -> Option<Row> {
+        None
     }
 }
 
+/***************************************************************************************************/
 #[derive(Debug)]
-struct ProjectNode {
-    cols: Vec<col_id>,
+struct CSVScanNode<'a> {
+    filename: &'a str,
+    colnames: Vec<String>,
+    coltypes: Vec<DataType>,
+    iter: io::Lines<io::BufReader<File>>,
 }
 
-#[derive(Debug)]
-struct UnionNode {}
+impl<'a> Node for CSVScanNode<'a> {
+    fn next(&mut self) -> Option<Row> {
+        if let Some(line) = self.iter.next() {
+            let line = line.unwrap();
+            let cols = line
+                .split(',')
+                .enumerate()
+                .map(|(ix, col)| match self.coltypes[ix] {
+                    DataType::INT => {
+                        let ival = col.parse::<isize>().unwrap();
+                        Datum::INT(ival)
+                    }
+                    DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                    _ => unimplemented!(),
+                })
+                .collect::<Vec<Datum>>();
+            Some(Row::from(cols))
+        } else {
+            None
+        }
+    }
+}
 
+impl<'a> CSVScanNode<'a> {
+    fn new(filename: &str) -> CSVScanNode {
+        let mut iter = read_lines(&filename).unwrap();
+        let (colnames, coltypes) = Self::infer_metadata(&filename);
+
+        // Consume the header row
+        iter.next();
+
+        CSVScanNode {
+            filename,
+            colnames,
+            coltypes,
+            iter,
+        }
+    }
+
+    fn infer_datatype(str: &String) -> DataType {
+        let res = str.parse::<i32>();
+        if res.is_ok() {
+            DataType::INT
+        } else if str.eq("true") || str.eq("false") {
+            DataType::BOOL
+        } else {
+            DataType::STR
+        }
+    }
+
+    fn infer_metadata(filename: &str) -> (Vec<String>, Vec<DataType>) {
+        let mut iter = read_lines(&filename).unwrap();
+        let mut colnames: Vec<String> = vec![];
+        let mut coltypes: Vec<DataType> = vec![];
+        let mut first_row = true;
+
+        while let Some(line) = iter.next() {
+            let cols: Vec<String> =
+                line.unwrap().split(',').map(|e| e.to_owned()).collect();
+            if colnames.len() == 0 {
+                colnames = cols;
+            } else {
+                for (ix, col) in cols.iter().enumerate() {
+                    let datatype = CSVScanNode::infer_datatype(col);
+                    if first_row {
+                        coltypes.push(datatype)
+                    } else if coltypes[ix] != DataType::STR {
+                        coltypes[ix] = datatype;
+                    } else {
+                        coltypes[ix] = DataType::STR;
+                    }
+                }
+                first_row = false;
+            }
+        }
+        //dbg!(&colnames);
+        //dbg!(&coltypes);
+        (colnames, coltypes)
+    }
+}
+
+impl<'a> fmt::Display for CSVScanNode<'a> {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CSVScanNode({})", self.filename)
+    }
+}
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
+}
+
+/***************************************************************************************************/
 #[derive(Debug)]
-struct CSVNode {
-    name: String,
+struct ProjectNode {
+    colids: Vec<usize>,
+}
+
+impl ProjectNode {
+    fn new(child: T, cols: Vec<usize>) -> ProjectNode<T> {
+        println!("New cols {:?}", cols);
+
+        ProjectNode {
+            colids: cols,
+        }
+    }
+}
+
+impl Node for ProjectNode
+{
+    fn next(&mut self) -> Option<Row> {
+        if let Some(row) = self.child.next() {
+            return Some(row.project(&self.colids));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl<T> fmt::Display for ProjectNode<T>
+where
+    T: Display,
+{
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ProjectNode({:?}, {})", &self.colids, &self.child)
+    }
+}
+
+/***************************************************************************************************/
+#[derive(Debug)]
+struct FilterNode<T> {
+    child: T,
+    expr: Expr,
+}
+
+impl<T> FilterNode<T> {
+    fn new(child: T, expr: Expr) -> FilterNode<T> {
+        if let Expr::RelExpr(..) = expr {
+            FilterNode { child, expr }
+        } else {
+            panic!("Invalid filter expression")
+        }
+    }
+}
+
+impl<T> Node for FilterNode<T>
+where
+    T: Node,
+{
+    fn next(&mut self) -> Option<Row> {
+        while let Some(e) = self.child.next() {
+            if let Datum::BOOL(b) = self.expr.eval(&e) {
+                if b {
+                    return Some(e);
+                }
+            }
+        }
+        return None;
+    }
+}
+
+impl<T> fmt::Display for FilterNode<T>
+where
+    T: Display,
+{
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "FilterNode({}, {})", &self.expr, &self.child)
+    }
 }
 
 /***************************************************************************************************/
@@ -41,201 +234,124 @@ enum AggType {
 }
 
 #[derive(Debug)]
-struct AggNode {
-    keycolids: Vec<col_id>,
-    aggcolids: Vec<(AggType, col_id)>,
+struct AggNode<T> {
+    keycolids: Vec<usize>,
+    aggcolids: Vec<(AggType, usize)>,
+    child: T,
 }
 
-impl CSVNode {
-    fn new(arena: &Arena<Node>, name: String) -> &Node {
-        let base = NodeBase::CSVNode(CSVNode { name });
-        let node_id = arena.len();
-
-        arena.alloc(Node {
-            node_id,
-            base,
-            source: vec![],
-        })
-    }
-}
-
-#[derive(Debug)]
-enum NodeBase {
-    CSVNode(CSVNode),
-    ProjectNode(ProjectNode),
-    UnionNode(UnionNode),
-    AggNode(AggNode),
-}
-
-impl NodeBase {
-    fn open(&mut self) {
-        
-    }
-}
-
-#[derive(Debug)]
-struct Node {
-    node_id: node_id,
-    base: NodeBase,
-    source: Vec<node_id>,
-}
-
-impl Node {
-    fn project<'a>(
-        &self, arena: &'a Arena<Node>, cols: Vec<col_id>,
-    ) -> &'a Node {
-        let base = NodeBase::ProjectNode(ProjectNode { cols });
-        let node_id = arena.len();
-
-        arena.alloc(Node {
-            node_id,
-            base,
-            source: vec![self.node_id],
-        })
-    }
-
-    fn agg<'a>(
-        &self, arena: &'a Arena<Node>, keycolids: Vec<col_id>,
-        aggcolids: Vec<(AggType, col_id)>,
-    ) -> &'a Node {
-        let base = NodeBase::AggNode(AggNode {
-            keycolids,
-            aggcolids,
-        });
-        let node_id = arena.len();
-
-        arena.alloc(Node {
-            node_id,
-            base,
-            source: vec![self.node_id],
-        })
-    }
-
-    fn union<'a>(
-        &self, arena: &'a Arena<Node>, sources: Vec<&Node>,
-    ) -> &'a Node {
-        let base = NodeBase::UnionNode(UnionNode {});
-        let node_id = arena.len();
-        let mut source: Vec<_> = sources.iter().map(|e| e.node_id).collect();
-        source.push(self.node_id);
-
-        arena.alloc(Node {
-            node_id,
-            base,
-            source,
-        })
-    }
-
-    fn name(&self) -> String {
-        let nodetype = match &self.base {
-            NodeBase::CSVNode(_) => "CSVNode",
-            NodeBase::ProjectNode(_) => "ProjectNode",
-            NodeBase::UnionNode(_) => "UnionNode",
-            NodeBase::AggNode(_) => "AggNode",
-        };
-        format!("{}-{}|{}", nodetype, self.node_id, self.node_id)
-    }
-}
-
-fn make_test_flow() -> Flow {
-    let arena: Arena<_> = Arena::new();
-
-    /*
-                       C ->
-                    /      \
-        A -> B ->              -> E
-                            /
-                    \  D ->
-    */
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string())
-        .project(&arena, vec![0, 1, 2]);
-    let c = ab.project(&arena, vec![0]);
-    let d = ab.project(&arena, vec![1]);
-    let e = c.union(&arena, vec![d]).agg(
-        &arena,
-        vec![0],
-        vec![(AggType::COUNT, 1)],
-    );
-
-    Flow {
-        nodes: arena.into_vec(),
-    }
-}
-
-fn make_mvp_flow() -> Flow {
-    let arena: Arena<_> = Arena::new();
-
-    /*
-        CSV -> Project -> Agg
-    */
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string())
-        .project(&arena, vec![0, 1, 2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
-
-    Flow {
-        nodes: arena.into_vec(),
-    }
-}
-
-use std::io::Write;
-use std::process::Command;
-
-fn write_flow_to_graphviz(
-    flow: &Flow, filename: &str, open_jpg: bool,
-) -> std::io::Result<()> {
-    let mut file = std::fs::File::create(filename)?;
-    file.write_all("digraph example1 {\n".as_bytes())?;
-    file.write_all("    node [shape=record];\n".as_bytes())?;
-    file.write_all("    rankdir=LR;\n".as_bytes())?; // direction of DAG
-    file.write_all("    splines=polyline;\n".as_bytes())?;
-    file.write_all("    nodesep=0.5;\n".as_bytes())?;
-
-    for node in flow.nodes.iter() {
-        let nodestr =
-            format!("    Node{}[label=\"{}\"];\n", node.node_id, node.name());
-        file.write_all(nodestr.as_bytes())?;
-
-        for source in node.source.iter() {
-            let edge = format!("    Node{} -> Node{};\n", source, node.node_id);
-            file.write_all(edge.as_bytes())?;
+impl<'a, T> AggNode<T>
+where
+    T: Node,
+{
+    fn new<'b>(
+        child: T, keycols: Vec<usize>, aggcols: Vec<(AggType, usize)>,
+    ) -> AggNode<T> {
+        AggNode {
+            child,
+            keycolids: keycols,
+            aggcolids: aggcols,
         }
     }
-    file.write_all("}\n".as_bytes())?;
-    drop(file);
 
-    let ofilename = format!("{}.jpg", filename);
-    let oflag = format!("-o{}.jpg", filename);
-
-    // dot -Tjpg -oex.jpg exampl1.dot
-    let cmd = Command::new("dot")
-        .arg("-Tjpg")
-        .arg(oflag)
-        .arg(filename)
-        .status()
-        .expect("failed to execute process");
-
-    if open_jpg {
-        let cmd = Command::new("open")
-            .arg(ofilename)
-            .status()
-            .expect("failed to execute process");
+    fn run_one_agg(&mut self, acc: &mut Row, currow: &Row) {
+        for ix in 0..acc.len() {
+            match self.aggcolids[ix].0 {
+                AggType::COUNT => {
+                    let mut col = acc.get_column_mut(ix);
+                    *col = Datum::INT(99);
+                }
+                _ => {}
+            }
+        }
     }
 
-    Ok(())
+    /*
+    fn run_agg(&mut self) {
+        while let Some(mut currow) = self.child.next() {
+            // build key
+            let key = currow.project(&self.keycolids);
+            println!("-- key = {}", key);
+
+            let acc = self.htable.entry(key).or_insert_with(|| {
+                let acc_cols: Vec<Datum> = self
+                    .aggcolids
+                    .iter()
+                    .map(|&(aggtype, ix)| {
+                        // Build an empty accumumator Row
+                        match aggtype {
+                            AggType::COUNT => Datum::INT(0),
+                            _ => currow.get_column(ix).clone(),
+                        }
+                    })
+                    .collect();
+                Row::from(acc_cols)
+            });
+            println!("-- acc = {}", acc);
+            AggNode::run_one_agg(self, acc, &currow)
+        }
+        self.agg_iter = Some(self.htable.iter()); // DOES NOT COMPILE!! Ugh!
+    }
+    */
 }
 
-#[test]
-fn test() {
-    let flow = make_mvp_flow();
-
-    let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
-
-    write_flow_to_graphviz(&flow, &gvfilename, true)
-        .expect("Cannot write to .dot file.");
+impl<'a, T> Node for AggNode<T>
+where
+    T: Node,
+{
+    fn next(&mut self) -> Option<Row> {
+        /*
+        if !self.run_agg {
+            self.run_agg();
+            self.run_agg = true;
+        }
+        */
+        /*
+        if let Some(row) = self.child.next() {
+            return Some(row.project(&self.keycolids));
+        } else {
+            return None;
+        }
+        */
+        None
+    }
 }
 
-fn run(flow: Flow, top_node: node_id) {
-    let node = flow.get_node(top_node);
+impl<'a, T> fmt::Display for AggNode<T>
+where
+    T: Display,
+{
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "AggNode({:?}, {})", &self.keycolids, &self.child)
+    }
+}
+
+/***************************************************************************************************/
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test() {
+        let expr = RelExpr(
+            Box::new(CID(1)),
+            RelOp::Gt,
+            Box::new(Literal(Datum::INT(15))),
+        );
+
+        let filename = "/Users/adarshrp/Projects/flare/src/data/emp.csv";
+
+        let mut node = CSVScanNode::new(filename)
+            .filter(expr)
+            .project(vec![2, 1, 0]);
+    //            .agg(vec![0], vec![(AggType::COUNT, 1)]);
+
+        println!("{}", node);
+
+        //let mut node = CSVScanNode::new(filename);
+
+        while let Some(row) = node.next() {
+            println!("-- {}", row);
+        }
+    }
 }
