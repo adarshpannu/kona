@@ -11,27 +11,29 @@ use typed_arena::Arena;
 type node_id = usize;
 type col_id = usize;
 
+type NodeArena = Arena<Box<dyn Node>>;
+
 trait Node {
     fn next(&mut self) -> Option<Row> {
         None
     }
 
     fn project(
-        &self, arena: &Arena<Box<dyn Node>>, colids: Vec<col_id>,
+        &self, arena: &NodeArena, colids: Vec<col_id>,
     ) -> Box<dyn Node> {
         let base = NodeBase::new1(&arena, self.id());
         Box::new(ProjectNode { base, colids })
     }
 
     fn union(
-        &self, arena: &Arena<Box<dyn Node>>, other_sources: Vec<&Box<dyn Node>>,
+        &self, arena: &NodeArena, other_sources: Vec<&Box<dyn Node>>,
     ) -> Box<dyn Node> {
         let base = NodeBase::new(&arena, self.id(), other_sources);
         Box::new(UnionNode { base })
     }
 
     fn agg(
-        &self, arena: &Arena<Box<dyn Node>>, keycolids: Vec<col_id>,
+        &self, arena: &NodeArena, keycolids: Vec<col_id>,
         aggcolids: Vec<(AggType, col_id)>,
     ) -> Box<dyn Node> {
         let base = NodeBase::new1(&arena, self.id());
@@ -64,14 +66,14 @@ struct NodeBase {
 }
 
 impl NodeBase {
-    fn new0(arena: &Arena<Box<dyn Node>>) -> NodeBase {
+    fn new0(arena: &NodeArena) -> NodeBase {
         NodeBase {
             id: arena.len(),
             sources: vec![],
         }
     }
 
-    fn new1(arena: &Arena<Box<dyn Node>>, source_id: node_id) -> NodeBase {
+    fn new1(arena: &NodeArena, source_id: node_id) -> NodeBase {
         NodeBase {
             id: arena.len(),
             sources: vec![source_id],
@@ -79,7 +81,7 @@ impl NodeBase {
     }
 
     fn new(
-        arena: &Arena<Box<dyn Node>>, source_id: node_id,
+        arena: &NodeArena, source_id: node_id,
         other_sources: Vec<&Box<dyn Node>>,
     ) -> NodeBase {
         let node_id = arena.len();
@@ -99,7 +101,7 @@ struct CSVNode {
 }
 
 impl CSVNode {
-    fn new(arena: &Arena<Box<dyn Node>>, filename: String) -> Box<dyn Node> {
+    fn new(arena: &NodeArena, filename: String) -> Box<dyn Node> {
         let base = NodeBase {
             id: arena.len(),
             sources: vec![],
@@ -166,7 +168,7 @@ enum AggType {
 
 #[test]
 fn test() {
-    let arena: Arena<Box<dyn Node>> = Arena::new();
+    let arena: NodeArena = Arena::new();
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
     let ab = CSVNode::new(&arena, csvfilename.to_string())
         .project(&arena, vec![0, 1, 2]);
@@ -199,7 +201,7 @@ fn make_mvp_flow() -> Flow {
     let ab = CSVNode::new(&arena, csvfilename.to_string())
         .project(&arena, vec![0, 1, 2])
         .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
-
+    
     Flow {
         nodes: arena.into_vec(),
     }
@@ -261,4 +263,3 @@ fn test2() {
     write_flow_to_graphviz(&flow, &gvfilename, true)
         .expect("Cannot write to .dot file.");
 }
-
