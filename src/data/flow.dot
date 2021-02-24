@@ -3,4 +3,8 @@ digraph example1 {
     rankdir=LR;
     splines=polyline;
     nodesep=0.5;
+    Node0[label="ProjectNode"];
+    Node0 -> Node0;
+    Node1[label="AggNode"];
+    Node0 -> Node1;
 }

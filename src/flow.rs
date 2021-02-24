@@ -18,40 +18,41 @@ trait Node {
         None
     }
 
-    fn project(
-        &self, arena: &NodeArena, colids: Vec<col_id>,
-    ) -> Box<dyn Node> {
+    fn project<'a>(
+        &self, arena: &'a NodeArena, colids: Vec<col_id>,
+    ) -> &'a Box<dyn Node> {
         let base = NodeBase::new1(&arena, self.id());
-        Box::new(ProjectNode { base, colids })
+        let retval = arena.alloc(Box::new(ProjectNode { base, colids }));
+        retval
     }
 
-    fn union(
-        &self, arena: &NodeArena, other_sources: Vec<&Box<dyn Node>>,
-    ) -> Box<dyn Node> {
+    fn union<'a>(
+        &self, arena: &'a NodeArena, other_sources: Vec<&Box<dyn Node>>,
+    ) -> &'a Box<dyn Node> {
         let base = NodeBase::new(&arena, self.id(), other_sources);
-        Box::new(UnionNode { base })
+        let retval = arena.alloc(Box::new(UnionNode { base }));
+        retval
     }
 
-    fn agg(
-        &self, arena: &NodeArena, keycolids: Vec<col_id>,
+    fn agg<'a>(
+        &self, arena: &'a NodeArena, keycolids: Vec<col_id>,
         aggcolids: Vec<(AggType, col_id)>,
-    ) -> Box<dyn Node> {
+    ) -> &'a Box<dyn Node> {
         let base = NodeBase::new1(&arena, self.id());
-        Box::new(AggNode {
+        let retval = arena.alloc(Box::new(AggNode {
             base,
             keycolids,
             aggcolids,
-        })
+        }));
+        retval
     }
 
     fn base(&self) -> &NodeBase;
 
+    fn name(&self) -> String;
+
     fn id(&self) -> node_id {
         self.base().id
-    }
-
-    fn name(&self) -> String {
-        "name tbd".to_string()
     }
 
     fn sources(&self) -> &Vec<node_id> {
@@ -67,15 +68,17 @@ struct NodeBase {
 
 impl NodeBase {
     fn new0(arena: &NodeArena) -> NodeBase {
+        let id = arena.len();
         NodeBase {
-            id: arena.len(),
+            id,
             sources: vec![],
         }
     }
 
     fn new1(arena: &NodeArena, source_id: node_id) -> NodeBase {
+        let id = arena.len();
         NodeBase {
-            id: arena.len(),
+            id,
             sources: vec![source_id],
         }
     }
@@ -84,14 +87,11 @@ impl NodeBase {
         arena: &NodeArena, source_id: node_id,
         other_sources: Vec<&Box<dyn Node>>,
     ) -> NodeBase {
-        let node_id = arena.len();
+        let id = arena.len();
         let mut sources: Vec<_> =
             other_sources.iter().map(|e| e.id()).collect();
         sources.push(source_id);
-        NodeBase {
-            id: arena.len(),
-            sources,
-        }
+        NodeBase { id, sources }
     }
 }
 
@@ -111,6 +111,10 @@ impl CSVNode {
 }
 
 impl Node for CSVNode {
+    fn name(&self) -> String {
+        "CSVNode".to_string()
+    }
+
     fn base(&self) -> &NodeBase {
         &self.base
     }
@@ -123,6 +127,10 @@ struct ProjectNode {
 }
 
 impl Node for ProjectNode {
+    fn name(&self) -> String {
+        "ProjectNode".to_string()
+    }
+
     fn base(&self) -> &NodeBase {
         &self.base
     }
@@ -135,6 +143,10 @@ struct UnionNode {
 }
 
 impl Node for UnionNode {
+    fn name(&self) -> String {
+        "UnionNode".to_string()
+    }
+
     fn base(&self) -> &NodeBase {
         &self.base
     }
@@ -150,6 +162,10 @@ struct AggNode {
 }
 
 impl Node for AggNode {
+    fn name(&self) -> String {
+        "AggNode".to_string()
+    }
+
     fn base(&self) -> &NodeBase {
         &self.base
     }
@@ -201,7 +217,7 @@ fn make_mvp_flow() -> Flow {
     let ab = CSVNode::new(&arena, csvfilename.to_string())
         .project(&arena, vec![0, 1, 2])
         .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
-    
+
     Flow {
         nodes: arena.into_vec(),
     }
@@ -262,4 +278,15 @@ fn test2() {
 
     write_flow_to_graphviz(&flow, &gvfilename, true)
         .expect("Cannot write to .dot file.");
+}
+
+fn test3() {
+    struct Monster {
+        level: u32,
+    }
+
+    let monsters = Arena::new();
+
+    let vegeta = monsters.alloc(Monster { level: 9001 });
+    assert!(vegeta.level > 9000);
 }
