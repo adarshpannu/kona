@@ -101,18 +101,19 @@ struct CSVNode {
 }
 
 impl CSVNode {
-    fn new(arena: &NodeArena, filename: String) -> Box<dyn Node> {
+    fn new(arena: &NodeArena, filename: String) -> &Box<dyn Node> {
         let base = NodeBase {
             id: arena.len(),
             sources: vec![],
         };
-        Box::new(CSVNode { base, filename })
+        let retval = arena.alloc(Box::new(CSVNode { base, filename }));
+        retval
     }
 }
 
 impl Node for CSVNode {
     fn name(&self) -> String {
-        "CSVNode".to_string()
+        format!("CSVNode|{}", self.filename)
     }
 
     fn base(&self) -> &NodeBase {
@@ -128,7 +129,7 @@ struct ProjectNode {
 
 impl Node for ProjectNode {
     fn name(&self) -> String {
-        "ProjectNode".to_string()
+        format!("ProjectNode|{:?}", self.colids)
     }
 
     fn base(&self) -> &NodeBase {
@@ -182,8 +183,18 @@ enum AggType {
     //SUM,
 }
 
-#[test]
-fn test() {
+
+struct Flow {
+    nodes: Vec<Box<dyn Node>>,
+}
+
+impl Flow {
+    fn get_node(&self, node_id: node_id) -> &Box<dyn Node> {
+        &self.nodes[node_id]
+    }
+}
+
+fn make_complex_flow() -> Flow {
     let arena: NodeArena = Arena::new();
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
     let ab = CSVNode::new(&arena, csvfilename.to_string())
@@ -195,15 +206,8 @@ fn test() {
         vec![0],
         vec![(AggType::COUNT, 1)],
     );
-}
-
-struct Flow {
-    nodes: Vec<Box<dyn Node>>,
-}
-
-impl Flow {
-    fn get_node(&self, node_id: node_id) -> &Box<dyn Node> {
-        &self.nodes[node_id]
+    Flow {
+        nodes: arena.into_vec(),
     }
 }
 
@@ -271,22 +275,11 @@ fn write_flow_to_graphviz(
 }
 
 #[test]
-fn test2() {
-    let flow = make_mvp_flow();
+fn test() {
+    let flow = make_complex_flow();
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
 
     write_flow_to_graphviz(&flow, &gvfilename, true)
         .expect("Cannot write to .dot file.");
-}
-
-fn test3() {
-    struct Monster {
-        level: u32,
-    }
-
-    let monsters = Arena::new();
-
-    let vegeta = monsters.alloc(Monster { level: 9001 });
-    assert!(vegeta.level > 9000);
 }
