@@ -1,8 +1,8 @@
 #![allow(warnings)]
 
-use typed_arena::Arena;
-use std::cell::RefCell;
 use std::rc::Rc;
+use std::{cell::RefCell, collections::HashMap};
+use typed_arena::Arena;
 
 use crate::consts::*;
 use crate::expr::{Expr::*, *};
@@ -73,9 +73,7 @@ pub trait Node {
         flow.get_node(children[ix])
     }
 
-    fn next(&self, _: &Flow) -> Option<Row> {
-        None
-    }
+    fn next(&self, _: &Flow) -> Option<Row>;
 }
 
 /***************************************************************************************************/
@@ -118,12 +116,12 @@ impl NodeBase {
 struct CSVNode {
     base: NodeBase,
     filename: String,
+    colnames: Vec<String>,
+    coltypes: Vec<DataType>,
     context: RefCell<CSVNodeContext>,
 }
 
 struct CSVNodeContext {
-    colnames: Vec<String>,
-    coltypes: Vec<DataType>,
     iter: io::Lines<io::BufReader<File>>,
 }
 
@@ -145,17 +143,15 @@ impl CSVNode {
         let mut iter = read_lines(&filename).unwrap();
         iter.next(); // Consume the header row
 
-        let context = RefCell::new(CSVNodeContext {
-            colnames,
-            coltypes,
-            iter,
-        });
+        let context = RefCell::new(CSVNodeContext { iter });
 
         let base = NodeBase::new0(&arena);
 
         let retval = arena.alloc(Box::new(CSVNode {
             base,
             filename,
+            colnames,
+            coltypes,
             context,
         }));
         retval
@@ -204,13 +200,13 @@ impl CSVNode {
 }
 
 impl CSVNodeContext {
-    fn next(&mut self, _: &CSVNode) -> Option<Row> {
+    fn next(&mut self, node: &CSVNode) -> Option<Row> {
         if let Some(line) = self.iter.next() {
             let line = line.unwrap();
             let cols = line
                 .split(',')
                 .enumerate()
-                .map(|(ix, col)| match self.coltypes[ix] {
+                .map(|(ix, col)| match node.coltypes[ix] {
                     DataType::INT => {
                         let ival = col.parse::<isize>().unwrap();
                         Datum::INT(ival)
@@ -228,9 +224,11 @@ impl CSVNodeContext {
 
 impl Node for CSVNode {
     fn name(&self) -> String {
-        let filename = self.filename.split("/").last().unwrap_or(&self.filename);
+        let filename =
+            self.filename.split("/").last().unwrap_or(&self.filename);
 
-        format!("CSVNode|{}", filename)
+        format!("CSVNode|{} {:?}", filename, self.colnames)
+            .replace("\"", "\\\"")
     }
 
     fn base(&self) -> &NodeBase {
@@ -324,6 +322,10 @@ impl Node for UnionNode {
     fn base(&self) -> &NodeBase {
         &self.base
     }
+
+    fn next(&self, _: &Flow) -> Option<Row> {
+        unimplemented!()
+    }
 }
 
 impl UnionNode {}
@@ -344,9 +346,55 @@ impl Node for AggNode {
     fn base(&self) -> &NodeBase {
         &self.base
     }
+
+    fn next(&self, flow: &Flow) -> Option<Row> {
+        let htable: HashMap<Row, Row> = self.run_agg(flow);
+        None
+    }
 }
 
-impl AggNode {}
+impl AggNode {
+    fn run_one_agg(&self, acc: &mut Row, currow: &Row) {
+        for ix in 0..acc.len() {
+            match self.aggcolids[ix].0 {
+                AggType::COUNT => {
+                    let mut col = acc.get_column_mut(ix);
+                    *col = Datum::INT(99);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn run_agg(&self, flow: &Flow) -> HashMap<Row, Row> {
+        let mut htable: HashMap<Row, Row> = HashMap::new();
+        let child = self.child(flow, 0);
+
+        while let Some(mut currow) = child.next(&flow) {
+            // build key
+            let key = currow.project(&self.keycolids);
+            println!("-- key = {}", key);
+
+            let acc = htable.entry(key).or_insert_with(|| {
+                let acc_cols: Vec<Datum> = self
+                    .aggcolids
+                    .iter()
+                    .map(|&(aggtype, ix)| {
+                        // Build an empty accumumator Row
+                        match aggtype {
+                            AggType::COUNT => Datum::INT(0),
+                            _ => currow.get_column(ix).clone(),
+                        }
+                    })
+                    .collect();
+                Row::from(acc_cols)
+            });
+            println!("-- acc = {}", acc);
+            AggNode::run_one_agg(self, acc, &currow)
+        }
+        htable
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum AggType {
@@ -413,7 +461,8 @@ fn make_simple_flow() -> Flow {
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
     let ab = CSVNode::new(&arena, csvfilename.to_string())
         .filter(&arena, expr)
-        .project(&arena, vec![2, 0]);
+        .project(&arena, vec![2, 1, 0])
+        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
 
     Flow {
         nodes: arena.into_vec(),
@@ -435,3 +484,13 @@ fn test() {
         println!("-- {}", row);
     }
 }
+
+struct Stage {
+    bottom: node_id,
+    top: node_id
+}
+
+fn make_stages(flow: &Flow) {
+
+}
+

@@ -3,9 +3,11 @@ digraph example1 {
     rankdir=LR;
     splines=polyline;
     nodesep=0.5;
-    Node0[label="CSVNode|emp.csv"];
+    Node0[label="CSVNode|emp.csv [\"name\", \"age\", \"dept_id\"]"];
     Node1[label="FilterNode|($1 &gt; 15)"];
     Node0 -> Node1;
-    Node2[label="ProjectNode|[2, 0]"];
+    Node2[label="ProjectNode|[2, 1, 0]"];
     Node1 -> Node2;
+    Node3[label="AggNode"];
+    Node2 -> Node3;
 }

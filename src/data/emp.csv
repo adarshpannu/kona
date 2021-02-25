@@ -1,5 +1,7 @@
-name,age,gender
-john,32,m
-aby,30,f
-sarah,3,f
-joe,1,m
+name,age,dept_id
+john,32,1
+aby,30,2
+sarah,53,2
+joe,45,3
+hari,25,3
+kumar,28,3
