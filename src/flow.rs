@@ -1,21 +1,17 @@
 #![allow(warnings)]
 
-use std::{borrow::BorrowMut, cell::UnsafeCell};
-
-use crate::expr::{Expr::*, *};
-use crate::graphviz::write_flow_to_graphviz;
-use crate::row::*;
-
+use typed_arena::Arena;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::consts::*;
-use typed_arena::Arena;
-
-type node_id = usize;
-type col_id = usize;
+use crate::expr::{Expr::*, *};
+use crate::graphviz::write_flow_to_graphviz;
+use crate::row::*;
 
 /***************************************************************************************************/
+type node_id = usize;
+type col_id = usize;
 
 type NodeArena = Arena<Box<dyn Node>>;
 pub trait Node {
@@ -77,17 +73,8 @@ pub trait Node {
         flow.get_node(children[ix])
     }
 
-    fn next(&self, flow: &Flow) -> Option<Row> {
+    fn next(&self, _: &Flow) -> Option<Row> {
         None
-    }
-
-    fn open(&self, flow: &Flow) {}
-
-    fn do_open(&mut self, flow: &Flow) {
-        for ix in 0..self.nchildren() {
-            let mut child = self.child(flow, ix);
-            child.open(flow);
-        }
     }
 }
 
@@ -164,10 +151,7 @@ impl CSVNode {
             iter,
         });
 
-        let base = NodeBase {
-            id: arena.len(),
-            children: vec![],
-        };
+        let base = NodeBase::new0(&arena);
 
         let retval = arena.alloc(Box::new(CSVNode {
             base,
@@ -220,7 +204,7 @@ impl CSVNode {
 }
 
 impl CSVNodeContext {
-    fn next(&mut self, node: &CSVNode) -> Option<Row> {
+    fn next(&mut self, _: &CSVNode) -> Option<Row> {
         if let Some(line) = self.iter.next() {
             let line = line.unwrap();
             let cols = line
@@ -253,7 +237,7 @@ impl Node for CSVNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow) -> Option<Row> {
+    fn next(&self, _: &Flow) -> Option<Row> {
         let mut context = self.context.borrow_mut();
         context.next(self)
     }
