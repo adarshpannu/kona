@@ -3,16 +3,9 @@ digraph example1 {
     rankdir=LR;
     splines=polyline;
     nodesep=0.5;
-    Node0[label="CSVNode|/Users/adarshrp/Projects/flare/src/data/emp.csv"];
-    Node1[label="ProjectNode|[0, 1, 2]"];
+    Node0[label="CSVNode|emp.csv"];
+    Node1[label="FilterNode|($1 &gt; 15)"];
     Node0 -> Node1;
-    Node2[label="ProjectNode|[0]"];
+    Node2[label="ProjectNode|[2, 0]"];
     Node1 -> Node2;
-    Node3[label="ProjectNode|[1]"];
-    Node1 -> Node3;
-    Node4[label="UnionNode"];
-    Node3 -> Node4;
-    Node2 -> Node4;
-    Node5[label="AggNode"];
-    Node4 -> Node5;
 }

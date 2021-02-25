@@ -5,6 +5,8 @@ pub mod flow;
 pub mod expr;
 pub mod row;
 pub mod consts;
+pub mod graphviz;
+
 
 use clp::CLParser;
 

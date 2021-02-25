@@ -1,9 +1,13 @@
 #![allow(warnings)]
 
-use std::cell::UnsafeCell;
+use std::{borrow::BorrowMut, cell::UnsafeCell};
 
 use crate::expr::{Expr::*, *};
+use crate::graphviz::write_flow_to_graphviz;
 use crate::row::*;
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::consts::*;
 use typed_arena::Arena;
@@ -11,13 +15,10 @@ use typed_arena::Arena;
 type node_id = usize;
 type col_id = usize;
 
+/***************************************************************************************************/
+
 type NodeArena = Arena<Box<dyn Node>>;
-
-trait Node {
-    fn next(&mut self) -> Option<Row> {
-        None
-    }
-
+pub trait Node {
     fn project<'a>(
         &self, arena: &'a NodeArena, colids: Vec<col_id>,
     ) -> &'a Box<dyn Node> {
@@ -26,10 +27,18 @@ trait Node {
         retval
     }
 
-    fn union<'a>(
-        &self, arena: &'a NodeArena, other_sources: Vec<&Box<dyn Node>>,
+    fn filter<'a>(
+        &self, arena: &'a NodeArena, expr: Expr,
     ) -> &'a Box<dyn Node> {
-        let base = NodeBase::new(&arena, self.id(), other_sources);
+        let base = NodeBase::new1(&arena, self.id());
+        let retval = arena.alloc(Box::new(FilterNode::new(base, expr)));
+        retval
+    }
+
+    fn union<'a>(
+        &self, arena: &'a NodeArena, other_children: Vec<&Box<dyn Node>>,
+    ) -> &'a Box<dyn Node> {
+        let base = NodeBase::new(&arena, self.id(), other_children);
         let retval = arena.alloc(Box::new(UnionNode { base }));
         retval
     }
@@ -55,15 +64,38 @@ trait Node {
         self.base().id
     }
 
-    fn sources(&self) -> &Vec<node_id> {
-        &self.base().sources
+    fn children(&self) -> &Vec<node_id> {
+        &self.base().children
+    }
+
+    fn nchildren(&self) -> usize {
+        self.base().children.len()
+    }
+
+    fn child<'a>(&self, flow: &'a Flow, ix: node_id) -> &'a Box<dyn Node> {
+        let children = &self.base().children;
+        flow.get_node(children[ix])
+    }
+
+    fn next(&self, flow: &Flow) -> Option<Row> {
+        None
+    }
+
+    fn open(&self, flow: &Flow) {}
+
+    fn do_open(&mut self, flow: &Flow) {
+        for ix in 0..self.nchildren() {
+            let mut child = self.child(flow, ix);
+            child.open(flow);
+        }
     }
 }
 
+/***************************************************************************************************/
 #[derive(Debug)]
-struct NodeBase {
+pub struct NodeBase {
     id: node_id,
-    sources: Vec<node_id>,
+    children: Vec<node_id>,
 }
 
 impl NodeBase {
@@ -71,56 +103,163 @@ impl NodeBase {
         let id = arena.len();
         NodeBase {
             id,
-            sources: vec![],
+            children: vec![],
         }
     }
 
-    fn new1(arena: &NodeArena, source_id: node_id) -> NodeBase {
+    fn new1(arena: &NodeArena, child_id: node_id) -> NodeBase {
         let id = arena.len();
         NodeBase {
             id,
-            sources: vec![source_id],
+            children: vec![child_id],
         }
     }
 
     fn new(
-        arena: &NodeArena, source_id: node_id,
-        other_sources: Vec<&Box<dyn Node>>,
+        arena: &NodeArena, child_id: node_id,
+        other_children: Vec<&Box<dyn Node>>,
     ) -> NodeBase {
         let id = arena.len();
-        let mut sources: Vec<_> =
-            other_sources.iter().map(|e| e.id()).collect();
-        sources.push(source_id);
-        NodeBase { id, sources }
+        let mut children: Vec<_> =
+            other_children.iter().map(|e| e.id()).collect();
+        children.push(child_id);
+        NodeBase { id, children }
     }
 }
 
+/***************************************************************************************************/
 struct CSVNode {
     base: NodeBase,
     filename: String,
+    context: RefCell<CSVNodeContext>,
+}
+
+struct CSVNodeContext {
+    colnames: Vec<String>,
+    coltypes: Vec<DataType>,
+    iter: io::Lines<io::BufReader<File>>,
+}
+
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
+
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>, {
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
 }
 
 impl CSVNode {
     fn new(arena: &NodeArena, filename: String) -> &Box<dyn Node> {
+        let (colnames, coltypes) = Self::infer_metadata(&filename);
+
+        let mut iter = read_lines(&filename).unwrap();
+        iter.next(); // Consume the header row
+
+        let context = RefCell::new(CSVNodeContext {
+            colnames,
+            coltypes,
+            iter,
+        });
+
         let base = NodeBase {
             id: arena.len(),
-            sources: vec![],
+            children: vec![],
         };
-        let retval = arena.alloc(Box::new(CSVNode { base, filename }));
+
+        let retval = arena.alloc(Box::new(CSVNode {
+            base,
+            filename,
+            context,
+        }));
         retval
+    }
+
+    fn infer_datatype(str: &String) -> DataType {
+        let res = str.parse::<i32>();
+        if res.is_ok() {
+            DataType::INT
+        } else if str.eq("true") || str.eq("false") {
+            DataType::BOOL
+        } else {
+            DataType::STR
+        }
+    }
+
+    fn infer_metadata(filename: &str) -> (Vec<String>, Vec<DataType>) {
+        let mut iter = read_lines(&filename).unwrap();
+        let mut colnames: Vec<String> = vec![];
+        let mut coltypes: Vec<DataType> = vec![];
+        let mut first_row = true;
+
+        while let Some(line) = iter.next() {
+            let cols: Vec<String> =
+                line.unwrap().split(',').map(|e| e.to_owned()).collect();
+            if colnames.len() == 0 {
+                colnames = cols;
+            } else {
+                for (ix, col) in cols.iter().enumerate() {
+                    let datatype = CSVNode::infer_datatype(col);
+                    if first_row {
+                        coltypes.push(datatype)
+                    } else if coltypes[ix] != DataType::STR {
+                        coltypes[ix] = datatype;
+                    } else {
+                        coltypes[ix] = DataType::STR;
+                    }
+                }
+                first_row = false;
+            }
+        }
+        dbg!(&colnames);
+        dbg!(&coltypes);
+        (colnames, coltypes)
+    }
+}
+
+impl CSVNodeContext {
+    fn next(&mut self, node: &CSVNode) -> Option<Row> {
+        if let Some(line) = self.iter.next() {
+            let line = line.unwrap();
+            let cols = line
+                .split(',')
+                .enumerate()
+                .map(|(ix, col)| match self.coltypes[ix] {
+                    DataType::INT => {
+                        let ival = col.parse::<isize>().unwrap();
+                        Datum::INT(ival)
+                    }
+                    DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                    _ => unimplemented!(),
+                })
+                .collect::<Vec<Datum>>();
+            Some(Row::from(cols))
+        } else {
+            None
+        }
     }
 }
 
 impl Node for CSVNode {
     fn name(&self) -> String {
-        format!("CSVNode|{}", self.filename)
+        let filename = self.filename.split("/").last().unwrap_or(&self.filename);
+
+        format!("CSVNode|{}", filename)
     }
 
     fn base(&self) -> &NodeBase {
         &self.base
     }
+
+    fn next(&self, flow: &Flow) -> Option<Row> {
+        let mut context = self.context.borrow_mut();
+        context.next(self)
+    }
 }
 
+/***************************************************************************************************/
 #[derive(Debug)]
 struct ProjectNode {
     base: NodeBase,
@@ -135,10 +274,60 @@ impl Node for ProjectNode {
     fn base(&self) -> &NodeBase {
         &self.base
     }
+
+    fn next(&self, flow: &Flow) -> Option<Row> {
+        if let Some(row) = self.child(flow, 0).next(flow) {
+            return Some(row.project(&self.colids));
+        } else {
+            return None;
+        }
+    }
 }
 
 impl ProjectNode {}
 
+/***************************************************************************************************/
+#[derive(Debug)]
+struct FilterNode {
+    base: NodeBase,
+    expr: Expr,
+}
+
+impl Node for FilterNode {
+    fn name(&self) -> String {
+        format!("FilterNode|{}", self.expr)
+            .replace("&", "&amp;")
+            .replace(">", "&gt;")
+            .replace("<", "&lt;")
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
+    }
+
+    fn next(&self, flow: &Flow) -> Option<Row> {
+        while let Some(e) = self.child(flow, 0).next(flow) {
+            if let Datum::BOOL(b) = self.expr.eval(&e) {
+                if b {
+                    return Some(e);
+                }
+            }
+        }
+        return None;
+    }
+}
+
+impl FilterNode {
+    fn new(base: NodeBase, expr: Expr) -> FilterNode {
+        if let Expr::RelExpr(..) = expr {
+            FilterNode { base, expr }
+        } else {
+            panic!("Invalid filter expression")
+        }
+    }
+}
+
+/***************************************************************************************************/
 struct UnionNode {
     base: NodeBase,
 }
@@ -155,6 +344,7 @@ impl Node for UnionNode {
 
 impl UnionNode {}
 
+/***************************************************************************************************/
 #[derive(Debug)]
 struct AggNode {
     base: NodeBase,
@@ -175,7 +365,7 @@ impl Node for AggNode {
 impl AggNode {}
 
 #[derive(Debug, Clone, Copy)]
-enum AggType {
+pub enum AggType {
     COUNT,
     MIN,
     MAX,
@@ -183,9 +373,9 @@ enum AggType {
     //SUM,
 }
 
-
-struct Flow {
-    nodes: Vec<Box<dyn Node>>,
+/***************************************************************************************************/
+pub struct Flow {
+    pub nodes: Vec<Box<dyn Node>>,
 }
 
 impl Flow {
@@ -194,6 +384,7 @@ impl Flow {
     }
 }
 
+/***************************************************************************************************/
 fn make_complex_flow() -> Flow {
     let arena: NodeArena = Arena::new();
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
@@ -227,59 +418,36 @@ fn make_mvp_flow() -> Flow {
     }
 }
 
-use std::io::Write;
-use std::process::Command;
+fn make_simple_flow() -> Flow {
+    let arena: NodeArena = Arena::new();
+    let expr = RelExpr(
+        Box::new(CID(1)),
+        RelOp::Gt,
+        Box::new(Literal(Datum::INT(15))),
+    );
 
-fn write_flow_to_graphviz(
-    flow: &Flow, filename: &str, open_jpg: bool,
-) -> std::io::Result<()> {
-    let mut file = std::fs::File::create(filename)?;
-    file.write_all("digraph example1 {\n".as_bytes())?;
-    file.write_all("    node [shape=record];\n".as_bytes())?;
-    file.write_all("    rankdir=LR;\n".as_bytes())?; // direction of DAG
-    file.write_all("    splines=polyline;\n".as_bytes())?;
-    file.write_all("    nodesep=0.5;\n".as_bytes())?;
+    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
+    let ab = CSVNode::new(&arena, csvfilename.to_string())
+        .filter(&arena, expr)
+        .project(&arena, vec![2, 0]);
 
-    for node in flow.nodes.iter() {
-        let nodestr =
-            format!("    Node{}[label=\"{}\"];\n", node.id(), node.name());
-        file.write_all(nodestr.as_bytes())?;
-
-        for source in node.sources().iter() {
-            let edge = format!("    Node{} -> Node{};\n", source, node.id());
-            file.write_all(edge.as_bytes())?;
-        }
+    Flow {
+        nodes: arena.into_vec(),
     }
-    file.write_all("}\n".as_bytes())?;
-    drop(file);
-
-    let ofilename = format!("{}.jpg", filename);
-    let oflag = format!("-o{}.jpg", filename);
-
-    // dot -Tjpg -oex.jpg exampl1.dot
-    let cmd = Command::new("dot")
-        .arg("-Tjpg")
-        .arg(oflag)
-        .arg(filename)
-        .status()
-        .expect("failed to execute process");
-
-    if open_jpg {
-        let cmd = Command::new("open")
-            .arg(ofilename)
-            .status()
-            .expect("failed to execute process");
-    }
-
-    Ok(())
 }
 
 #[test]
 fn test() {
-    let flow = make_complex_flow();
+    let flow = make_simple_flow();
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
 
     write_flow_to_graphviz(&flow, &gvfilename, true)
         .expect("Cannot write to .dot file.");
+
+    let node = &flow.nodes[flow.nodes.len() - 1];
+
+    while let Some(row) = node.next(&flow) {
+        println!("-- {}", row);
+    }
 }
