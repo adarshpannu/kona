@@ -371,13 +371,31 @@ impl Node for AggNode {
     }
 }
 
+use std::cmp::Ordering;
+
 impl AggNode {
-    fn run_one_agg(&self, acc: &mut Row, currow: &Row) {
-        for ix in 0..acc.len() {
-            match self.aggcolids[ix].0 {
+    fn run_agg_one_row(&self, accrow: &mut Row, currow: &Row) {
+        for ix in 0..accrow.len() {
+            let agg_type = self.aggcolids[ix].0;
+            let agg_colid = self.aggcolids[ix].1;
+            let mut acccol = accrow.get_column_mut(ix);
+
+            match agg_type {
                 AggType::COUNT => {
-                    let mut col = acc.get_column_mut(ix);
-                    *col = Datum::INT(99);
+                    let val = acccol.as_int() + 1;
+                    *acccol = Datum::INT(val);
+                }
+                AggType::MIN => {
+                    let curcol = currow.get_column(agg_colid);
+                    if curcol.cmp(&acccol) == Ordering::Less {
+                        accrow.set_column(agg_colid, &curcol)
+                    }
+                }
+                AggType::MAX => {
+                    let curcol = currow.get_column(agg_colid);
+                    if curcol.cmp(&acccol) == Ordering::Greater {
+                        accrow.set_column(agg_colid, &curcol)
+                    }
                 }
                 _ => {}
             }
@@ -400,17 +418,23 @@ impl AggNode {
                     .map(|&(aggtype, ix)| {
                         // Build an empty accumumator Row
                         match aggtype {
-                            AggType::COUNT => Datum::INT(0),
-                            _ => currow.get_column(ix).clone(),
+                            AggType::COUNT => Datum::INT(1),
+                            AggType::MAX | AggType::MIN => {
+                                currow.get_column(ix).clone()
+                            }
                         }
                     })
                     .collect();
                 Row::from(acc_cols)
             });
-            println!("-- acc = {}", acc);
-            AggNode::run_one_agg(self, acc, &currow)
+            AggNode::run_agg_one_row(self, acc, &currow);
+            println!("   acc = {}", acc);
+        }
+        for (k,v) in htable.iter() {
+            println!("key = {}, value = {}", k, v);
         }
         htable
+
     }
 }
 
@@ -481,10 +505,10 @@ fn make_simple_flow() -> Flow {
     );
 
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string())
-        .filter(&arena, expr)
-        .project(&arena, vec![2, 1, 0])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
+    let ab = CSVNode::new(&arena, csvfilename.to_string()) // name,age,dept_id
+        //.filter(&arena, expr)
+        //.project(&arena, vec![2, 1, 0])
+        .agg(&arena, vec![2], vec![(AggType::MIN, 0), (AggType::MAX, 0)]);
 
     Flow {
         nodes: arena.into_vec(),
@@ -493,11 +517,11 @@ fn make_simple_flow() -> Flow {
 
 #[test]
 fn test() {
-    let flow = make_join_flow();
+    let flow = make_simple_flow();
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
 
-    write_flow_to_graphviz(&flow, &gvfilename, true)
+    write_flow_to_graphviz(&flow, &gvfilename, false)
         .expect("Cannot write to .dot file.");
 
     let node = &flow.nodes[flow.nodes.len() - 1];
@@ -530,18 +554,15 @@ struct Stage {
 }
 
 impl Stage {
-    fn run_stage(&self, flow: &Flow) {
-    }
+    fn run_stage(&self, flow: &Flow) {}
 }
 
 #[derive(Debug)]
 struct Task {
     top: node_id,
-    partition: partition_id
+    partition: partition_id,
 }
 
 impl Task {
-    fn run(&self, flow: &Flow) {
-
-    }
+    fn run(&self, flow: &Flow) {}
 }

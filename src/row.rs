@@ -1,13 +1,24 @@
 #![allow(dead_code)]
 
+use core::panic;
 use std::rc::Rc;
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
 pub enum Datum {
     STR(Rc<String>),
     INT(isize),
     BOOL(bool),
+}
+
+impl Datum {
+    pub fn as_int(&self) -> isize {
+        if let Datum::INT(val) = self {
+            *val
+        } else {
+            panic!("Datum is not an INT.")
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -37,6 +48,10 @@ pub struct Row {
 impl Row {
     pub fn get_column_mut(&mut self, ix: usize) -> &mut Column {
         &mut self.cols[ix]
+    }
+
+    pub fn set_column(&mut self, ix: usize, newcol: &Column) {
+        self.cols[ix] = newcol.clone()
     }
 
     pub fn get_column(&self, ix: usize) -> &Column {
