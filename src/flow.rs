@@ -1,17 +1,18 @@
 #![allow(warnings)]
 
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 use std::{cell::RefCell, collections::HashMap};
 use typed_arena::Arena;
 
 use crate::consts::*;
 use crate::expr::{Expr::*, *};
-use crate::graphviz::write_flow_to_graphviz;
+use crate::graphviz::{htmlify, write_flow_to_graphviz};
 use crate::row::*;
 
 /***************************************************************************************************/
 type node_id = usize;
 type col_id = usize;
+type partition_id = usize;
 
 type NodeArena = Arena<Box<dyn Node>>;
 pub trait Node {
@@ -31,11 +32,12 @@ pub trait Node {
         retval
     }
 
-    fn union<'a>(
+    fn join<'a>(
         &self, arena: &'a NodeArena, other_children: Vec<&Box<dyn Node>>,
+        preds: Vec<JoinPredicate>,
     ) -> &'a Box<dyn Node> {
         let base = NodeBase::new(&arena, self.id(), other_children);
-        let retval = arena.alloc(Box::new(UnionNode { base }));
+        let retval = arena.alloc(Box::new(JoinNode { base, preds }));
         retval
     }
 
@@ -54,7 +56,7 @@ pub trait Node {
 
     fn base(&self) -> &NodeBase;
 
-    fn name(&self) -> String;
+    fn desc(&self) -> String;
 
     fn id(&self) -> node_id {
         self.base().id
@@ -74,6 +76,10 @@ pub trait Node {
     }
 
     fn next(&self, _: &Flow) -> Option<Row>;
+
+    fn needs_shuffle(&self) -> bool {
+        false
+    }
 }
 
 /***************************************************************************************************/
@@ -223,11 +229,11 @@ impl CSVNodeContext {
 }
 
 impl Node for CSVNode {
-    fn name(&self) -> String {
+    fn desc(&self) -> String {
         let filename =
             self.filename.split("/").last().unwrap_or(&self.filename);
 
-        format!("CSVNode|{} {:?}", filename, self.colnames)
+        format!("CSVNode-#{}|{} {:?}", self.id(), filename, self.colnames)
             .replace("\"", "\\\"")
     }
 
@@ -249,8 +255,8 @@ struct ProjectNode {
 }
 
 impl Node for ProjectNode {
-    fn name(&self) -> String {
-        format!("ProjectNode|{:?}", self.colids)
+    fn desc(&self) -> String {
+        format!("ProjectNode-#{}|{:?}", self.id(), self.colids)
     }
 
     fn base(&self) -> &NodeBase {
@@ -276,11 +282,9 @@ struct FilterNode {
 }
 
 impl Node for FilterNode {
-    fn name(&self) -> String {
-        format!("FilterNode|{}", self.expr)
-            .replace("&", "&amp;")
-            .replace(">", "&gt;")
-            .replace("<", "&lt;")
+    fn desc(&self) -> String {
+        let s = format!("FilterNode-#{}|{}", self.id(), self.expr);
+        htmlify(s)
     }
 
     fn base(&self) -> &NodeBase {
@@ -310,13 +314,17 @@ impl FilterNode {
 }
 
 /***************************************************************************************************/
-struct UnionNode {
+struct JoinNode {
     base: NodeBase,
+    preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
 }
 
-impl Node for UnionNode {
-    fn name(&self) -> String {
-        "UnionNode".to_string()
+type JoinPredicate = (col_id, RelOp, col_id);
+
+impl Node for JoinNode {
+    fn desc(&self) -> String {
+        let s = format!("JoinNode-#{}|{:?}", self.id(), self.preds);
+        htmlify(s)
     }
 
     fn base(&self) -> &NodeBase {
@@ -324,11 +332,11 @@ impl Node for UnionNode {
     }
 
     fn next(&self, _: &Flow) -> Option<Row> {
-        unimplemented!()
+        None
     }
 }
 
-impl UnionNode {}
+impl JoinNode {}
 
 /***************************************************************************************************/
 #[derive(Debug)]
@@ -339,8 +347,14 @@ struct AggNode {
 }
 
 impl Node for AggNode {
-    fn name(&self) -> String {
-        "AggNode".to_string()
+    fn desc(&self) -> String {
+        let s = format!(
+            "AggNode-#{}|by = {:?}, aggs = {:?}",
+            self.id(),
+            self.keycolids,
+            self.aggcolids
+        );
+        s
     }
 
     fn base(&self) -> &NodeBase {
@@ -350,6 +364,10 @@ impl Node for AggNode {
     fn next(&self, flow: &Flow) -> Option<Row> {
         let htable: HashMap<Row, Row> = self.run_agg(flow);
         None
+    }
+
+    fn needs_shuffle(&self) -> bool {
+        true
     }
 }
 
@@ -417,14 +435,18 @@ impl Flow {
 }
 
 /***************************************************************************************************/
-fn make_complex_flow() -> Flow {
+fn make_join_flow() -> Flow {
     let arena: NodeArena = Arena::new();
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string())
-        .project(&arena, vec![0, 1, 2]);
-    let c = ab.project(&arena, vec![0]);
-    let d = ab.project(&arena, vec![1]);
-    let e = c.union(&arena, vec![&d]).agg(
+    let empfilename = format!("{}/{}", DATADIR, "emp.csv").to_string();
+    let deptfilename = format!("{}/{}", DATADIR, "dept.csv").to_string();
+
+    let emp = CSVNode::new(&arena, empfilename)
+        .project(&arena, vec![0, 1, 2])
+        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
+
+    let dept = CSVNode::new(&arena, deptfilename);
+
+    let join = emp.join(&arena, vec![&dept], vec![(2, RelOp::Eq, 0)]).agg(
         &arena,
         vec![0],
         vec![(AggType::COUNT, 1)],
@@ -442,8 +464,8 @@ fn make_mvp_flow() -> Flow {
     */
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
     let ab = CSVNode::new(&arena, csvfilename.to_string())
-        .project(&arena, vec![0, 1, 2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
+        .project(&arena, vec![2])
+        .agg(&arena, vec![0], vec![(AggType::COUNT, 0)]);
 
     Flow {
         nodes: arena.into_vec(),
@@ -471,7 +493,7 @@ fn make_simple_flow() -> Flow {
 
 #[test]
 fn test() {
-    let flow = make_simple_flow();
+    let flow = make_join_flow();
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
 
@@ -483,14 +505,43 @@ fn test() {
     while let Some(row) = node.next(&flow) {
         println!("-- {}", row);
     }
+
+    stage_manager(&flow);
 }
 
+fn stage_manager(flow: &Flow) {
+    let stages: Vec<_> = flow
+        .nodes
+        .iter()
+        .filter(|node| node.needs_shuffle())
+        .map(|node| Stage { top: node.id() })
+        .collect();
+
+    dbg!(&stages);
+
+    for stage in stages {
+        stage.run_stage(&flow);
+    }
+}
+
+#[derive(Debug)]
 struct Stage {
-    bottom: node_id,
-    top: node_id
+    top: node_id,
 }
 
-fn make_stages(flow: &Flow) {
-
+impl Stage {
+    fn run_stage(&self, flow: &Flow) {
+    }
 }
 
+#[derive(Debug)]
+struct Task {
+    top: node_id,
+    partition: partition_id
+}
+
+impl Task {
+    fn run(&self, flow: &Flow) {
+
+    }
+}

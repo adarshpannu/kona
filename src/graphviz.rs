@@ -15,7 +15,7 @@ pub(crate) fn write_flow_to_graphviz(
 
     for node in flow.nodes.iter() {
         let nodestr =
-            format!("    Node{}[label=\"{}\"];\n", node.id(), node.name());
+            format!("    Node{}[label=\"{}\"];\n", node.id(), node.desc());
         file.write_all(nodestr.as_bytes())?;
 
         for child in node.children().iter() {
@@ -47,3 +47,8 @@ pub(crate) fn write_flow_to_graphviz(
     Ok(())
 }
 
+pub fn htmlify(s: String) -> String {
+    s.replace("&", "&amp;")
+        .replace(">", "&gt;")
+        .replace("<", "&lt;")
+}
