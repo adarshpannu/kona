@@ -86,7 +86,7 @@ pub trait Node {
         flow.get_node(children[ix])
     }
 
-    fn next(&self, _: &Flow) -> Option<Row>;
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row>;
 
     fn is_endpoint(&self) -> bool {
         false
@@ -157,8 +157,8 @@ impl Node for EmitNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow) -> Option<Row> {
-        self.child(flow, 0).next(flow)
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
+        self.child(flow, 0).next(flow, false)
     }
 
     fn is_endpoint(&self) -> bool {
@@ -251,8 +251,8 @@ impl CSVNode {
                 first_row = false;
             }
         }
-        dbg!(&colnames);
-        dbg!(&coltypes);
+        //dbg!(&colnames);
+        //dbg!(&coltypes);
         (colnames, coltypes)
     }
 }
@@ -299,7 +299,7 @@ impl Node for CSVNode {
         &self.base
     }
 
-    fn next(&self, _: &Flow) -> Option<Row> {
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
         let mut context = self.context.borrow_mut();
         context.next(self)
     }
@@ -321,8 +321,8 @@ impl Node for ProjectNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow) -> Option<Row> {
-        if let Some(row) = self.child(flow, 0).next(flow) {
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
+        if let Some(row) = self.child(flow, 0).next(flow, false) {
             return Some(row.project(&self.colids));
         } else {
             return None;
@@ -349,8 +349,8 @@ impl Node for FilterNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow) -> Option<Row> {
-        while let Some(e) = self.child(flow, 0).next(flow) {
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
+        while let Some(e) = self.child(flow, 0).next(flow, false) {
             if let Datum::BOOL(b) = self.expr.eval(&e) {
                 if b {
                     return Some(e);
@@ -389,7 +389,7 @@ impl Node for JoinNode {
         &self.base
     }
 
-    fn next(&self, _: &Flow) -> Option<Row> {
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
         None
     }
 }
@@ -420,8 +420,8 @@ impl Node for AggNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow) -> Option<Row> {
-        let htable: HashMap<Row, Row> = self.run_agg(flow);
+    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
+        let htable: HashMap<Row, Row> = self.run_map_side(flow);
         None
     }
 
@@ -433,7 +433,8 @@ impl Node for AggNode {
 use std::cmp::Ordering;
 
 impl AggNode {
-    fn run_agg_one_row(&self, accrow: &mut Row, currow: &Row) {
+
+    fn run_map_side_one_row(&self, accrow: &mut Row, currow: &Row) {
         for (ix, &(agg_type, agg_colid)) in self.aggcolids.iter().enumerate() {
             let mut acccol = accrow.get_column_mut(ix);
             let curcol = currow.get_column(agg_colid);
@@ -459,14 +460,14 @@ impl AggNode {
         }
     }
 
-    fn run_agg(&self, flow: &Flow) -> HashMap<Row, Row> {
+    fn run_map_side(&self, flow: &Flow) -> HashMap<Row, Row> {
         let mut htable: HashMap<Row, Row> = HashMap::new();
         let child = self.child(flow, 0);
 
-        while let Some(mut currow) = child.next(&flow) {
+        while let Some(mut currow) = child.next(&flow, false) {
             // build key
             let key = currow.project(&self.keycolids);
-            println!("-- key = {}", key);
+            //println!("-- key = {}", key);
 
             let acc = htable.entry(key).or_insert_with(|| {
                 let acc_cols: Vec<Datum> = self
@@ -485,8 +486,8 @@ impl AggNode {
                     .collect();
                 Row::from(acc_cols)
             });
-            AggNode::run_agg_one_row(self, acc, &currow);
-            println!("   acc = {}", acc);
+            AggNode::run_map_side_one_row(self, acc, &currow);
+            //println!("   acc = {}", acc);
         }
         for (k, v) in htable.iter() {
             println!("key = {}, value = {}", k, v);
@@ -584,39 +585,55 @@ fn make_simple_flow() -> Flow {
     }
 }
 
-fn stage_manager(flow: &Flow) {
-    let stages: Vec<_> = flow
-        .nodes
-        .iter()
-        .filter(|node| node.is_endpoint())
-        .map(|node| Stage { top: node.id() })
-        .collect();
-
-    dbg!(&stages);
-
-    for stage in stages {
-        stage.run_stage(&flow);
+/***************************************************************************************************/
+impl Flow {
+    fn make_stages(&self) -> Vec<Stage> {
+        let stages: Vec<_> = self
+            .nodes
+            .iter()
+            .filter(|node| node.is_endpoint())
+            .map(|node| Stage::new(node.id(), self))
+            .collect();
+        dbg!(&stages);
+        stages
     }
-}
 
-#[derive(Debug)]
-struct Stage {
-    top: node_id,
-}
-
-impl Stage {
-    fn run_stage(&self, flow: &Flow) {
-        let node = flow.get_node(self.top);
-        for part in 0..node.base().npartitions {
-            let task = Task {
-                top: self.top,
-                partition_id: part,
-            };
-            task.run(&flow);
+    fn run(&self) {
+        let stages = self.make_stages();
+        for stage in stages {
+            stage.run(self);
         }
     }
 }
 
+/***************************************************************************************************/
+#[derive(Debug)]
+struct Stage {
+    top: node_id,
+    npartitions: usize,
+}
+
+impl Stage {
+    fn new(top: node_id, flow: &Flow) -> Stage {
+        let node = flow.get_node(top);
+        let npartitions = node.child(flow, 0).npartitions();
+        Stage { top, npartitions }
+    }
+
+    fn run(&self, flow: &Flow) {
+        let node = flow.get_node(self.top);
+        let npartitions = self.npartitions;
+        for part in 0..npartitions {
+            let task = Task {
+                top: self.top,
+                partition_id: part,
+            };
+            task.run(&flow, self);
+        }
+    }
+}
+
+/***************************************************************************************************/
 #[derive(Debug)]
 struct Task {
     top: node_id,
@@ -625,15 +642,19 @@ struct Task {
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
 impl Task {
-    fn run(&self, flow: &Flow) {
+    fn run(&self, flow: &Flow, stage: &Stage) {
         println!(
-            "Running task: top = {}, partition = {}",
-            self.top, self.partition_id
+            "Running task: top = {}, partition = {}/{}",
+            self.top, self.partition_id, stage.npartitions
         );
+        let node = flow.get_node(stage.top);
+        node.next(flow, true);
     }
 }
+
 fn write_partition(flow: &Flow, task: &Task, row: &Row) {}
 
+/***************************************************************************************************/
 #[test]
 fn run_flow() {
     let flow = make_simple_flow();
@@ -645,9 +666,12 @@ fn run_flow() {
 
     let node = &flow.nodes[flow.nodes.len() - 1];
 
-    while let Some(row) = node.next(&flow) {
+    /*
+    while let Some(row) = node.next(&flow, true) {
         println!("-- {}", row);
     }
+    */
 
-    stage_manager(&flow);
+    // Run the flow
+    flow.run();
 }
