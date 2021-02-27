@@ -16,10 +16,18 @@ type partition_id = usize;
 
 type NodeArena = Arena<Box<dyn Node>>;
 pub trait Node {
+    fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Box<dyn Node> {
+        let npartitions = self.base().npartitions;
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
+        let retval = arena.alloc(Box::new(EmitNode { base }));
+        retval
+    }
+
     fn project<'a>(
         &self, arena: &'a NodeArena, colids: Vec<col_id>,
     ) -> &'a Box<dyn Node> {
-        let base = NodeBase::new1(&arena, self.id());
+        let npartitions = self.base().npartitions;
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
         let retval = arena.alloc(Box::new(ProjectNode { base, colids }));
         retval
     }
@@ -27,7 +35,8 @@ pub trait Node {
     fn filter<'a>(
         &self, arena: &'a NodeArena, expr: Expr,
     ) -> &'a Box<dyn Node> {
-        let base = NodeBase::new1(&arena, self.id());
+        let npartitions = self.base().npartitions;
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
         let retval = arena.alloc(Box::new(FilterNode::new(base, expr)));
         retval
     }
@@ -36,16 +45,18 @@ pub trait Node {
         &self, arena: &'a NodeArena, other_children: Vec<&Box<dyn Node>>,
         preds: Vec<JoinPredicate>,
     ) -> &'a Box<dyn Node> {
-        let base = NodeBase::new(&arena, self.id(), other_children);
+        let npartitions = self.base().npartitions;
+        let base =
+            NodeBase::new(&arena, self.id(), other_children, npartitions);
         let retval = arena.alloc(Box::new(JoinNode { base, preds }));
         retval
     }
 
     fn agg<'a>(
         &self, arena: &'a NodeArena, keycolids: Vec<col_id>,
-        aggcolids: Vec<(AggType, col_id)>,
+        aggcolids: Vec<(AggType, col_id)>, npartitions: usize,
     ) -> &'a Box<dyn Node> {
-        let base = NodeBase::new1(&arena, self.id());
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
         let retval = arena.alloc(Box::new(AggNode {
             base,
             keycolids,
@@ -77,8 +88,12 @@ pub trait Node {
 
     fn next(&self, _: &Flow) -> Option<Row>;
 
-    fn needs_shuffle(&self) -> bool {
+    fn is_endpoint(&self) -> bool {
         false
+    }
+
+    fn npartitions(&self) -> usize {
+        self.base().npartitions
     }
 }
 
@@ -87,36 +102,71 @@ pub trait Node {
 pub struct NodeBase {
     id: node_id,
     children: Vec<node_id>,
+    npartitions: usize,
 }
 
 impl NodeBase {
-    fn new0(arena: &NodeArena) -> NodeBase {
+    fn new0(arena: &NodeArena, npartitions: usize) -> NodeBase {
         let id = arena.len();
         NodeBase {
             id,
             children: vec![],
+            npartitions,
         }
     }
 
-    fn new1(arena: &NodeArena, child_id: node_id) -> NodeBase {
+    fn new1(
+        arena: &NodeArena, child_id: node_id, npartitions: usize,
+    ) -> NodeBase {
         let id = arena.len();
         NodeBase {
             id,
             children: vec![child_id],
+            npartitions,
         }
     }
 
     fn new(
         arena: &NodeArena, child_id: node_id,
-        other_children: Vec<&Box<dyn Node>>,
+        other_children: Vec<&Box<dyn Node>>, npartitions: usize,
     ) -> NodeBase {
         let id = arena.len();
         let mut children: Vec<_> =
             other_children.iter().map(|e| e.id()).collect();
         children.push(child_id);
-        NodeBase { id, children }
+        NodeBase {
+            id,
+            children,
+            npartitions,
+        }
     }
 }
+
+/***************************************************************************************************/
+#[derive(Debug)]
+struct EmitNode {
+    base: NodeBase,
+}
+
+impl Node for EmitNode {
+    fn desc(&self) -> String {
+        format!("EmitNode-#{}", self.id())
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
+    }
+
+    fn next(&self, flow: &Flow) -> Option<Row> {
+        self.child(flow, 0).next(flow)
+    }
+
+    fn is_endpoint(&self) -> bool {
+        true
+    }
+}
+
+impl EmitNode {}
 
 /***************************************************************************************************/
 struct CSVNode {
@@ -143,7 +193,9 @@ where
 }
 
 impl CSVNode {
-    fn new(arena: &NodeArena, filename: String) -> &Box<dyn Node> {
+    fn new(
+        arena: &NodeArena, filename: String, npartitions: usize,
+    ) -> &Box<dyn Node> {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
 
         let mut iter = read_lines(&filename).unwrap();
@@ -151,7 +203,7 @@ impl CSVNode {
 
         let context = RefCell::new(CSVNodeContext { iter });
 
-        let base = NodeBase::new0(&arena);
+        let base = NodeBase::new0(&arena, npartitions);
 
         let retval = arena.alloc(Box::new(CSVNode {
             base,
@@ -233,8 +285,14 @@ impl Node for CSVNode {
         let filename =
             self.filename.split("/").last().unwrap_or(&self.filename);
 
-        format!("CSVNode-#{}|{} {:?}", self.id(), filename, self.colnames)
-            .replace("\"", "\\\"")
+        format!(
+            "CSVNode-#{} (p={})|{} {:?}",
+            self.id(),
+            self.npartitions(),
+            filename,
+            self.colnames
+        )
+        .replace("\"", "\\\"")
     }
 
     fn base(&self) -> &NodeBase {
@@ -349,8 +407,9 @@ struct AggNode {
 impl Node for AggNode {
     fn desc(&self) -> String {
         let s = format!(
-            "AggNode-#{}|by = {:?}, aggs = {:?}",
+            "AggNode-#{} (p={})|by = {:?}, aggs = {:?}",
             self.id(),
+            self.npartitions(),
             self.keycolids,
             self.aggcolids
         );
@@ -366,7 +425,7 @@ impl Node for AggNode {
         None
     }
 
-    fn needs_shuffle(&self) -> bool {
+    fn is_endpoint(&self) -> bool {
         true
     }
 }
@@ -375,29 +434,27 @@ use std::cmp::Ordering;
 
 impl AggNode {
     fn run_agg_one_row(&self, accrow: &mut Row, currow: &Row) {
-        for ix in 0..accrow.len() {
-            let agg_type = self.aggcolids[ix].0;
-            let agg_colid = self.aggcolids[ix].1;
+        for (ix, &(agg_type, agg_colid)) in self.aggcolids.iter().enumerate() {
             let mut acccol = accrow.get_column_mut(ix);
+            let curcol = currow.get_column(agg_colid);
 
             match agg_type {
                 AggType::COUNT => {
-                    let val = acccol.as_int() + 1;
-                    *acccol = Datum::INT(val);
+                    *acccol = Datum::INT(acccol.as_int() + 1);
+                }
+                AggType::SUM => {
+                    *acccol = Datum::INT(acccol.as_int() + curcol.as_int());
                 }
                 AggType::MIN => {
-                    let curcol = currow.get_column(agg_colid);
                     if curcol.cmp(&acccol) == Ordering::Less {
-                        accrow.set_column(agg_colid, &curcol)
+                        accrow.set_column(ix, &curcol)
                     }
                 }
                 AggType::MAX => {
-                    let curcol = currow.get_column(agg_colid);
                     if curcol.cmp(&acccol) == Ordering::Greater {
-                        accrow.set_column(agg_colid, &curcol)
+                        accrow.set_column(ix, &curcol)
                     }
                 }
-                _ => {}
             }
         }
     }
@@ -418,7 +475,8 @@ impl AggNode {
                     .map(|&(aggtype, ix)| {
                         // Build an empty accumumator Row
                         match aggtype {
-                            AggType::COUNT => Datum::INT(1),
+                            AggType::COUNT => Datum::INT(0),
+                            AggType::SUM => Datum::INT(0),
                             AggType::MAX | AggType::MIN => {
                                 currow.get_column(ix).clone()
                             }
@@ -430,11 +488,10 @@ impl AggNode {
             AggNode::run_agg_one_row(self, acc, &currow);
             println!("   acc = {}", acc);
         }
-        for (k,v) in htable.iter() {
+        for (k, v) in htable.iter() {
             println!("key = {}, value = {}", k, v);
         }
         htable
-
     }
 }
 
@@ -443,8 +500,8 @@ pub enum AggType {
     COUNT,
     MIN,
     MAX,
+    SUM,
     //AVG,
-    //SUM,
 }
 
 /***************************************************************************************************/
@@ -464,16 +521,17 @@ fn make_join_flow() -> Flow {
     let empfilename = format!("{}/{}", DATADIR, "emp.csv").to_string();
     let deptfilename = format!("{}/{}", DATADIR, "dept.csv").to_string();
 
-    let emp = CSVNode::new(&arena, empfilename)
+    let emp = CSVNode::new(&arena, empfilename, 4)
         .project(&arena, vec![0, 1, 2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)]);
+        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)], 3);
 
-    let dept = CSVNode::new(&arena, deptfilename);
+    let dept = CSVNode::new(&arena, deptfilename, 4);
 
     let join = emp.join(&arena, vec![&dept], vec![(2, RelOp::Eq, 0)]).agg(
         &arena,
         vec![0],
         vec![(AggType::COUNT, 1)],
+        3,
     );
     Flow {
         nodes: arena.into_vec(),
@@ -487,9 +545,9 @@ fn make_mvp_flow() -> Flow {
         CSV -> Project -> Agg
     */
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string())
+    let ab = CSVNode::new(&arena, csvfilename.to_string(), 4)
         .project(&arena, vec![2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 0)]);
+        .agg(&arena, vec![0], vec![(AggType::COUNT, 0)], 3);
 
     Flow {
         nodes: arena.into_vec(),
@@ -505,39 +563,32 @@ fn make_simple_flow() -> Flow {
     );
 
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string()) // name,age,dept_id
+    let ab = CSVNode::new(&arena, csvfilename.to_string(), 4) // name,age,dept_id
         //.filter(&arena, expr)
         //.project(&arena, vec![2, 1, 0])
-        .agg(&arena, vec![2], vec![(AggType::MIN, 0), (AggType::MAX, 0)]);
+        .agg(
+            &arena,
+            vec![2],
+            vec![
+                (AggType::COUNT, 0),
+                (AggType::SUM, 2),
+                (AggType::MIN, 0),
+                (AggType::MAX, 0),
+            ],
+            3,
+        )
+        .emit(&arena);
 
     Flow {
         nodes: arena.into_vec(),
     }
 }
 
-#[test]
-fn test() {
-    let flow = make_simple_flow();
-
-    let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
-
-    write_flow_to_graphviz(&flow, &gvfilename, false)
-        .expect("Cannot write to .dot file.");
-
-    let node = &flow.nodes[flow.nodes.len() - 1];
-
-    while let Some(row) = node.next(&flow) {
-        println!("-- {}", row);
-    }
-
-    stage_manager(&flow);
-}
-
 fn stage_manager(flow: &Flow) {
     let stages: Vec<_> = flow
         .nodes
         .iter()
-        .filter(|node| node.needs_shuffle())
+        .filter(|node| node.is_endpoint())
         .map(|node| Stage { top: node.id() })
         .collect();
 
@@ -554,15 +605,49 @@ struct Stage {
 }
 
 impl Stage {
-    fn run_stage(&self, flow: &Flow) {}
+    fn run_stage(&self, flow: &Flow) {
+        let node = flow.get_node(self.top);
+        for part in 0..node.base().npartitions {
+            let task = Task {
+                top: self.top,
+                partition_id: part,
+            };
+            task.run(&flow);
+        }
+    }
 }
 
 #[derive(Debug)]
 struct Task {
     top: node_id,
-    partition: partition_id,
+    partition_id: partition_id,
 }
 
+// Tasks write to flow-id / top-id / dest-part-id / source-part-id
 impl Task {
-    fn run(&self, flow: &Flow) {}
+    fn run(&self, flow: &Flow) {
+        println!(
+            "Running task: top = {}, partition = {}",
+            self.top, self.partition_id
+        );
+    }
+}
+fn write_partition(flow: &Flow, task: &Task, row: &Row) {}
+
+#[test]
+fn run_flow() {
+    let flow = make_simple_flow();
+
+    let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
+
+    write_flow_to_graphviz(&flow, &gvfilename, false)
+        .expect("Cannot write to .dot file.");
+
+    let node = &flow.nodes[flow.nodes.len() - 1];
+
+    while let Some(row) = node.next(&flow) {
+        println!("-- {}", row);
+    }
+
+    stage_manager(&flow);
 }

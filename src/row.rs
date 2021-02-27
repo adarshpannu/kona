@@ -74,8 +74,11 @@ impl Row {
 
 impl fmt::Display for Row {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.cols.iter().for_each(|col| {
-            let _ = write!(f, "{}, ", col);
+        self.cols.iter().enumerate().for_each(|(ix, col)| {
+            if ix > 0 {
+                let _ = write!(f, ", ");
+            }
+            let _ = write!(f, "{}", col);
         });
         write!(f, "")
     }

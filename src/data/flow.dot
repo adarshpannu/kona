@@ -3,7 +3,9 @@ digraph example1 {
     rankdir=LR;
     splines=polyline;
     nodesep=0.5;
-    Node0[label="CSVNode-#0|emp.csv [\"name\", \"age\", \"dept_id\"]"];
-    Node1[label="AggNode-#1|by = [2], aggs = [(MIN, 0), (MAX, 0)]"];
+    Node0[label="CSVNode-#0 (p=4)|emp.csv [\"name\", \"age\", \"dept_id\"]"];
+    Node1[label="AggNode-#1 (p=3)|by = [2], aggs = [(COUNT, 0), (SUM, 2), (MIN, 0), (MAX, 0)]"];
     Node0 -> Node1;
+    Node2[label="EmitNode-#2"];
+    Node1 -> Node2;
 }
