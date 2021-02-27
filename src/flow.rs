@@ -86,7 +86,7 @@ pub trait Node {
         flow.get_node(children[ix])
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row>;
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row>;
 
     fn is_endpoint(&self) -> bool {
         false
@@ -144,6 +144,12 @@ impl NodeBase {
 
 /***************************************************************************************************/
 #[derive(Debug)]
+enum NodeRuntime {
+    CSVNodeRuntime(CSVNodeContext),
+}
+
+/***************************************************************************************************/
+#[derive(Debug)]
 struct EmitNode {
     base: NodeBase,
 }
@@ -157,8 +163,9 @@ impl Node for EmitNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
-        self.child(flow, 0).next(flow, false)
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+        let flow = task.stage.flow;
+        self.child(flow, 0).next(task, false)
     }
 
     fn is_endpoint(&self) -> bool {
@@ -177,6 +184,7 @@ struct CSVNode {
     context: RefCell<CSVNodeContext>,
 }
 
+#[derive(Debug)]
 struct CSVNodeContext {
     iter: io::Lines<io::BufReader<File>>,
 }
@@ -280,6 +288,8 @@ impl CSVNodeContext {
     }
 }
 
+use std::collections::hash_map::Entry;
+
 impl Node for CSVNode {
     fn desc(&self) -> String {
         let filename =
@@ -299,9 +309,20 @@ impl Node for CSVNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
-        let mut context = self.context.borrow_mut();
-        context.next(self)
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+        let runtime = task.contexts.entry(self.id()).or_insert_with(|| {
+            let mut iter = read_lines(&self.filename).unwrap();
+            iter.next(); // Consume the header row
+            let context = CSVNodeContext { iter };
+            NodeRuntime::CSVNodeRuntime(context)
+        });
+
+        if let NodeRuntime::CSVNodeRuntime(context) = runtime {
+            return context.next(self);
+        }
+        panic!("Cannot get CSVNodeContext")
+        //let mut context = self.context.borrow_mut();
+        //context.next(self)
     }
 }
 
@@ -321,8 +342,9 @@ impl Node for ProjectNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
-        if let Some(row) = self.child(flow, 0).next(flow, false) {
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+        let flow = task.stage.flow;
+        if let Some(row) = self.child(flow, 0).next(task, false) {
             return Some(row.project(&self.colids));
         } else {
             return None;
@@ -349,8 +371,10 @@ impl Node for FilterNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
-        while let Some(e) = self.child(flow, 0).next(flow, false) {
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+        let flow = task.stage.flow;
+
+        while let Some(e) = self.child(flow, 0).next(task, false) {
             if let Datum::BOOL(b) = self.expr.eval(&e) {
                 if b {
                     return Some(e);
@@ -389,7 +413,7 @@ impl Node for JoinNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
         None
     }
 }
@@ -420,8 +444,8 @@ impl Node for AggNode {
         &self.base
     }
 
-    fn next(&self, flow: &Flow, is_head: bool) -> Option<Row> {
-        let htable: HashMap<Row, Row> = self.run_map_side(flow);
+    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+        let htable: HashMap<Row, Row> = self.run_map_side(task);
         None
     }
 
@@ -433,7 +457,6 @@ impl Node for AggNode {
 use std::cmp::Ordering;
 
 impl AggNode {
-
     fn run_map_side_one_row(&self, accrow: &mut Row, currow: &Row) {
         for (ix, &(agg_type, agg_colid)) in self.aggcolids.iter().enumerate() {
             let mut acccol = accrow.get_column_mut(ix);
@@ -460,11 +483,12 @@ impl AggNode {
         }
     }
 
-    fn run_map_side(&self, flow: &Flow) -> HashMap<Row, Row> {
+    fn run_map_side(&self, task: &mut Task) -> HashMap<Row, Row> {
+        let flow = task.stage.flow;
         let mut htable: HashMap<Row, Row> = HashMap::new();
         let child = self.child(flow, 0);
 
-        while let Some(mut currow) = child.next(&flow, false) {
+        while let Some(mut currow) = child.next(task, false) {
             // build key
             let key = currow.project(&self.keycolids);
             //println!("-- key = {}", key);
@@ -594,65 +618,77 @@ impl Flow {
             .filter(|node| node.is_endpoint())
             .map(|node| Stage::new(node.id(), self))
             .collect();
-        dbg!(&stages);
+        for stage in stages.iter() {
+            println!("Stage: {}", stage.head_node_id)
+        }
         stages
     }
 
     fn run(&self) {
         let stages = self.make_stages();
         for stage in stages {
-            stage.run(self);
+            stage.run();
         }
     }
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
-struct Stage {
-    top: node_id,
+struct Stage<'a> {
+    flow: &'a Flow,
+    head_node_id: node_id,
     npartitions: usize,
 }
 
-impl Stage {
+impl<'a> Stage<'a> {
     fn new(top: node_id, flow: &Flow) -> Stage {
         let node = flow.get_node(top);
         let npartitions = node.child(flow, 0).npartitions();
-        Stage { top, npartitions }
+        Stage {
+            flow,
+            head_node_id: top,
+            npartitions,
+        }
     }
 
-    fn run(&self, flow: &Flow) {
-        let node = flow.get_node(self.top);
+    fn run(&self) {
+        let node = self.flow.get_node(self.head_node_id);
         let npartitions = self.npartitions;
-        for part in 0..npartitions {
-            let task = Task {
-                top: self.top,
-                partition_id: part,
-            };
-            task.run(&flow, self);
+        for partition_id in 0..npartitions {
+            let mut task = Task::new(self, partition_id);
+            task.run();
         }
     }
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
-struct Task {
-    top: node_id,
+pub struct Task<'a> {
+    stage: &'a Stage<'a>,
     partition_id: partition_id,
+    contexts: HashMap<node_id, NodeRuntime>,
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
-impl Task {
-    fn run(&self, flow: &Flow, stage: &Stage) {
+impl<'a> Task<'a> {
+    fn new(stage: &'a Stage, partition_id: partition_id) -> Task<'a> {
+        Task {
+            stage,
+            partition_id,
+            contexts: HashMap::new(),
+        }
+    }
+
+    fn run(&mut self) {
+        let stage = self.stage;
         println!(
             "Running task: top = {}, partition = {}/{}",
-            self.top, self.partition_id, stage.npartitions
+            self.stage.head_node_id, self.partition_id, stage.npartitions
         );
-        let node = flow.get_node(stage.top);
-        node.next(flow, true);
+        let node = stage.flow.get_node(stage.head_node_id);
+        node.next(self, true);
     }
 }
 
-fn write_partition(flow: &Flow, task: &Task, row: &Row) {}
+fn write_partition(task: &Task, row: &Row) {}
 
 /***************************************************************************************************/
 #[test]
