@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use std::collections::hash_map::Entry;
 use std::{any::Any, rc::Rc};
 use std::{cell::RefCell, collections::HashMap};
 use typed_arena::Arena;
@@ -145,7 +146,9 @@ impl NodeBase {
 /***************************************************************************************************/
 #[derive(Debug)]
 enum NodeRuntime {
-    CSVNodeRuntime(CSVNodeContext),
+    CSVNodeRuntime {
+        iter: io::Lines<io::BufReader<File>>,
+    },
 }
 
 /***************************************************************************************************/
@@ -181,12 +184,6 @@ struct CSVNode {
     filename: String,
     colnames: Vec<String>,
     coltypes: Vec<DataType>,
-    context: RefCell<CSVNodeContext>,
-}
-
-#[derive(Debug)]
-struct CSVNodeContext {
-    iter: io::Lines<io::BufReader<File>>,
 }
 
 use std::fs::File;
@@ -205,12 +202,6 @@ impl CSVNode {
         arena: &NodeArena, filename: String, npartitions: usize,
     ) -> &Box<dyn Node> {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
-
-        let mut iter = read_lines(&filename).unwrap();
-        iter.next(); // Consume the header row
-
-        let context = RefCell::new(CSVNodeContext { iter });
-
         let base = NodeBase::new0(&arena, npartitions);
 
         let retval = arena.alloc(Box::new(CSVNode {
@@ -218,7 +209,6 @@ impl CSVNode {
             filename,
             colnames,
             coltypes,
-            context,
         }));
         retval
     }
@@ -265,31 +255,6 @@ impl CSVNode {
     }
 }
 
-impl CSVNodeContext {
-    fn next(&mut self, node: &CSVNode) -> Option<Row> {
-        if let Some(line) = self.iter.next() {
-            let line = line.unwrap();
-            let cols = line
-                .split(',')
-                .enumerate()
-                .map(|(ix, col)| match node.coltypes[ix] {
-                    DataType::INT => {
-                        let ival = col.parse::<isize>().unwrap();
-                        Datum::INT(ival)
-                    }
-                    DataType::STR => Datum::STR(Rc::new(col.to_owned())),
-                    _ => unimplemented!(),
-                })
-                .collect::<Vec<Datum>>();
-            Some(Row::from(cols))
-        } else {
-            None
-        }
-    }
-}
-
-use std::collections::hash_map::Entry;
-
 impl Node for CSVNode {
     fn desc(&self) -> String {
         let filename =
@@ -313,16 +278,30 @@ impl Node for CSVNode {
         let runtime = task.contexts.entry(self.id()).or_insert_with(|| {
             let mut iter = read_lines(&self.filename).unwrap();
             iter.next(); // Consume the header row
-            let context = CSVNodeContext { iter };
-            NodeRuntime::CSVNodeRuntime(context)
+            NodeRuntime::CSVNodeRuntime { iter }
         });
 
-        if let NodeRuntime::CSVNodeRuntime(context) = runtime {
-            return context.next(self);
+        if let NodeRuntime::CSVNodeRuntime { iter } = runtime {
+            if let Some(line) = iter.next() {
+                let line = line.unwrap();
+                let cols = line
+                    .split(',')
+                    .enumerate()
+                    .map(|(ix, col)| match self.coltypes[ix] {
+                        DataType::INT => {
+                            let ival = col.parse::<isize>().unwrap();
+                            Datum::INT(ival)
+                        }
+                        DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                        _ => unimplemented!(),
+                    })
+                    .collect::<Vec<Datum>>();
+                return Some(Row::from(cols));
+            } else {
+                return None;
+            }
         }
-        panic!("Cannot get CSVNodeContext")
-        //let mut context = self.context.borrow_mut();
-        //context.next(self)
+        panic!("Cannot get CSVNodeRuntime")
     }
 }
 
