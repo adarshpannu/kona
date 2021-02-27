@@ -6,7 +6,7 @@ pub mod expr;
 pub mod row;
 pub mod consts;
 pub mod graphviz;
-
+pub mod csv;
 
 use clp::CLParser;
 
