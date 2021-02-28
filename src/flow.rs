@@ -10,11 +10,11 @@ use crate::expr::{Expr::*, *};
 use crate::graphviz::{htmlify, write_flow_to_graphviz};
 use crate::row::*;
 
-/***************************************************************************************************/
 type node_id = usize;
 type col_id = usize;
 type partition_id = usize;
 
+/***************************************************************************************************/
 type NodeArena = Arena<Box<dyn Node>>;
 pub trait Node {
     fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Box<dyn Node> {
@@ -146,7 +146,7 @@ impl NodeBase {
 /***************************************************************************************************/
 #[derive(Debug)]
 enum NodeRuntime {
-    CSVNodeRuntime {
+    CSV {
         iter: io::Lines<io::BufReader<File>>,
     },
 }
@@ -278,10 +278,10 @@ impl Node for CSVNode {
         let runtime = task.contexts.entry(self.id()).or_insert_with(|| {
             let mut iter = read_lines(&self.filename).unwrap();
             iter.next(); // Consume the header row
-            NodeRuntime::CSVNodeRuntime { iter }
+            NodeRuntime::CSV { iter }
         });
 
-        if let NodeRuntime::CSVNodeRuntime { iter } = runtime {
+        if let NodeRuntime::CSV { iter } = runtime {
             if let Some(line) = iter.next() {
                 let line = line.unwrap();
                 let cols = line
@@ -301,7 +301,7 @@ impl Node for CSVNode {
                 return None;
             }
         }
-        panic!("Cannot get CSVNodeRuntime")
+        panic!("Cannot get NodeRuntime::CSV")
     }
 }
 
