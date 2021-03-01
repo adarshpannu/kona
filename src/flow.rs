@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::HashMap};
 use typed_arena::Arena;
 
 use crate::consts::*;
+use crate::csv::*;
 use crate::expr::{Expr::*, *};
 use crate::graphviz::{htmlify, write_flow_to_graphviz};
 use crate::row::*;
@@ -144,11 +145,8 @@ impl NodeBase {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
 enum NodeRuntime {
-    CSV {
-        iter: io::Lines<io::BufReader<File>>,
-    },
+    CSV { iter: CSVPartitionIter },
 }
 
 /***************************************************************************************************/
@@ -184,6 +182,7 @@ struct CSVNode {
     filename: String,
     colnames: Vec<String>,
     coltypes: Vec<DataType>,
+    partitions: Vec<TextFilePartition>,
 }
 
 use std::fs::File;
@@ -204,11 +203,14 @@ impl CSVNode {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
         let base = NodeBase::new0(&arena, npartitions);
 
+        let partitions =
+            compute_partitions(&filename, npartitions as u64).unwrap();
         let retval = arena.alloc(Box::new(CSVNode {
             base,
             filename,
             colnames,
             coltypes,
+            partitions,
         }));
         retval
     }
@@ -275,16 +277,21 @@ impl Node for CSVNode {
     }
 
     fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+        let partition_id = task.partition_id;
         let runtime = task.contexts.entry(self.id()).or_insert_with(|| {
-            let mut iter = read_lines(&self.filename).unwrap();
-            iter.next(); // Consume the header row
+            let partition = &self.partitions[partition_id];
+            let mut iter = CSVPartitionIter::new(&self.filename, partition);
+            if partition_id == 0 {
+                iter.next(); // Consume the header row
+            }
             NodeRuntime::CSV { iter }
         });
 
         if let NodeRuntime::CSV { iter } = runtime {
             if let Some(line) = iter.next() {
-                let line = line.unwrap();
+                println!("line = :{}:", &line.trim_end());
                 let cols = line
+                    .trim_end()
                     .split(',')
                     .enumerate()
                     .map(|(ix, col)| match self.coltypes[ix] {
@@ -659,7 +666,7 @@ impl<'a> Task<'a> {
     fn run(&mut self) {
         let stage = self.stage;
         println!(
-            "Running task: top = {}, partition = {}/{}",
+            "\n\nRunning task: top = {}, partition = {}/{}",
             self.stage.head_node_id, self.partition_id, stage.npartitions
         );
         let node = stage.flow.get_node(stage.head_node_id);

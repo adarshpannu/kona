@@ -2,7 +2,7 @@
 #![allow(warnings)]
 
 #[derive(Debug, Clone, Copy)]
-struct TextFilePartition(u64, u64);
+pub struct TextFilePartition(u64, u64);
 
 use crate::consts::*;
 use std::error::Error;
@@ -10,14 +10,14 @@ use std::fs;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 
-struct CSVPartitionIter {
+pub struct CSVPartitionIter {
     reader: io::BufReader<File>,
     partition_size: u64,
     cur_read: u64,
 }
 
 impl CSVPartitionIter {
-    fn new(
+    pub fn new(
         filename: &String, partition: &TextFilePartition,
     ) -> CSVPartitionIter {
         let file = File::open(filename).unwrap();
@@ -37,13 +37,17 @@ impl Iterator for CSVPartitionIter {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.cur_read > self.partition_size {
+        if self.cur_read >= self.partition_size {
             None
         } else {
             let mut line = String::new();
             self.reader.read_line(&mut line);
-            self.cur_read += line.len() as u64;
-            Some(line)
+            if line.len() > 0 {
+                self.cur_read += line.len() as u64;
+                Some(line)
+            } else {
+                None
+            }
         }
     }
 }
@@ -51,7 +55,7 @@ impl Iterator for CSVPartitionIter {
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
-fn compute_partitions(
+pub fn compute_partitions(
     filename: &str, nsplits: u64,
 ) -> Result<Vec<TextFilePartition>, Box<dyn Error>> {
     let mut f = fs::File::open(&filename)?;
