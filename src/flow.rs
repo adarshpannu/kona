@@ -1,6 +1,6 @@
 #![allow(warnings)]
 
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, hash::Hash};
 use std::{any::Any, rc::Rc};
 use std::{cell::RefCell, collections::HashMap};
 use typed_arena::Arena;
@@ -431,7 +431,7 @@ impl Node for AggNode {
     }
 
     fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
-        let htable: HashMap<Row, Row> = self.run_map_side(task);
+        let htable: HashMap<Row, Row> = self.run_producer(task);
         None
     }
 
@@ -443,7 +443,7 @@ impl Node for AggNode {
 use std::cmp::Ordering;
 
 impl AggNode {
-    fn run_map_side_one_row(&self, accrow: &mut Row, currow: &Row) {
+    fn run_producer_one_row(&self, accrow: &mut Row, currow: &Row) {
         for (ix, &(agg_type, agg_colid)) in self.aggcolids.iter().enumerate() {
             let mut acccol = accrow.get_column_mut(ix);
             let curcol = currow.get_column(agg_colid);
@@ -469,7 +469,7 @@ impl AggNode {
         }
     }
 
-    fn run_map_side(&self, task: &mut Task) -> HashMap<Row, Row> {
+    fn run_producer(&self, task: &mut Task) -> HashMap<Row, Row> {
         let flow = task.stage.flow;
         let mut htable: HashMap<Row, Row> = HashMap::new();
         let child = self.child(flow, 0);
@@ -496,11 +496,11 @@ impl AggNode {
                     .collect();
                 Row::from(acc_cols)
             });
-            AggNode::run_map_side_one_row(self, acc, &currow);
+            AggNode::run_producer_one_row(self, acc, &currow);
             //println!("   acc = {}", acc);
         }
         for (k, v) in htable.iter() {
-            println!("key = {}, value = {}", k, v);
+            write_partition(task, v);
         }
         htable
     }
@@ -622,7 +622,8 @@ impl Flow {
 struct Stage<'a> {
     flow: &'a Flow,
     head_node_id: node_id,
-    npartitions: usize,
+    npartitions_producer: usize,
+    npartitions_consumer: usize,
 }
 
 impl<'a> Stage<'a> {
@@ -632,13 +633,14 @@ impl<'a> Stage<'a> {
         Stage {
             flow,
             head_node_id: top,
-            npartitions,
+            npartitions_producer: npartitions,
+            npartitions_consumer: node.npartitions()
         }
     }
 
     fn run(&self) {
         let node = self.flow.get_node(self.head_node_id);
-        let npartitions = self.npartitions;
+        let npartitions = self.npartitions_producer;
         for partition_id in 0..npartitions {
             let mut task = Task::new(self, partition_id);
             task.run();
@@ -667,14 +669,29 @@ impl<'a> Task<'a> {
         let stage = self.stage;
         println!(
             "\n\nRunning task: top = {}, partition = {}/{}",
-            self.stage.head_node_id, self.partition_id, stage.npartitions
+            self.stage.head_node_id, self.partition_id, stage.npartitions_producer
         );
         let node = stage.flow.get_node(stage.head_node_id);
         node.next(self, true);
     }
 }
 
-fn write_partition(task: &Task, row: &Row) {}
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+}
+
+fn write_partition(task: &Task, row: &Row) {
+    // Key: flow-id / rdd-id / dest-part / src-part
+    let npartitions_consumer = task.stage.npartitions_consumer;
+    let partition = calculate_hash(row) % task.stage.npartitions_consumer as u64;
+
+    println!("write = {} to partition {} ", row, partition);
+}
 
 /***************************************************************************************************/
 #[test]
