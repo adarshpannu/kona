@@ -8,6 +8,7 @@ struct BlockMgr {
 
 }
 
+
 impl BlockMgr {
     fn write_row() {}
 
