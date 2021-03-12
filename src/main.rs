@@ -7,6 +7,7 @@ pub mod row;
 pub mod consts;
 pub mod graphviz;
 pub mod csv;
+pub mod blockmgr;
 
 use clp::CLParser;
 
