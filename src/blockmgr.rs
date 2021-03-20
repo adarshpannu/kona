@@ -12,7 +12,7 @@ impl Block {
 }
 
 struct BlockMgr {
-    blocks: Vec<Box<Block>>,
+    free_list: Vec<Box<Block>>,
 }
 
 impl BlockMgr {
@@ -22,15 +22,17 @@ impl BlockMgr {
             let block = Block::new();
             blocks.push(block);
         }
-        BlockMgr { blocks }
+        BlockMgr { free_list: blocks }
     }
+
+    
 
     fn get() -> Block {
         unimplemented!()
     }
 
     fn put() {
-        
+
     }
 }
 
