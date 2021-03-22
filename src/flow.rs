@@ -693,6 +693,7 @@ fn write_partition(task: &Task, row: &Row) {
     println!("write = {} to partition {} ", row, partition);
 }
 
+
 /***************************************************************************************************/
 #[test]
 fn run_flow() {
