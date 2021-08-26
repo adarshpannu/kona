@@ -3,10 +3,11 @@
 use core::panic;
 use std::rc::Rc;
 use std::fmt;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
 pub enum Datum {
-    STR(Rc<String>),
+    STR(Arc<String>),
     INT(isize),
     BOOL(bool),
 }

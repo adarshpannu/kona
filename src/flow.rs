@@ -1,8 +1,8 @@
-#![allow(warnings)]
+//#![allow(warnings)]
 
-use std::{collections::hash_map::Entry, hash::Hash};
-use std::{any::Any, rc::Rc};
-use std::{cell::RefCell, collections::HashMap};
+use std::sync::Arc;
+use std::collections::HashMap;
+use std::hash::Hash;
 use typed_arena::Arena;
 
 use crate::consts::*;
@@ -11,55 +11,55 @@ use crate::expr::{Expr::*, *};
 use crate::graphviz::{htmlify, write_flow_to_graphviz};
 use crate::row::*;
 
-type node_id = usize;
-type col_id = usize;
-type partition_id = usize;
+type NodeId = usize;
+type ColId = usize;
+type PartitionId = usize;
 
 /***************************************************************************************************/
-type NodeArena = Arena<Box<dyn Node>>;
-pub trait Node {
-    fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Box<dyn Node> {
+type NodeArena = Arena<Arc<dyn Node + Send + Sync>>;
+pub trait Node : Send + Sync {
+    fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Arc<dyn Node + Send + Sync> {
         let npartitions = self.base().npartitions;
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Box::new(EmitNode { base }));
+        let retval = arena.alloc(Arc::new(EmitNode { base }));
         retval
     }
 
     fn project<'a>(
-        &self, arena: &'a NodeArena, colids: Vec<col_id>,
-    ) -> &'a Box<dyn Node> {
+        &self, arena: &'a NodeArena, colids: Vec<ColId>,
+    ) -> &'a Arc<dyn Node + Send + Sync> {
         let npartitions = self.base().npartitions;
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Box::new(ProjectNode { base, colids }));
+        let retval = arena.alloc(Arc::new(ProjectNode { base, colids }));
         retval
     }
 
     fn filter<'a>(
         &self, arena: &'a NodeArena, expr: Expr,
-    ) -> &'a Box<dyn Node> {
+    ) -> &'a Arc<dyn Node + Send + Sync> {
         let npartitions = self.base().npartitions;
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Box::new(FilterNode::new(base, expr)));
+        let retval = arena.alloc(Arc::new(FilterNode::new(base, expr)));
         retval
     }
 
     fn join<'a>(
-        &self, arena: &'a NodeArena, other_children: Vec<&Box<dyn Node>>,
+        &self, arena: &'a NodeArena, other_children: Vec<&Arc<dyn Node + Send + Sync>>,
         preds: Vec<JoinPredicate>,
-    ) -> &'a Box<dyn Node> {
+    ) -> &'a Arc<dyn Node + Send + Sync> {
         let npartitions = self.base().npartitions;
         let base =
             NodeBase::new(&arena, self.id(), other_children, npartitions);
-        let retval = arena.alloc(Box::new(JoinNode { base, preds }));
+        let retval = arena.alloc(Arc::new(JoinNode { base, preds }));
         retval
     }
 
     fn agg<'a>(
-        &self, arena: &'a NodeArena, keycolids: Vec<col_id>,
-        aggcolids: Vec<(AggType, col_id)>, npartitions: usize,
-    ) -> &'a Box<dyn Node> {
+        &self, arena: &'a NodeArena, keycolids: Vec<ColId>,
+        aggcolids: Vec<(AggType, ColId)>, npartitions: usize,
+    ) -> &'a Arc<dyn Node + Send + Sync> {
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Box::new(AggNode {
+        let retval = arena.alloc(Arc::new(AggNode {
             base,
             keycolids,
             aggcolids,
@@ -71,11 +71,11 @@ pub trait Node {
 
     fn desc(&self) -> String;
 
-    fn id(&self) -> node_id {
+    fn id(&self) -> NodeId {
         self.base().id
     }
 
-    fn children(&self) -> &Vec<node_id> {
+    fn children(&self) -> &Vec<NodeId> {
         &self.base().children
     }
 
@@ -83,12 +83,12 @@ pub trait Node {
         self.base().children.len()
     }
 
-    fn child<'a>(&self, flow: &'a Flow, ix: node_id) -> &'a Box<dyn Node> {
+    fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a Arc<dyn Node + Send + Sync> {
         let children = &self.base().children;
         flow.get_node(children[ix])
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row>;
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row>;
 
     fn is_endpoint(&self) -> bool {
         false
@@ -102,8 +102,8 @@ pub trait Node {
 /***************************************************************************************************/
 #[derive(Debug)]
 pub struct NodeBase {
-    id: node_id,
-    children: Vec<node_id>,
+    id: NodeId,
+    children: Vec<NodeId>,
     npartitions: usize,
 }
 
@@ -118,7 +118,7 @@ impl NodeBase {
     }
 
     fn new1(
-        arena: &NodeArena, child_id: node_id, npartitions: usize,
+        arena: &NodeArena, child_id: NodeId, npartitions: usize,
     ) -> NodeBase {
         let id = arena.len();
         NodeBase {
@@ -129,8 +129,8 @@ impl NodeBase {
     }
 
     fn new(
-        arena: &NodeArena, child_id: node_id,
-        other_children: Vec<&Box<dyn Node>>, npartitions: usize,
+        arena: &NodeArena, child_id: NodeId,
+        other_children: Vec<&Arc<dyn Node + Send + Sync>>, npartitions: usize,
     ) -> NodeBase {
         let id = arena.len();
         let mut children: Vec<_> =
@@ -164,9 +164,8 @@ impl Node for EmitNode {
         &self.base
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
-        let flow = task.stage.flow;
-        self.child(flow, 0).next(task, false)
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+        self.child(flow, 0).next(flow, stage, task, false)
     }
 
     fn is_endpoint(&self) -> bool {
@@ -199,13 +198,13 @@ where
 impl CSVNode {
     fn new(
         arena: &NodeArena, filename: String, npartitions: usize,
-    ) -> &Box<dyn Node> {
+    ) -> &Arc<dyn Node + Send + Sync> {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
         let base = NodeBase::new0(&arena, npartitions);
 
         let partitions =
             compute_partitions(&filename, npartitions as u64).unwrap();
-        let retval = arena.alloc(Box::new(CSVNode {
+        let retval = arena.alloc(Arc::new(CSVNode {
             base,
             filename,
             colnames,
@@ -276,7 +275,7 @@ impl Node for CSVNode {
         &self.base
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
         let partition_id = task.partition_id;
         let runtime = task.contexts.entry(self.id()).or_insert_with(|| {
             let partition = &self.partitions[partition_id];
@@ -299,7 +298,7 @@ impl Node for CSVNode {
                             let ival = col.parse::<isize>().unwrap();
                             Datum::INT(ival)
                         }
-                        DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                        DataType::STR => Datum::STR(Arc::new(col.to_owned())),
                         _ => unimplemented!(),
                     })
                     .collect::<Vec<Datum>>();
@@ -316,7 +315,7 @@ impl Node for CSVNode {
 #[derive(Debug)]
 struct ProjectNode {
     base: NodeBase,
-    colids: Vec<col_id>,
+    colids: Vec<ColId>,
 }
 
 impl Node for ProjectNode {
@@ -328,9 +327,11 @@ impl Node for ProjectNode {
         &self.base
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
-        let flow = task.stage.flow;
-        if let Some(row) = self.child(flow, 0).next(task, false) {
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+        //let flow = task.stage().flow();
+        //let flow = &*(&*task.stage).flow;
+
+        if let Some(row) = self.child(flow, 0).next(flow, stage, task, false) {
             return Some(row.project(&self.colids));
         } else {
             return None;
@@ -357,10 +358,8 @@ impl Node for FilterNode {
         &self.base
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
-        let flow = task.stage.flow;
-
-        while let Some(e) = self.child(flow, 0).next(task, false) {
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+        while let Some(e) = self.child(flow, 0).next(flow, stage, task, false) {
             if let Datum::BOOL(b) = self.expr.eval(&e) {
                 if b {
                     return Some(e);
@@ -387,7 +386,7 @@ struct JoinNode {
     preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
 }
 
-type JoinPredicate = (col_id, RelOp, col_id);
+type JoinPredicate = (ColId, RelOp, ColId);
 
 impl Node for JoinNode {
     fn desc(&self) -> String {
@@ -399,7 +398,7 @@ impl Node for JoinNode {
         &self.base
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
         None
     }
 }
@@ -410,8 +409,8 @@ impl JoinNode {}
 #[derive(Debug)]
 struct AggNode {
     base: NodeBase,
-    keycolids: Vec<col_id>,
-    aggcolids: Vec<(AggType, col_id)>,
+    keycolids: Vec<ColId>,
+    aggcolids: Vec<(AggType, ColId)>,
 }
 
 impl Node for AggNode {
@@ -430,8 +429,8 @@ impl Node for AggNode {
         &self.base
     }
 
-    fn next(&self, task: &mut Task, is_head: bool) -> Option<Row> {
-        let htable: HashMap<Row, Row> = self.run_producer(task);
+    fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+        let htable: HashMap<Row, Row> = self.run_producer(flow, stage, task);
         None
     }
 
@@ -469,12 +468,11 @@ impl AggNode {
         }
     }
 
-    fn run_producer(&self, task: &mut Task) -> HashMap<Row, Row> {
-        let flow = task.stage.flow;
+    fn run_producer(&self, flow: &Flow, stage: &Stage, task: &mut Task) -> HashMap<Row, Row> {
         let mut htable: HashMap<Row, Row> = HashMap::new();
-        let child = self.child(flow, 0);
+        let child = self.child(&*flow, 0);
 
-        while let Some(mut currow) = child.next(task, false) {
+        while let Some(mut currow) = child.next(flow, stage, task, false) {
             // build key
             let key = currow.project(&self.keycolids);
             //println!("-- key = {}", key);
@@ -500,7 +498,7 @@ impl AggNode {
             //println!("   acc = {}", acc);
         }
         for (k, v) in htable.iter() {
-            write_partition(task, v);
+            write_partition(flow, stage, task, v);
         }
         htable
     }
@@ -517,11 +515,11 @@ pub enum AggType {
 
 /***************************************************************************************************/
 pub struct Flow {
-    pub nodes: Vec<Box<dyn Node>>,
+    pub nodes: Vec<Arc<dyn Node + Send + Sync>>,
 }
 
 impl Flow {
-    fn get_node(&self, node_id: node_id) -> &Box<dyn Node> {
+    fn get_node(&self, node_id: NodeId) -> &Arc<dyn Node + Send + Sync> {
         &self.nodes[node_id]
     }
 }
@@ -613,66 +611,63 @@ impl Flow {
     fn run(&self) {
         let stages = self.make_stages();
         for stage in stages {
-            stage.run();
+            stage.run(self);
         }
     }
 }
 
 /***************************************************************************************************/
-struct Stage<'a> {
-    flow: &'a Flow,
-    head_node_id: node_id,
+pub struct Stage {
+    head_node_id: NodeId,
     npartitions_producer: usize,
     npartitions_consumer: usize,
 }
 
-impl<'a> Stage<'a> {
-    fn new(top: node_id, flow: &Flow) -> Stage {
+impl Stage {
+    fn new(top: NodeId, flow: &Flow) -> Stage {
         let node = flow.get_node(top);
         let npartitions = node.child(flow, 0).npartitions();
         Stage {
-            flow,
             head_node_id: top,
             npartitions_producer: npartitions,
-            npartitions_consumer: node.npartitions()
+            npartitions_consumer: node.npartitions(),
         }
     }
 
-    fn run(&self) {
-        let node = self.flow.get_node(self.head_node_id);
+    fn run(&self, flow: &Flow) {
+        let node = flow.get_node(self.head_node_id);
         let npartitions = self.npartitions_producer;
         for partition_id in 0..npartitions {
-            let mut task = Task::new(self, partition_id);
-            task.run();
+            let mut task = Task::new(partition_id);
+            task.run(flow, self);
         }
     }
 }
 
 /***************************************************************************************************/
-pub struct Task<'a> {
-    stage: &'a Stage<'a>,
-    partition_id: partition_id,
-    contexts: HashMap<node_id, NodeRuntime>,
+pub struct Task {
+    partition_id: PartitionId,
+    contexts: HashMap<NodeId, NodeRuntime>,
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
-impl<'a> Task<'a> {
-    fn new(stage: &'a Stage, partition_id: partition_id) -> Task<'a> {
+impl Task {
+    fn new(partition_id: PartitionId) -> Task {
         Task {
-            stage,
             partition_id,
             contexts: HashMap::new(),
         }
     }
 
-    fn run(&mut self) {
-        let stage = self.stage;
+    fn run(&mut self, flow: &Flow, stage: &Stage) {
         println!(
             "\n\nRunning task: top = {}, partition = {}/{}",
-            self.stage.head_node_id, self.partition_id, stage.npartitions_producer
+            stage.head_node_id,
+            self.partition_id,
+            stage.npartitions_producer
         );
-        let node = stage.flow.get_node(stage.head_node_id);
-        node.next(self, true);
+        let node = flow.get_node(stage.head_node_id);
+        node.next(flow, stage, self, true);
     }
 }
 
@@ -685,14 +680,36 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
-fn write_partition(task: &Task, row: &Row) {
+fn write_partition(flow: &Flow, stage: &Stage, task: &Task, row: &Row) {
     // Key: flow-id / rdd-id / dest-part / src-part
-    let npartitions_consumer = task.stage.npartitions_consumer;
-    let partition = calculate_hash(row) % task.stage.npartitions_consumer as u64;
+    let npartitions_consumer = stage.npartitions_consumer;
+    let partition =
+        calculate_hash(row) % stage.npartitions_consumer as u64;
 
     println!("write = {} to partition {} ", row, partition);
 }
 
+use std::sync::mpsc;
+use std::thread;
+
+enum WorkerMessage {
+    ShutdownWorker,
+    RunTask(Task),
+}
+
+fn create_worker_pool(ntasks: u32) {
+    //let mut threads = vec![];
+
+    for i in 0..ntasks {
+        let (tx_channel, rx_channel) = mpsc::channel::<WorkerMessage>();
+
+        let thrd = thread::spawn(move || for msg in rx_channel {
+            
+        });
+        thrd.join();
+
+    }
+}
 
 /***************************************************************************************************/
 #[test]
@@ -715,3 +732,4 @@ fn run_flow() {
     // Run the flow
     flow.run();
 }
+
