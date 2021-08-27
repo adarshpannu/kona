@@ -3,10 +3,11 @@
 use core::panic;
 use std::fmt;
 use std::sync::Arc;
+use crate::includes::*;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize)]
 pub enum Datum {
-    STR(Arc<String>),
+    STR(Box<String>),
     INT(isize),
     BOOL(bool),
 }
@@ -21,7 +22,7 @@ impl Datum {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug, PartialEq, PartialOrd, Serialize)]
 pub enum DataType {
     STR,
     INT,
@@ -40,7 +41,7 @@ impl fmt::Display for Column {
 
 type Column = Datum;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct Row {
     cols: Vec<Column>,
 }

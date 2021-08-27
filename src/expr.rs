@@ -1,12 +1,14 @@
 #![allow(warnings)]
 
+use crate::includes::*;
+
 use crate::row::{Datum, Row};
 use core::panic;
 use std::fmt;
 use std::ops;
 use Expr::*;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum ArithOp {
     Add,
     Sub,
@@ -26,7 +28,7 @@ impl fmt::Display for ArithOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum LogOp {
     And,
     Or,
@@ -45,7 +47,7 @@ impl fmt::Display for LogOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum RelOp {
     Eq,
     Ne,
@@ -71,7 +73,7 @@ impl fmt::Display for RelOp {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum Expr {
     CID(usize),
     Literal(Datum),

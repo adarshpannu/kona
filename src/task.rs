@@ -11,9 +11,6 @@ use std::thread;
 
 use crate::flow::*;
 
-use serde::{Serialize, Deserialize};
-
-
 /***************************************************************************************************/
 impl Flow {
     fn make_stages(&self) -> Vec<Stage> {
@@ -65,7 +62,7 @@ impl Stage {
 
             let thread_id = partition_id % (ctx.thread_pool.threads.len());
             //ctx.thread_pool.s2t_channels_sx[thread_id]
-             //   .send(ThreadPoolMessage::RunTask(&flow, &stage, &task));
+            //   .send(ThreadPoolMessage::RunTask(&flow, &stage, &task));
         }
     }
 }
@@ -98,7 +95,7 @@ impl Task {
 }
 
 pub enum ThreadPoolMessage {
-    RunTask(Flow, Stage, Task),
+    RunTask,
     EndTask,
     TaskEnded,
 }
@@ -130,11 +127,9 @@ impl ThreadPool {
                         ThreadPoolMessage::EndTask => {
                             debug!("Task on thread {} ended", i)
                         }
-                        ThreadPoolMessage::RunTask(flow, stage, task) => {
-                            debug!(
-                                "Received task on thread {}: stage={:?} ptn={}",
-                                i, &stage, task.partition_id
-                            );
+                        ThreadPoolMessage::RunTask => {
+                            debug!("Received task on thread");
+
                             t2s_channel_tx_clone
                                 .send(ThreadPoolMessage::TaskEnded);
                         }

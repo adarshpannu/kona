@@ -3,8 +3,6 @@
 
 use crate::includes::*;
 
-#[derive(Debug, Clone, Copy)]
-pub struct TextFilePartition(u64, u64);
 
 use std::error::Error;
 use std::fs;
@@ -89,6 +87,7 @@ pub fn compute_partitions(
     Ok(splits)
 }
 
+/*
 #[test]
 fn test() {
     debug!("Hello, world!");
@@ -106,5 +105,6 @@ fn test() {
 
     debug!("Done");
 }
+*/
 
 

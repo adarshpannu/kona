@@ -9,3 +9,7 @@ pub type ColId = usize;
 pub type PartitionId = usize;
 
 pub use crate::Context;
+pub use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct TextFilePartition(pub u64, pub u64);

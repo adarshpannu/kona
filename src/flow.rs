@@ -6,63 +6,80 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use typed_arena::Arena;
 
-use crate::includes::*;
-use crate::csv::*;
+use crate::csv22::*;
 use crate::expr::{Expr::*, *};
 use crate::graphviz::{htmlify, write_flow_to_graphviz};
+use crate::includes::*;
 use crate::row::*;
 use crate::task::*;
-use serde::{Serialize, Deserialize};
 
+pub trait Node2: serde_traitobject::Serialize {}
+
+#[derive(Serialize)]
+struct EmitNode2 {
+    id: NodeId,
+}
+
+impl Node2 for EmitNode2 {}
+
+#[derive(Serialize)]
+pub struct Flow2 {
+    #[serde(with = "serde_traitobject")]
+    pub nodes: Box<dyn Node2>,
+}
+
+impl Node2 for EmitNode {}
+impl Node2 for ProjectNode {}
+impl Node2 for FilterNode {}
+impl Node2 for CSVNode {}
+impl Node2 for JoinNode {}
+impl Node2 for AggNode {}
 
 /***************************************************************************************************/
-type NodeArena = Arena<Arc<dyn Node + Send + Sync>>;
-pub trait Node: Send + Sync {
-    fn emit<'a>(
-        &self, arena: &'a NodeArena,
-    ) -> &'a Arc<dyn Node + Send + Sync> {
+type NodeArena = Arena<Box<dyn Node>>;
+pub trait Node: serde_traitobject::Serialize {
+    fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Box<dyn Node> {
         let npartitions = self.base().npartitions;
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Arc::new(EmitNode { base }));
+        let retval = arena.alloc(Box::new(EmitNode { base }));
         retval
     }
 
     fn project<'a>(
         &self, arena: &'a NodeArena, colids: Vec<ColId>,
-    ) -> &'a Arc<dyn Node + Send + Sync> {
+    ) -> &'a Box<dyn Node> {
         let npartitions = self.base().npartitions;
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Arc::new(ProjectNode { base, colids }));
+        let retval = arena.alloc(Box::new(ProjectNode { base, colids }));
         retval
     }
 
     fn filter<'a>(
         &self, arena: &'a NodeArena, expr: Expr,
-    ) -> &'a Arc<dyn Node + Send + Sync> {
+    ) -> &'a Box<dyn Node> {
         let npartitions = self.base().npartitions;
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Arc::new(FilterNode::new(base, expr)));
+        let retval = arena.alloc(Box::new(FilterNode::new(base, expr)));
         retval
     }
 
     fn join<'a>(
-        &self, arena: &'a NodeArena,
-        other_children: Vec<&Arc<dyn Node + Send + Sync>>,
+        &self, arena: &'a NodeArena, other_children: Vec<&Box<dyn Node>>,
         preds: Vec<JoinPredicate>,
-    ) -> &'a Arc<dyn Node + Send + Sync> {
+    ) -> &'a Box<dyn Node> {
         let npartitions = self.base().npartitions;
         let base =
             NodeBase::new(&arena, self.id(), other_children, npartitions);
-        let retval = arena.alloc(Arc::new(JoinNode { base, preds }));
+        let retval = arena.alloc(Box::new(JoinNode { base, preds }));
         retval
     }
 
     fn agg<'a>(
         &self, arena: &'a NodeArena, keycolids: Vec<ColId>,
         aggcolids: Vec<(AggType, ColId)>, npartitions: usize,
-    ) -> &'a Arc<dyn Node + Send + Sync> {
+    ) -> &'a Box<dyn Node> {
         let base = NodeBase::new1(&arena, self.id(), npartitions);
-        let retval = arena.alloc(Arc::new(AggNode {
+        let retval = arena.alloc(Box::new(AggNode {
             base,
             keycolids,
             aggcolids,
@@ -86,9 +103,7 @@ pub trait Node: Send + Sync {
         self.base().children.len()
     }
 
-    fn child<'a>(
-        &self, flow: &'a Flow, ix: NodeId,
-    ) -> &'a Arc<dyn Node + Send + Sync> {
+    fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a Box<dyn Node> {
         let children = &self.base().children;
         flow.get_node(children[ix])
     }
@@ -107,7 +122,7 @@ pub trait Node: Send + Sync {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct NodeBase {
     id: NodeId,
     children: Vec<NodeId>,
@@ -137,7 +152,7 @@ impl NodeBase {
 
     fn new(
         arena: &NodeArena, child_id: NodeId,
-        other_children: Vec<&Arc<dyn Node + Send + Sync>>, npartitions: usize,
+        other_children: Vec<&Box<dyn Node>>, npartitions: usize,
     ) -> NodeBase {
         let id = arena.len();
         let mut children: Vec<_> =
@@ -158,7 +173,7 @@ pub enum NodeRuntime {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct EmitNode {
     base: NodeBase,
 }
@@ -186,6 +201,7 @@ impl Node for EmitNode {
 impl EmitNode {}
 
 /***************************************************************************************************/
+#[derive(Debug, Serialize)]
 struct CSVNode {
     base: NodeBase,
     filename: String,
@@ -208,13 +224,13 @@ where
 impl CSVNode {
     fn new(
         arena: &NodeArena, filename: String, npartitions: usize,
-    ) -> &Arc<dyn Node + Send + Sync> {
+    ) -> &Box<dyn Node> {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
         let base = NodeBase::new0(&arena, npartitions);
 
         let partitions =
             compute_partitions(&filename, npartitions as u64).unwrap();
-        let retval = arena.alloc(Arc::new(CSVNode {
+        let retval = arena.alloc(Box::new(CSVNode {
             base,
             filename,
             colnames,
@@ -310,7 +326,7 @@ impl Node for CSVNode {
                             let ival = col.parse::<isize>().unwrap();
                             Datum::INT(ival)
                         }
-                        DataType::STR => Datum::STR(Arc::new(col.to_owned())),
+                        DataType::STR => Datum::STR(Box::new(col.to_owned())),
                         _ => unimplemented!(),
                     })
                     .collect::<Vec<Datum>>();
@@ -324,7 +340,7 @@ impl Node for CSVNode {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct ProjectNode {
     base: NodeBase,
     colids: Vec<ColId>,
@@ -356,7 +372,7 @@ impl Node for ProjectNode {
 impl ProjectNode {}
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct FilterNode {
     base: NodeBase,
     expr: Expr,
@@ -397,6 +413,7 @@ impl FilterNode {
 }
 
 /***************************************************************************************************/
+#[derive(Debug, Serialize)]
 struct JoinNode {
     base: NodeBase,
     preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
@@ -424,7 +441,7 @@ impl Node for JoinNode {
 impl JoinNode {}
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct AggNode {
     base: NodeBase,
     keycolids: Vec<ColId>,
@@ -526,7 +543,7 @@ impl AggNode {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub enum AggType {
     COUNT,
     MIN,
@@ -536,13 +553,33 @@ pub enum AggType {
 }
 
 /***************************************************************************************************/
-//#[derive(Serialize, Deserialize)]
+//#[derive(Serialize)]
 pub struct Flow {
-    pub nodes: Vec<Arc<dyn Node + Send + Sync>>,
+    //#[serde(with = "serde_traitobject")]
+    pub nodes: Vec<Box<dyn Node>>,
 }
 
+/*
+use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeMap};
+
+impl Serialize for Flow
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(0))?;
+
+        for e in &self.nodes {
+            seq.serialize_element(&true)?;
+        }
+        seq.end()
+    }
+}
+*/
+
 impl Flow {
-    pub fn get_node(&self, node_id: NodeId) -> &Arc<dyn Node + Send + Sync> {
+    pub fn get_node(&self, node_id: NodeId) -> &Box<dyn Node> {
         &self.nodes[node_id]
     }
 }
