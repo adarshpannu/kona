@@ -1,10 +1,11 @@
 // main.rs
 #![allow(warnings)]
 
+use crate::includes::*;
+
 #[derive(Debug, Clone, Copy)]
 pub struct TextFilePartition(u64, u64);
 
-use crate::consts::*;
 use std::error::Error;
 use std::fs;
 use std::io::prelude::*;
@@ -82,7 +83,7 @@ pub fn compute_partitions(
             end += line.len() as u64;
         }
         splits.push(TextFilePartition(begin, end));
-        println!("begin = {}, end = {}", begin, end);
+        debug!("begin = {}, end = {}", begin, end);
         begin = end;
     }
     Ok(splits)
@@ -90,20 +91,20 @@ pub fn compute_partitions(
 
 #[test]
 fn test() {
-    println!("Hello, world!");
+    debug!("Hello, world!");
     let filename = format!("{}/{}", DATADIR, "emp.csv").to_string();
 
     let partitions = compute_partitions(&filename, 4).unwrap();
     for partition in partitions.iter() {
-        println!("split = {:?}", partition);
+        debug!("split = {:?}", partition);
     }
 
     let ptniter = CSVPartitionIter::new(&filename, &partitions[1]);
     for line in ptniter {
-        println!("line = {:?}", line);
+        debug!("line = {:?}", line);
     }
 
-    println!("Done");
+    debug!("Done");
 }
 
 
