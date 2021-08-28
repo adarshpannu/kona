@@ -15,6 +15,7 @@ pub mod task;
 use clp::CLParser;
 use env_logger::Env;
 use task::ThreadPool;
+use bincode;
 
 pub struct Context {
     thread_pool: ThreadPool,
@@ -45,6 +46,12 @@ pub fn run_flow(ctx: &Context) {
     }
     */
 
+    dbg!(&flow);
+
+    let encoded: Vec<u8> = bincode::serialize(&flow).unwrap();
+
+    dbg!(encoded.len());
+    
     // Run the flow
     flow.run(&ctx);
 }

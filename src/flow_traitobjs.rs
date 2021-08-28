@@ -13,139 +13,82 @@ use crate::includes::*;
 use crate::row::*;
 use crate::task::*;
 
-type NodeArena = Arena<Node>;
-
-#[derive(Debug, Serialize)]
-enum NodeEnum {
-    EmitNode(EmitNode),
-    CSVNode(CSVNode),
-    ProjectNode(ProjectNode),
-    FilterNode(FilterNode),
-    AggNode(AggNode),
-    JoinNode(JoinNode),
-}
-
-#[derive(Debug, Serialize)]
-pub struct Node {
-    id: NodeId,
-    children: Vec<NodeId>,
-    npartitions: usize,
-    node_enum: NodeEnum,
-}
-
-impl Node {
-    fn new0(
-        arena: &NodeArena, npartitions: usize, node_enum: NodeEnum,
-    ) -> Node {
-        let id = arena.len();
-        Node {
-            id,
-            children: vec![],
-            npartitions,
-            node_enum,
-        }
-    }
-
-    fn new1(
-        arena: &NodeArena, child_id: NodeId, npartitions: usize,
-        node_enum: NodeEnum,
-    ) -> Node {
-        let id = arena.len();
-        Node {
-            id,
-            children: vec![child_id],
-            npartitions,
-            node_enum,
-        }
-    }
-
-    fn new(
-        arena: &NodeArena, child_id: NodeId, other_children: Vec<&Node>,
-        npartitions: usize, node_enum: NodeEnum,
-    ) -> Node {
-        let id = arena.len();
-        let mut children: Vec<_> =
-            other_children.iter().map(|e| e.id()).collect();
-        children.push(child_id);
-        Node {
-            id,
-            children,
-            npartitions,
-            node_enum,
-        }
-    }
-}
-
 /***************************************************************************************************/
-impl Node {
-    fn emit<'a>(&self, arena: &'a NodeArena) -> Node {
-        let npartitions = self.npartitions;
-        let retval = Node::new1(&arena, self.id(), npartitions, EmitNode {});
+type NodeArena = Arena<Box<dyn Node>>;
+pub trait Node: serde_traitobject::Serialize {
+    fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Box<dyn Node> {
+        let npartitions = self.base().npartitions;
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
+        let retval = arena.alloc(Box::new(EmitNode { base }));
         retval
     }
 
-    fn project<'a>(&self, arena: &'a NodeArena, colids: Vec<ColId>) -> Node {
+    fn project<'a>(
+        &self, arena: &'a NodeArena, colids: Vec<ColId>,
+    ) -> &'a Box<dyn Node> {
         let npartitions = self.base().npartitions;
-        let retval =
-            Node::new1(&arena, self.id(), npartitions, ProjectNode { colids });
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
+        let retval = arena.alloc(Box::new(ProjectNode { base, colids }));
         retval
     }
 
-    fn filter<'a>(&self, arena: &'a NodeArena, expr: Expr) -> Node {
+    fn filter<'a>(
+        &self, arena: &'a NodeArena, expr: Expr,
+    ) -> &'a Box<dyn Node> {
         let npartitions = self.base().npartitions;
-        let retval =
-            Node::new1(&arena, self.id(), npartitions, FilterNode::new(expr));
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
+        let retval = arena.alloc(Box::new(FilterNode::new(base, expr)));
         retval
     }
 
     fn join<'a>(
-        &self, arena: &'a NodeArena, other_children: Vec<&Node>,
+        &self, arena: &'a NodeArena, other_children: Vec<&Box<dyn Node>>,
         preds: Vec<JoinPredicate>,
-    ) -> Node {
-        let retval = Node::new(
-            &arena,
-            self.id(),
-            other_children,
-            self.npartitions, // TBD: Partitions need to be decided
-            JoinNode { preds },
-        );
+    ) -> &'a Box<dyn Node> {
+        let npartitions = self.base().npartitions;
+        let base =
+            NodeBase::new(&arena, self.id(), other_children, npartitions);
+        let retval = arena.alloc(Box::new(JoinNode { base, preds }));
         retval
     }
 
     fn agg<'a>(
         &self, arena: &'a NodeArena, keycolids: Vec<ColId>,
         aggcolids: Vec<(AggType, ColId)>, npartitions: usize,
-    ) -> Node {
-        let aggnode = AggNode {
+    ) -> &'a Box<dyn Node> {
+        let base = NodeBase::new1(&arena, self.id(), npartitions);
+        let retval = arena.alloc(Box::new(AggNode {
+            base,
             keycolids,
             aggcolids,
-        };
-        let retval = Node::new1(&arena, self.id(), npartitions, aggnode);
+        }));
         retval
     }
 
+    fn base(&self) -> &NodeBase;
+
+    fn desc(&self) -> String;
+
     fn id(&self) -> NodeId {
-        self.id
+        self.base().id
     }
 
     fn children(&self) -> &Vec<NodeId> {
-        &self.children
+        &self.base().children
     }
 
     fn nchildren(&self) -> usize {
         self.base().children.len()
     }
 
-    fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a Node {
+    fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a Box<dyn Node> {
         let children = &self.base().children;
         flow.get_node(children[ix])
     }
 
     fn next(
         &self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool,
-    ) -> Option<Row> {
-        unimplemented!()
-    }
+    ) -> Option<Row>;
 
     fn is_endpoint(&self) -> bool {
         false
@@ -157,6 +100,51 @@ impl Node {
 }
 
 /***************************************************************************************************/
+#[derive(Debug, Serialize)]
+pub struct NodeBase {
+    id: NodeId,
+    children: Vec<NodeId>,
+    npartitions: usize,
+}
+
+impl NodeBase {
+    fn new0(arena: &NodeArena, npartitions: usize) -> NodeBase {
+        let id = arena.len();
+        NodeBase {
+            id,
+            children: vec![],
+            npartitions,
+        }
+    }
+
+    fn new1(
+        arena: &NodeArena, child_id: NodeId, npartitions: usize,
+    ) -> NodeBase {
+        let id = arena.len();
+        NodeBase {
+            id,
+            children: vec![child_id],
+            npartitions,
+        }
+    }
+
+    fn new(
+        arena: &NodeArena, child_id: NodeId,
+        other_children: Vec<&Box<dyn Node>>, npartitions: usize,
+    ) -> NodeBase {
+        let id = arena.len();
+        let mut children: Vec<_> =
+            other_children.iter().map(|e| e.id()).collect();
+        children.push(child_id);
+        NodeBase {
+            id,
+            children,
+            npartitions,
+        }
+    }
+}
+
+/***************************************************************************************************/
 pub enum NodeRuntime {
     Unused,
     CSV { iter: CSVPartitionIter },
@@ -164,11 +152,17 @@ pub enum NodeRuntime {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize)]
-struct EmitNode {}
+struct EmitNode {
+    base: NodeBase,
+}
 
-impl EmitNode {
+impl Node for EmitNode {
     fn desc(&self) -> String {
         format!("EmitNode-#{}", self.id())
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
     }
 
     fn next(
@@ -187,6 +181,7 @@ impl EmitNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize)]
 struct CSVNode {
+    base: NodeBase,
     filename: String,
     colnames: Vec<String>,
     coltypes: Vec<DataType>,
@@ -199,26 +194,28 @@ use std::path::Path;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
-    P: AsRef<Path>,
-{
+    P: AsRef<Path>, {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
 
 impl CSVNode {
-    fn new(arena: &NodeArena, filename: String, npartitions: usize) -> Node {
+    fn new(
+        arena: &NodeArena, filename: String, npartitions: usize,
+    ) -> &Box<dyn Node> {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
+        let base = NodeBase::new0(&arena, npartitions);
 
         let partitions =
             compute_partitions(&filename, npartitions as u64).unwrap();
-        let csvnode = CSVNode {
+        let retval = arena.alloc(Box::new(CSVNode {
+            base,
             filename,
             colnames,
             coltypes,
             partitions,
-        };
-        let node = Node::new0(arena, npartitions, csvnode);
-        node
+        }));
+        retval
     }
 
     fn infer_datatype(str: &String) -> DataType {
@@ -263,7 +260,7 @@ impl CSVNode {
     }
 }
 
-impl CSVNode {
+impl Node for CSVNode {
     fn desc(&self) -> String {
         let filename =
             self.filename.split("/").last().unwrap_or(&self.filename);
@@ -276,6 +273,10 @@ impl CSVNode {
             self.colnames
         )
         .replace("\"", "\\\"")
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
     }
 
     fn next(
@@ -319,12 +320,17 @@ impl CSVNode {
 /***************************************************************************************************/
 #[derive(Debug, Serialize)]
 struct ProjectNode {
+    base: NodeBase,
     colids: Vec<ColId>,
 }
 
-impl ProjectNode {
+impl Node for ProjectNode {
     fn desc(&self) -> String {
         format!("ProjectNode-#{}|{:?}", self.id(), self.colids)
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
     }
 
     fn next(
@@ -346,13 +352,18 @@ impl ProjectNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize)]
 struct FilterNode {
+    base: NodeBase,
     expr: Expr,
 }
 
-impl FilterNode {
+impl Node for FilterNode {
     fn desc(&self) -> String {
         let s = format!("FilterNode-#{}|{}", self.id(), self.expr);
         htmlify(s)
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
     }
 
     fn next(
@@ -370,9 +381,9 @@ impl FilterNode {
 }
 
 impl FilterNode {
-    fn new(expr: Expr) -> FilterNode {
+    fn new(base: NodeBase, expr: Expr) -> FilterNode {
         if let Expr::RelExpr(..) = expr {
-            FilterNode { expr }
+            FilterNode { base, expr }
         } else {
             panic!("Invalid filter expression")
         }
@@ -382,15 +393,20 @@ impl FilterNode {
 /***************************************************************************************************/
 #[derive(Debug, Serialize)]
 struct JoinNode {
+    base: NodeBase,
     preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
 }
 
 type JoinPredicate = (ColId, RelOp, ColId);
 
-impl JoinNode {
+impl Node for JoinNode {
     fn desc(&self) -> String {
         let s = format!("JoinNode-#{}|{:?}", self.id(), self.preds);
         htmlify(s)
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
     }
 
     fn next(
@@ -405,11 +421,12 @@ impl JoinNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize)]
 struct AggNode {
+    base: NodeBase,
     keycolids: Vec<ColId>,
     aggcolids: Vec<(AggType, ColId)>,
 }
 
-impl AggNode {
+impl Node for AggNode {
     fn desc(&self) -> String {
         let s = format!(
             "AggNode-#{} (p={})|by = {:?}, aggs = {:?}",
@@ -419,6 +436,10 @@ impl AggNode {
             self.aggcolids
         );
         s
+    }
+
+    fn base(&self) -> &NodeBase {
+        &self.base
     }
 
     fn next(
@@ -512,7 +533,8 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Serialize)]
 pub struct Flow {
-    pub nodes: Vec<Node>,
+    #[serde(with = "serde_traitobject")]
+    pub nodes: Vec<Box<dyn Node>>,
 }
 
 /*
@@ -535,7 +557,7 @@ impl Serialize for Flow
 */
 
 impl Flow {
-    pub fn get_node(&self, node_id: NodeId) -> &Node {
+    pub fn get_node(&self, node_id: NodeId) -> &Box<dyn Node> {
         &self.nodes[node_id]
     }
 }
