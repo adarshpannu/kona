@@ -5,7 +5,7 @@ use std::fmt;
 use std::sync::Arc;
 use crate::includes::*;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
 pub enum Datum {
     STR(Box<String>),
     INT(isize),
@@ -22,7 +22,7 @@ impl Datum {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Serialize)]
+#[derive(Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum DataType {
     STR,
     INT,
@@ -41,7 +41,7 @@ impl fmt::Display for Column {
 
 type Column = Datum;
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Row {
     cols: Vec<Column>,
 }

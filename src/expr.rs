@@ -8,7 +8,7 @@ use std::fmt;
 use std::ops;
 use Expr::*;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ArithOp {
     Add,
     Sub,
@@ -28,7 +28,7 @@ impl fmt::Display for ArithOp {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum LogOp {
     And,
     Or,
@@ -47,7 +47,7 @@ impl fmt::Display for LogOp {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum RelOp {
     Eq,
     Ne,
@@ -73,7 +73,7 @@ impl fmt::Display for RelOp {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
     Literal(Datum),

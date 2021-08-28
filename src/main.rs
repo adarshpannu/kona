@@ -46,12 +46,12 @@ pub fn run_flow(ctx: &Context) {
     }
     */
 
-    dbg!(&flow);
+    //dbg!(&flow);
 
     let encoded: Vec<u8> = bincode::serialize(&flow).unwrap();
 
     dbg!(encoded.len());
-    
+
     // Run the flow
     flow.run(&ctx);
 }

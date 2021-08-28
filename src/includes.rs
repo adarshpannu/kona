@@ -11,5 +11,5 @@ pub type PartitionId = usize;
 pub use crate::Context;
 pub use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TextFilePartition(pub u64, pub u64);

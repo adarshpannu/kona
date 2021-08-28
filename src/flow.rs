@@ -15,7 +15,7 @@ use crate::task::*;
 
 type NodeArena = Arena<Node>;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 enum NodeEnum {
     EmitNode(EmitNode),
     CSVNode(CSVNode),
@@ -25,7 +25,7 @@ enum NodeEnum {
     JoinNode(JoinNode),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
     id: NodeId,
     children: Vec<NodeId>,
@@ -185,7 +185,7 @@ pub enum NodeRuntime {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct EmitNode {}
 
 impl EmitNode {
@@ -208,7 +208,7 @@ impl EmitNode {
 impl EmitNode {}
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CSVNode {
     filename: String,
     colnames: Vec<String>,
@@ -342,7 +342,7 @@ impl CSVNode {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ProjectNode {
     colids: Vec<ColId>,
 }
@@ -376,7 +376,7 @@ impl ProjectNode {
 impl ProjectNode {}
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct FilterNode {
     expr: Expr,
 }
@@ -415,7 +415,7 @@ impl FilterNode {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct JoinNode {
     preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
 }
@@ -443,7 +443,7 @@ impl JoinNode {
 impl JoinNode {}
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AggNode {
     keycolids: Vec<ColId>,
     aggcolids: Vec<(AggType, ColId)>,
@@ -547,7 +547,7 @@ impl AggNode {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AggType {
     COUNT,
     MIN,
@@ -557,11 +557,10 @@ pub enum AggType {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
     pub nodes: Vec<Node>,
 }
-
 
 impl Flow {
     pub fn get_node(&self, node_id: NodeId) -> &Node {

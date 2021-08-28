@@ -35,7 +35,7 @@ impl Flow {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Stage {
     pub head_node_id: NodeId,
     pub npartitions_producer: usize,
@@ -58,18 +58,32 @@ impl Stage {
         let npartitions = self.npartitions_producer;
         for partition_id in 0..npartitions {
             let mut task = Task::new(partition_id);
-            task.run(flow, self);
+            //task.run(flow, self);
 
             let thread_id = partition_id % (ctx.thread_pool.threads.len());
-            //ctx.thread_pool.s2t_channels_sx[thread_id]
-            //   .send(ThreadPoolMessage::RunTask(&flow, &stage, &task));
+
+            //let t2sa = Task2SendAcross { flow: flow.clone() };
+            let t2sa = &(flow, self, task);
+            let encoded: Vec<u8> = bincode::serialize(&t2sa).unwrap();
+            debug!("Serialized task len = {}", encoded.len());
+
+            let decoded: (Flow, Stage, Task) =
+                bincode::deserialize(&encoded[..]).unwrap();
+
+            //dbg!(&decoded.0);
+
+            ctx.thread_pool.s2t_channels_sx[thread_id]
+                .send(ThreadPoolMessage::RunTask(encoded));
         }
     }
 }
 
 /***************************************************************************************************/
+#[derive(Serialize, Deserialize)]
 pub struct Task {
     pub partition_id: PartitionId,
+
+    #[serde(skip)]
     pub contexts: HashMap<NodeId, NodeRuntime>,
 }
 
@@ -95,7 +109,7 @@ impl Task {
 }
 
 pub enum ThreadPoolMessage {
-    RunTask,
+    RunTask(Vec<u8>),
     EndTask,
     TaskEnded,
 }
@@ -127,8 +141,18 @@ impl ThreadPool {
                         ThreadPoolMessage::EndTask => {
                             debug!("Task on thread {} ended", i)
                         }
-                        ThreadPoolMessage::RunTask => {
-                            debug!("Received task on thread");
+                        ThreadPoolMessage::RunTask(encoded) => {
+                            let (flow, stage, mut task): (Flow, Stage, Task) =
+                                bincode::deserialize(&encoded[..]).unwrap();
+
+                            debug!(
+                                "Received task on thread: len = {}, stage {}, partition {} ",
+                                encoded.len(),
+                                stage.head_node_id,
+                                task.partition_id
+                            );
+
+                            task.run(&flow, &stage);
 
                             t2s_channel_tx_clone
                                 .send(ThreadPoolMessage::TaskEnded);
