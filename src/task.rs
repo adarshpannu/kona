@@ -98,7 +98,7 @@ impl Task {
 
     pub fn run(&mut self, flow: &Flow, stage: &Stage) {
         debug!(
-            "Running task: top = {}, partition = {}/{}",
+            "Running task: stage = {}, partition = {}/{}",
             stage.head_node_id, self.partition_id, stage.npartitions_producer
         );
         let node = flow.get_node(stage.head_node_id);
@@ -154,35 +154,41 @@ impl ThreadPool {
             let (s2t_channel_tx, s2t_channel_rx) =
                 mpsc::channel::<ThreadPoolMessage>();
 
-            let thrd = thread::Builder::new().name(format!("thread-{}", i)).spawn(move || {
-                for msg in s2t_channel_rx {
-                    match msg {
-                        ThreadPoolMessage::EndTask => {
-                            debug!("End of thread");
-                            break
-                        }
-                        ThreadPoolMessage::RunTask(encoded) => {
-                            let (flow, stage, mut task): (Flow, Stage, Task) =
-                                bincode::deserialize(&encoded[..]).unwrap();
+            let thrd = thread::Builder::new()
+                .name(format!("thread-{}", i))
+                .spawn(move || {
+                    for msg in s2t_channel_rx {
+                        match msg {
+                            ThreadPoolMessage::EndTask => {
+                                debug!("End of thread");
+                                break;
+                            }
+                            ThreadPoolMessage::RunTask(encoded) => {
+                                let (flow, stage, mut task): (
+                                    Flow,
+                                    Stage,
+                                    Task,
+                                ) = bincode::deserialize(&encoded[..]).unwrap();
 
-                            debug!(
-                                "Received task, len = {}, stage {}, partition {} ",
-                                encoded.len(),
-                                stage.head_node_id,
-                                task.partition_id
-                            );
+                                /*
+                                debug!(
+                                    "Received task, len = {}, stage {}, partition {} ",
+                                    encoded.len(),
+                                    stage.head_node_id,
+                                    task.partition_id
+                                );
+                                */
+                                task.run(&flow, &stage);
 
-                            task.run(&flow, &stage);
-
-                            t2s_channel_tx_clone
-                                .send(ThreadPoolMessage::TaskEnded);
-                        }
-                        ThreadPoolMessage::TaskEnded => {
-                            panic!("Invalid message")
+                                t2s_channel_tx_clone
+                                    .send(ThreadPoolMessage::TaskEnded);
+                            }
+                            ThreadPoolMessage::TaskEnded => {
+                                panic!("Invalid message")
+                            }
                         }
                     }
-                }
-            });
+                });
             threads.push(thrd.unwrap());
             s2t_channels_sx.push(s2t_channel_tx);
 

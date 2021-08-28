@@ -89,7 +89,9 @@ impl Node {
         retval
     }
 
-    fn project<'a>(&self, arena: &'a NodeArena, colids: Vec<ColId>) -> &'a Node {
+    fn project<'a>(
+        &self, arena: &'a NodeArena, colids: Vec<ColId>,
+    ) -> &'a Node {
         let npartitions = self.base().npartitions;
         let retval = Node::new1(
             &arena,
@@ -139,7 +141,15 @@ impl Node {
     }
 
     pub fn desc(&self) -> String {
-        unimplemented!()
+        // stupid dispatch, ugh!
+        match &self.node_enum {
+            NodeEnum::CSVNode(inner_node) => inner_node.desc(self),
+            NodeEnum::EmitNode(inner_node) => inner_node.desc(self),
+            NodeEnum::ProjectNode(inner_node) => inner_node.desc(self),
+            NodeEnum::FilterNode(inner_node) => inner_node.desc(self),
+            NodeEnum::JoinNode(inner_node) => inner_node.desc(self),
+            NodeEnum::AggNode(inner_node) => inner_node.desc(self),
+        }
     }
 
     pub fn nchildren(&self) -> usize {
@@ -156,12 +166,24 @@ impl Node {
     ) -> Option<Row> {
         // stupid dispatch, ugh!
         match &self.node_enum {
-            NodeEnum::CSVNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            NodeEnum::EmitNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            NodeEnum::ProjectNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            NodeEnum::FilterNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            NodeEnum::JoinNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            NodeEnum::AggNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
+            NodeEnum::CSVNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeEnum::EmitNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeEnum::ProjectNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeEnum::FilterNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeEnum::JoinNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeEnum::AggNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
         }
     }
 
@@ -169,7 +191,7 @@ impl Node {
         match &self.node_enum {
             NodeEnum::EmitNode(_) => true,
             NodeEnum::AggNode(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -223,14 +245,15 @@ use std::path::Path;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
-    P: AsRef<Path>,
-{
+    P: AsRef<Path>, {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
 
 impl CSVNode {
-    fn new<'a>(arena: &'a NodeArena, filename: String, npartitions: usize) -> &'a Node {
+    fn new<'a>(
+        arena: &'a NodeArena, filename: String, npartitions: usize,
+    ) -> &'a Node {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
 
         let partitions =
@@ -319,7 +342,7 @@ impl CSVNode {
 
         if let NodeRuntime::CSV { iter } = runtime {
             if let Some(line) = iter.next() {
-                debug!("line = :{}:", &line.trim_end());
+                // debug!("line = :{}:", &line.trim_end());
                 let cols = line
                     .trim_end()
                     .split(',')
@@ -610,24 +633,26 @@ fn make_mvp_flow() -> Flow {
 
 pub fn make_simple_flow() -> Flow {
     let arena: NodeArena = Arena::new();
+
+    // Expression: $column-1 > ?
     let expr = RelExpr(
         Box::new(CID(1)),
         RelOp::Gt,
-        Box::new(Literal(Datum::INT(15))),
+        Box::new(Literal(Datum::INT(60))),
     );
 
     let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
     let ab = CSVNode::new(&arena, csvfilename.to_string(), 4) // name,age,dept_id
-        //.filter(&arena, expr)
-        //.project(&arena, vec![2, 1, 0])
+        .filter(&arena, expr) // age > ?
+        .project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
-            vec![2],
+            vec![0],
             vec![
                 (AggType::COUNT, 0),
-                (AggType::SUM, 2),
-                (AggType::MIN, 0),
-                (AggType::MAX, 0),
+                (AggType::SUM, 1),
+                (AggType::MIN, 2),
+                (AggType::MAX, 2),
             ],
             3,
         )

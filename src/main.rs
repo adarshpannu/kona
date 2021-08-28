@@ -8,10 +8,10 @@ pub mod expr;
 pub mod flow;
 pub mod graphviz;
 pub mod includes;
+pub mod logging;
 pub mod net;
 pub mod row;
 pub mod task;
-pub mod logging;
 
 use bincode;
 use clp::CLParser;
@@ -35,8 +35,8 @@ pub fn run_flow(ctx: &mut Context) {
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
 
-    // graphviz::write_flow_to_graphviz(&flow, &gvfilename, false)
-    //  .expect("Cannot write to .dot file.");
+    graphviz::write_flow_to_graphviz(&flow, &gvfilename, false)
+        .expect("Cannot write to .dot file.");
 
     let node = &flow.nodes[flow.nodes.len() - 1];
 
@@ -54,11 +54,10 @@ pub fn run_flow(ctx: &mut Context) {
     ctx.thread_pool.join();
 }
 
-
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init();
-    
+
     info!("FLARE {}", "hello");
 
     let args = "cmdname --rank 0"
