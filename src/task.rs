@@ -21,7 +21,7 @@ impl Flow {
             .map(|node| Stage::new(node.id(), self))
             .collect();
         for stage in stages.iter() {
-            debug!("Stage: {}", stage.head_node_id)
+            debug!("Stage: head_node_id = {}", stage.head_node_id)
         }
         stages
     }
@@ -60,12 +60,12 @@ impl Stage {
             let mut task = Task::new(partition_id);
             //task.run(flow, self);
 
-            let thread_id = partition_id % (ctx.thread_pool.threads.len());
+            let thread_id = partition_id % (ctx.thread_pool.size());
 
             //let t2sa = Task2SendAcross { flow: flow.clone() };
             let t2sa = &(flow, self, task);
             let encoded: Vec<u8> = bincode::serialize(&t2sa).unwrap();
-            debug!("Serialized task len = {}", encoded.len());
+            //debug!("Serialized task len = {}", encoded.len());
 
             let decoded: (Flow, Stage, Task) =
                 bincode::deserialize(&encoded[..]).unwrap();
@@ -97,8 +97,6 @@ impl Task {
     }
 
     pub fn run(&mut self, flow: &Flow, stage: &Stage) {
-        debug!("");
-        debug!("");
         debug!(
             "Running task: top = {}, partition = {}/{}",
             stage.head_node_id, self.partition_id, stage.npartitions_producer
@@ -116,12 +114,33 @@ pub enum ThreadPoolMessage {
 
 /***************************************************************************************************/
 pub struct ThreadPool {
-    threads: Vec<JoinHandle<()>>,
+    threads: Option<Vec<JoinHandle<()>>>,
     s2t_channels_sx: Vec<mpsc::Sender<ThreadPoolMessage>>, // scheduler -> threads (T channels i.e. one per thread)
     t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>, // threads -> scheduler (1 channel, shared by all threads)
 }
 
 impl ThreadPool {
+    pub fn join(&mut self) {
+        let threads = self.threads.take();
+        for thrd in threads.unwrap() {
+            thrd.join().unwrap()
+        }
+    }
+
+    fn size(&self) -> usize {
+        if let Some(threads) = &self.threads {
+            threads.len()
+        } else {
+            0
+        }
+    }
+
+    pub fn close_all(&mut self) {
+        for tx in self.s2t_channels_sx.iter() {
+            tx.send(ThreadPoolMessage::EndTask);
+        }
+    }
+
     pub fn new(ntasks: u32) -> ThreadPool {
         let mut threads = vec![];
         let mut s2t_channels_sx = vec![];
@@ -135,18 +154,19 @@ impl ThreadPool {
             let (s2t_channel_tx, s2t_channel_rx) =
                 mpsc::channel::<ThreadPoolMessage>();
 
-            let thrd = thread::spawn(move || {
+            let thrd = thread::Builder::new().name(format!("thread-{}", i)).spawn(move || {
                 for msg in s2t_channel_rx {
                     match msg {
                         ThreadPoolMessage::EndTask => {
-                            debug!("Task on thread {} ended", i)
+                            debug!("End of thread");
+                            break
                         }
                         ThreadPoolMessage::RunTask(encoded) => {
                             let (flow, stage, mut task): (Flow, Stage, Task) =
                                 bincode::deserialize(&encoded[..]).unwrap();
 
                             debug!(
-                                "Received task on thread: len = {}, stage {}, partition {} ",
+                                "Received task, len = {}, stage {}, partition {} ",
                                 encoded.len(),
                                 stage.head_node_id,
                                 task.partition_id
@@ -161,16 +181,15 @@ impl ThreadPool {
                             panic!("Invalid message")
                         }
                     }
-                    break;
                 }
             });
-            threads.push(thrd);
+            threads.push(thrd.unwrap());
             s2t_channels_sx.push(s2t_channel_tx);
 
             //tx_channel.send(WorkerMessage::ShutdownWorker).unwrap();
         }
         ThreadPool {
-            threads,
+            threads: Some(threads),
             s2t_channels_sx,
             t2s_channel_rx,
         }

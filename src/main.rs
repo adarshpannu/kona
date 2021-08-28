@@ -11,11 +11,11 @@ pub mod includes;
 pub mod net;
 pub mod row;
 pub mod task;
+pub mod logging;
 
-use clp::CLParser;
-use env_logger::Env;
-use task::ThreadPool;
 use bincode;
+use clp::CLParser;
+use task::ThreadPool;
 
 pub struct Context {
     thread_pool: ThreadPool,
@@ -24,13 +24,13 @@ pub struct Context {
 impl Context {
     fn new() -> Context {
         // Create thread pool
-        let thread_pool = task::ThreadPool::new(4);
+        let thread_pool = task::ThreadPool::new(2);
         Context { thread_pool }
     }
 }
 
 /***************************************************************************************************/
-pub fn run_flow(ctx: &Context) {
+pub fn run_flow(ctx: &mut Context) {
     let flow = flow::make_simple_flow();
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
@@ -46,21 +46,19 @@ pub fn run_flow(ctx: &Context) {
     }
     */
 
-    //dbg!(&flow);
-
-    let encoded: Vec<u8> = bincode::serialize(&flow).unwrap();
-
-    dbg!(encoded.len());
-
     // Run the flow
     flow.run(&ctx);
+
+    ctx.thread_pool.close_all();
+
+    ctx.thread_pool.join();
 }
+
 
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug"))
-        .init();
-
+    logging::init();
+    
     info!("FLARE {}", "hello");
 
     let args = "cmdname --rank 0"
@@ -76,11 +74,14 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let ctx = Context::new();
+    let mut ctx = Context::new();
 
-    run_flow(&ctx);
+    run_flow(&mut ctx);
 
     info!("End of program");
+
+    debug!("sizeof Node: {}", std::mem::size_of::<flow::Node>());
+    debug!("sizeof Flow: {}", std::mem::size_of::<flow::Flow>());
 
     Ok(())
 }

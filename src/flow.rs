@@ -211,6 +211,7 @@ impl EmitNode {}
 #[derive(Debug, Serialize, Deserialize)]
 struct CSVNode {
     filename: String,
+    #[serde(skip)]
     colnames: Vec<String>,
     coltypes: Vec<DataType>,
     partitions: Vec<TextFilePartition>,
