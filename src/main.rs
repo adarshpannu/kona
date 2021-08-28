@@ -3,7 +3,7 @@
 
 use crate::includes::*;
 
-pub mod csv22;
+pub mod csv;
 pub mod expr;
 pub mod flow;
 pub mod graphviz;
