@@ -13,7 +13,7 @@ use crate::row::*;
 use crate::task::*;
 
 #[derive(Debug, Serialize, Deserialize)]
-enum NodeEnum {
+enum NodeInner {
     EmitNode(EmitNode),
     CSVNode(CSVNode),
     ProjectNode(ProjectNode),
@@ -27,7 +27,7 @@ pub struct Node {
     id: NodeId,
     children: Vec<NodeId>,
     npartitions: usize,
-    node_enum: NodeEnum,
+    node_inner: NodeInner,
 }
 
 impl Node {
@@ -36,33 +36,33 @@ impl Node {
     }
 
     fn new0(
-        arena: &NodeArena, npartitions: usize, node_enum: NodeEnum,
+        arena: &NodeArena, npartitions: usize, node_inner: NodeInner,
     ) -> &Node {
         let id = arena.len();
         arena.alloc(Node {
             id,
             children: vec![],
             npartitions,
-            node_enum,
+            node_inner,
         })
     }
 
     fn new1(
         arena: &NodeArena, child_id: NodeId, npartitions: usize,
-        node_enum: NodeEnum,
+        node_inner: NodeInner,
     ) -> &Node {
         let id = arena.len();
         arena.alloc(Node {
             id,
             children: vec![child_id],
             npartitions,
-            node_enum,
+            node_inner,
         })
     }
 
     fn new<'a>(
         arena: &'a NodeArena, child_id: NodeId, other_children: Vec<&Node>,
-        npartitions: usize, node_enum: NodeEnum,
+        npartitions: usize, node_inner: NodeInner,
     ) -> &'a Node {
         let id = arena.len();
         let mut children: Vec<_> =
@@ -72,7 +72,7 @@ impl Node {
             id,
             children,
             npartitions,
-            node_enum,
+            node_inner,
         })
     }
 }
@@ -139,13 +139,13 @@ impl Node {
 
     pub fn desc(&self) -> String {
         // stupid dispatch, ugh!
-        match &self.node_enum {
-            NodeEnum::CSVNode(inner_node) => inner_node.desc(self),
-            NodeEnum::EmitNode(inner_node) => inner_node.desc(self),
-            NodeEnum::ProjectNode(inner_node) => inner_node.desc(self),
-            NodeEnum::FilterNode(inner_node) => inner_node.desc(self),
-            NodeEnum::JoinNode(inner_node) => inner_node.desc(self),
-            NodeEnum::AggNode(inner_node) => inner_node.desc(self),
+        match &self.node_inner {
+            NodeInner::CSVNode(inner_node) => inner_node.desc(self),
+            NodeInner::EmitNode(inner_node) => inner_node.desc(self),
+            NodeInner::ProjectNode(inner_node) => inner_node.desc(self),
+            NodeInner::FilterNode(inner_node) => inner_node.desc(self),
+            NodeInner::JoinNode(inner_node) => inner_node.desc(self),
+            NodeInner::AggNode(inner_node) => inner_node.desc(self),
         }
     }
 
@@ -162,32 +162,32 @@ impl Node {
         &self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool,
     ) -> Option<Row> {
         // stupid dispatch, ugh!
-        match &self.node_enum {
-            NodeEnum::CSVNode(inner_node) => {
+        match &self.node_inner {
+            NodeInner::CSVNode(inner_node) => {
                 inner_node.next(self, flow, stage, task, is_head)
             }
-            NodeEnum::EmitNode(inner_node) => {
+            NodeInner::EmitNode(inner_node) => {
                 inner_node.next(self, flow, stage, task, is_head)
             }
-            NodeEnum::ProjectNode(inner_node) => {
+            NodeInner::ProjectNode(inner_node) => {
                 inner_node.next(self, flow, stage, task, is_head)
             }
-            NodeEnum::FilterNode(inner_node) => {
+            NodeInner::FilterNode(inner_node) => {
                 inner_node.next(self, flow, stage, task, is_head)
             }
-            NodeEnum::JoinNode(inner_node) => {
+            NodeInner::JoinNode(inner_node) => {
                 inner_node.next(self, flow, stage, task, is_head)
             }
-            NodeEnum::AggNode(inner_node) => {
+            NodeInner::AggNode(inner_node) => {
                 inner_node.next(self, flow, stage, task, is_head)
             }
         }
     }
 
     pub fn is_endpoint(&self) -> bool {
-        match &self.node_enum {
-            NodeEnum::EmitNode(_) => true,
-            NodeEnum::AggNode(_) => true,
+        match &self.node_inner {
+            NodeInner::EmitNode(_) => true,
+            NodeInner::AggNode(_) => true,
             _ => false,
         }
     }
@@ -205,29 +205,6 @@ pub enum NodeRuntime {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-struct EmitNode {}
-
-impl EmitNode {
-    fn new() -> NodeEnum {
-        NodeEnum::EmitNode(EmitNode {})
-    }
-
-    fn desc(&self, supernode: &Node) -> String {
-        format!("EmitNode-#{}", supernode.id())
-    }
-
-    fn next(
-        &self, supernode: &Node, flow: &Flow, stage: &Stage, task: &mut Task,
-        is_head: bool,
-    ) -> Option<Row> {
-        supernode.child(flow, 0).next(flow, stage, task, false)
-    }
-}
-
-impl EmitNode {}
-
-/***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CSVNode {
     filename: String,
     #[serde(skip)]
@@ -242,7 +219,8 @@ use std::path::Path;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
-    P: AsRef<Path>, {
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
@@ -255,7 +233,7 @@ impl CSVNode {
 
         let partitions =
             compute_partitions(&filename, npartitions as u64).unwrap();
-        let csvnode = NodeEnum::CSVNode(CSVNode {
+        let csvnode = NodeInner::CSVNode(CSVNode {
             filename,
             colnames,
             coltypes,
@@ -369,8 +347,8 @@ struct ProjectNode {
 }
 
 impl ProjectNode {
-    fn new(colids: Vec<ColId>) -> NodeEnum {
-        NodeEnum::ProjectNode(ProjectNode { colids })
+    fn new(colids: Vec<ColId>) -> NodeInner {
+        NodeInner::ProjectNode(ProjectNode { colids })
     }
 
     fn desc(&self, supernode: &Node) -> String {
@@ -426,9 +404,9 @@ impl FilterNode {
 }
 
 impl FilterNode {
-    fn new(expr: Expr) -> NodeEnum {
+    fn new(expr: Expr) -> NodeInner {
         if let Expr::RelExpr(..) = expr {
-            NodeEnum::FilterNode(FilterNode { expr })
+            NodeInner::FilterNode(FilterNode { expr })
         } else {
             panic!("Invalid filter expression")
         }
@@ -444,8 +422,8 @@ struct JoinNode {
 type JoinPredicate = (ColId, RelOp, ColId);
 
 impl JoinNode {
-    fn new(preds: Vec<JoinPredicate>) -> NodeEnum {
-        NodeEnum::JoinNode(JoinNode { preds })
+    fn new(preds: Vec<JoinPredicate>) -> NodeInner {
+        NodeInner::JoinNode(JoinNode { preds })
     }
 
     fn desc(&self, supernode: &Node) -> String {
@@ -473,8 +451,8 @@ struct AggNode {
 impl AggNode {
     fn new(
         keycolids: Vec<ColId>, aggcolids: Vec<(AggType, ColId)>,
-    ) -> NodeEnum {
-        NodeEnum::AggNode(AggNode {
+    ) -> NodeInner {
+        NodeInner::AggNode(AggNode {
             keycolids,
             aggcolids,
         })
@@ -499,11 +477,7 @@ impl AggNode {
             self.run_producer(supernode, flow, stage, task);
         None
     }
-}
 
-use std::cmp::Ordering;
-
-impl AggNode {
     fn run_producer_one_row(&self, accrow: &mut Row, currow: &Row) {
         for (ix, &(agg_type, agg_colid)) in self.aggcolids.iter().enumerate() {
             let acccol = accrow.get_column_mut(ix);
@@ -517,12 +491,12 @@ impl AggNode {
                     *acccol = Datum::INT(acccol.as_int() + curcol.as_int());
                 }
                 AggType::MIN => {
-                    if curcol.cmp(&acccol) == Ordering::Less {
+                    if curcol.cmp(&acccol) == std::cmp::Ordering::Less {
                         accrow.set_column(ix, &curcol)
                     }
                 }
                 AggType::MAX => {
-                    if curcol.cmp(&acccol) == Ordering::Greater {
+                    if curcol.cmp(&acccol) == std::cmp::Ordering::Greater {
                         accrow.set_column(ix, &curcol)
                     }
                 }
@@ -561,6 +535,7 @@ impl AggNode {
             AggNode::run_producer_one_row(self, acc, &currow);
             //debug!("   acc = {}", acc);
         }
+
         for (k, v) in htable.iter() {
             write_partition(flow, stage, task, v);
         }
@@ -579,6 +554,29 @@ pub enum AggType {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
+struct EmitNode {}
+
+impl EmitNode {
+    fn new() -> NodeInner {
+        NodeInner::EmitNode(EmitNode {})
+    }
+
+    fn desc(&self, supernode: &Node) -> String {
+        format!("EmitNode-#{}", supernode.id())
+    }
+
+    fn next(
+        &self, supernode: &Node, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
+        supernode.child(flow, 0).next(flow, stage, task, false)
+    }
+}
+
+impl EmitNode {}
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<Node>,
@@ -587,6 +585,26 @@ pub struct Flow {
 impl Flow {
     pub fn get_node(&self, node_id: NodeId) -> &Node {
         &self.nodes[node_id]
+    }
+
+    pub fn make_stages(&self) -> Vec<Stage> {
+        let stages: Vec<_> = self
+            .nodes
+            .iter()
+            .filter(|node| node.is_endpoint())
+            .map(|node| Stage::new(node.id(), self))
+            .collect();
+        for stage in stages.iter() {
+            debug!("Stage: head_node_id = {}", stage.head_node_id)
+        }
+        stages
+    }
+
+    pub fn run(&self, ctx: &Env) {
+        let stages = self.make_stages();
+        for stage in stages {
+            stage.run(ctx, self);
+        }
     }
 }
 
@@ -604,18 +622,23 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 fn write_partition(flow: &Flow, stage: &Stage, task: &Task, row: &Row) {
     // Key: flow-id / node-id / dest-part / src-part.extension
     let npartitions_consumer = stage.npartitions_consumer;
-    let dest_partition = calculate_hash(row) % stage.npartitions_consumer as u64;
+    let dest_partition =
+        calculate_hash(row) % stage.npartitions_consumer as u64;
 
-    let dirname = format!("{}/flow-{}/stage-{}/consumer-{}", TEMPDIR, flow.id, stage.head_node_id, dest_partition);
+    let dirname = format!(
+        "{}/flow-{}/stage-{}/consumer-{}",
+        TEMPDIR, flow.id, stage.head_node_id, dest_partition
+    );
     let filename = format!("{}/producer-{}.csv", dirname, task.partition_id);
     std::fs::create_dir_all(dirname);
 
     debug!("Write to {}: {}", filename, row);
     let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(filename).unwrap();
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(filename)
+        .unwrap();
 
     file.write(format!("{}\n", row).as_bytes());
 }

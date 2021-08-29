@@ -12,29 +12,6 @@ use std::thread;
 use crate::flow::*;
 
 /***************************************************************************************************/
-impl Flow {
-    fn make_stages(&self) -> Vec<Stage> {
-        let stages: Vec<_> = self
-            .nodes
-            .iter()
-            .filter(|node| node.is_endpoint())
-            .map(|node| Stage::new(node.id(), self))
-            .collect();
-        for stage in stages.iter() {
-            debug!("Stage: head_node_id = {}", stage.head_node_id)
-        }
-        stages
-    }
-
-    pub fn run(&self, ctx: &Env) {
-        let stages = self.make_stages();
-        for stage in stages {
-            stage.run(ctx, self);
-        }
-    }
-}
-
-/***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stage {
     pub head_node_id: NodeId,
@@ -43,7 +20,7 @@ pub struct Stage {
 }
 
 impl Stage {
-    fn new(top: NodeId, flow: &Flow) -> Stage {
+    pub fn new(top: NodeId, flow: &Flow) -> Stage {
         let node = flow.get_node(top);
         let npartitions = node.child(flow, 0).npartitions();
         Stage {
@@ -53,7 +30,7 @@ impl Stage {
         }
     }
 
-    fn run(&self, ctx: &Env, flow: &Flow) {
+    pub fn run(&self, ctx: &Env, flow: &Flow) {
         let node = flow.get_node(self.head_node_id);
         let npartitions = self.npartitions_producer;
         for partition_id in 0..npartitions {
