@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use typed_arena::Arena;
 
 use crate::csv::*;
 use crate::expr::{Expr::*, *};
@@ -12,8 +11,6 @@ use crate::graphviz::{htmlify, write_flow_to_graphviz};
 use crate::includes::*;
 use crate::row::*;
 use crate::task::*;
-
-type NodeArena = Arena<Node>;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum NodeEnum {
@@ -82,14 +79,14 @@ impl Node {
 
 /***************************************************************************************************/
 impl Node {
-    fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Node {
+    pub fn emit<'a>(&self, arena: &'a NodeArena) -> &'a Node {
         let npartitions = self.npartitions;
         let retval =
             Node::new1(&arena, self.id(), npartitions, EmitNode::new());
         retval
     }
 
-    fn project<'a>(
+    pub fn project<'a>(
         &self, arena: &'a NodeArena, colids: Vec<ColId>,
     ) -> &'a Node {
         let npartitions = self.base().npartitions;
@@ -102,14 +99,14 @@ impl Node {
         retval
     }
 
-    fn filter<'a>(&self, arena: &'a NodeArena, expr: Expr) -> &'a Node {
+    pub fn filter<'a>(&self, arena: &'a NodeArena, expr: Expr) -> &'a Node {
         let npartitions = self.base().npartitions;
         let retval =
             Node::new1(&arena, self.id(), npartitions, FilterNode::new(expr));
         retval
     }
 
-    fn join<'a>(
+    pub fn join<'a>(
         &self, arena: &'a NodeArena, other_children: Vec<&Node>,
         preds: Vec<JoinPredicate>,
     ) -> &'a Node {
@@ -123,7 +120,7 @@ impl Node {
         retval
     }
 
-    fn agg<'a>(
+    pub fn agg<'a>(
         &self, arena: &'a NodeArena, keycolids: Vec<ColId>,
         aggcolids: Vec<(AggType, ColId)>, npartitions: usize,
     ) -> &'a Node {
@@ -231,7 +228,7 @@ impl EmitNode {}
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-struct CSVNode {
+pub(crate) struct CSVNode {
     filename: String,
     #[serde(skip)]
     colnames: Vec<String>,
@@ -240,7 +237,7 @@ struct CSVNode {
 }
 
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use std::path::Path;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
@@ -251,7 +248,7 @@ where
 }
 
 impl CSVNode {
-    fn new<'a>(
+    pub fn new<'a>(
         arena: &'a NodeArena, filename: String, npartitions: usize,
     ) -> &'a Node {
         let (colnames, coltypes) = Self::infer_metadata(&filename);
@@ -583,83 +580,13 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
+    pub id: usize,
     pub nodes: Vec<Node>,
 }
 
 impl Flow {
     pub fn get_node(&self, node_id: NodeId) -> &Node {
         &self.nodes[node_id]
-    }
-}
-
-/***************************************************************************************************/
-pub fn make_join_flow() -> Flow {
-    let arena: NodeArena = Arena::new();
-    let empfilename = format!("{}/{}", DATADIR, "emp.csv").to_string();
-    let deptfilename = format!("{}/{}", DATADIR, "dept.csv").to_string();
-
-    let emp = CSVNode::new(&arena, empfilename, 4)
-        .project(&arena, vec![0, 1, 2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)], 3);
-
-    let dept = CSVNode::new(&arena, deptfilename, 4);
-
-    let join = emp.join(&arena, vec![&dept], vec![(2, RelOp::Eq, 0)]).agg(
-        &arena,
-        vec![0],
-        vec![(AggType::COUNT, 1)],
-        3,
-    );
-    Flow {
-        nodes: arena.into_vec(),
-    }
-}
-
-fn make_mvp_flow() -> Flow {
-    let arena: Arena<_> = Arena::new();
-
-    /*
-        CSV -> Project -> Agg
-    */
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string(), 4)
-        .project(&arena, vec![2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 0)], 3);
-
-    Flow {
-        nodes: arena.into_vec(),
-    }
-}
-
-pub fn make_simple_flow() -> Flow {
-    let arena: NodeArena = Arena::new();
-
-    // Expression: $column-1 > ?
-    let expr = RelExpr(
-        Box::new(CID(1)),
-        RelOp::Gt,
-        Box::new(Literal(Datum::INT(60))),
-    );
-
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string(), 4) // name,age,dept_id
-        .filter(&arena, expr) // age > ?
-        .project(&arena, vec![2, 1, 0]) // dept_id, age, name
-        .agg(
-            &arena,
-            vec![0],
-            vec![
-                (AggType::COUNT, 0),
-                (AggType::SUM, 1),
-                (AggType::MIN, 2),
-                (AggType::MAX, 2),
-            ],
-            3,
-        )
-        .emit(&arena);
-
-    Flow {
-        nodes: arena.into_vec(),
     }
 }
 
@@ -675,9 +602,20 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 }
 
 fn write_partition(flow: &Flow, stage: &Stage, task: &Task, row: &Row) {
-    // Key: flow-id / rdd-id / dest-part / src-part
+    // Key: flow-id / node-id / dest-part / src-part.extension
     let npartitions_consumer = stage.npartitions_consumer;
-    let partition = calculate_hash(row) % stage.npartitions_consumer as u64;
+    let dest_partition = calculate_hash(row) % stage.npartitions_consumer as u64;
 
-    debug!("write = {} to partition {} ", row, partition);
+    let dirname = format!("{}/flow-{}/stage-{}/consumer-{}", TEMPDIR, flow.id, stage.head_node_id, dest_partition);
+    let filename = format!("{}/producer-{}.csv", dirname, task.partition_id);
+    std::fs::create_dir_all(dirname);
+
+    debug!("Write to {}: {}", filename, row);
+    let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(filename).unwrap();
+
+    file.write(format!("{}\n", row).as_bytes());
 }

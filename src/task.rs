@@ -26,7 +26,7 @@ impl Flow {
         stages
     }
 
-    pub fn run(&self, ctx: &Context) {
+    pub fn run(&self, ctx: &Env) {
         let stages = self.make_stages();
         for stage in stages {
             stage.run(ctx, self);
@@ -53,7 +53,7 @@ impl Stage {
         }
     }
 
-    fn run(&self, ctx: &Context, flow: &Flow) {
+    fn run(&self, ctx: &Env, flow: &Flow) {
         let node = flow.get_node(self.head_node_id);
         let npartitions = self.npartitions_producer;
         for partition_id in 0..npartitions {
@@ -141,14 +141,14 @@ impl ThreadPool {
         }
     }
 
-    pub fn new(ntasks: u32) -> ThreadPool {
+    pub fn new(nthreads: usize) -> ThreadPool {
         let mut threads = vec![];
         let mut s2t_channels_sx = vec![];
 
         let (t2s_channel_tx, t2s_channel_rx) =
             mpsc::channel::<ThreadPoolMessage>();
 
-        for i in 0..ntasks {
+        for i in 0..nthreads {
             let t2s_channel_tx_clone = t2s_channel_tx.clone();
 
             let (s2t_channel_tx, s2t_channel_rx) =
