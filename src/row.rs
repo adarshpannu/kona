@@ -84,15 +84,3 @@ impl fmt::Display for Row {
         write!(f, "")
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::DataType;
-
-    #[test]
-    fn test() {
-        let d1 = DataType::STR;
-        let d2 = DataType::STR;
-        println!("{}", d1 > d2);
-    }
-}

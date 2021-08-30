@@ -3,7 +3,6 @@
 
 use crate::includes::*;
 
-
 use std::error::Error;
 use std::fs;
 use std::io::prelude::*;
@@ -81,7 +80,13 @@ pub fn compute_partitions(
             end += line.len() as u64;
         }
         splits.push(TextFilePartition(begin, end));
-        debug!("File {}, partition-{} offsets = [{}, {})", filename, splits.len(), begin, end);
+        debug!(
+            "File {}, partition-{} offsets = [{}, {})",
+            filename,
+            splits.len(),
+            begin,
+            end
+        );
         begin = end;
     }
     Ok(splits)
@@ -107,4 +112,78 @@ fn test() {
 }
 */
 
+/***************************************************************************************************/
 
+pub struct CSVDirIter {
+    filenames: Vec<std::path::PathBuf>,
+    cur_file_offset: usize,
+    cur_read: u64,
+    reader: Option<io::BufReader<File>>,
+}
+
+impl CSVDirIter {
+    pub fn new(dirname: &String) -> CSVDirIter {
+        let mut filenames = fs::read_dir(dirname)
+            .unwrap()
+            .map(|res| res.map(|e| e.path()))
+            .collect::<Result<Vec<_>, io::Error>>()
+            .unwrap();
+        filenames.sort();
+
+        CSVDirIter {
+            filenames,
+            cur_file_offset: 0,
+            cur_read: 0,
+            reader: None,
+        }
+    }
+}
+
+impl Iterator for CSVDirIter {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.reader.is_none() {
+                if self.cur_file_offset >= self.filenames.len() {
+                    // Exhausted all files
+                    return None;
+                } else {
+                    // Open first/next file
+                    let filename = &self.filenames[self.cur_file_offset];
+                    let file =
+                        File::open(filename)
+                            .unwrap();
+                    let mut reader = BufReader::new(file);
+                    reader.seek(SeekFrom::Start(0));
+                    self.reader = Some(reader);
+                }
+            }
+            if let Some(mut reader) = self.reader.as_mut() {
+                let mut line = String::new();
+                reader.read_line(&mut line);
+                if line.len() > 0 {
+                    // Return line read
+                    self.cur_read += line.len() as u64;
+                    //debug!("Read line: {}", line);
+                    return Some(line);
+                } else {
+                    // Exhausted all lines. Read next file, if any.
+                    self.reader = None;
+                    self.cur_file_offset += 1;
+                    continue;
+                }
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
+#[test]
+fn test() {
+    let iter = CSVDirIter::new(&"/Users/adarshrp/Projects/flare/src/temp/flow-99/stage-3/consumer-1/".to_string());
+    for row in iter {
+        println!(":{}:", row);
+    }
+}

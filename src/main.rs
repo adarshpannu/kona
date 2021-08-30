@@ -15,10 +15,10 @@ pub mod task;
 
 use bincode;
 use clp::CLParser;
-use task::ThreadPool;
+use expr::{Expr::*, *};
 use flow::*;
 use row::*;
-use expr::{*, Expr::*};
+use task::ThreadPool;
 
 pub struct Env {
     thread_pool: ThreadPool,
@@ -78,23 +78,6 @@ pub fn make_join_flow() -> Flow {
     }
 }
 
-fn make_mvp_flow() -> Flow {
-    let arena: Arena<_> = Arena::new();
-
-    /*
-        CSV -> Project -> Agg
-    */
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string(), 4)
-        .project(&arena, vec![2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 0)], 3);
-
-    Flow {
-        id: 98,
-        nodes: arena.into_vec(),
-    }
-}
-
 pub fn make_simple_flow() -> Flow {
     let arena: NodeArena = Arena::new();
 
@@ -105,18 +88,35 @@ pub fn make_simple_flow() -> Flow {
         Box::new(Literal(Datum::INT(10))),
     );
 
-    let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
-    let ab = CSVNode::new(&arena, csvfilename.to_string(), 4) // name,age,dept_id
+    let use_dir = true;
+
+    let csvnode = if use_dir == false {
+        let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
+        let csvnode = CSVNode::new(&arena, csvfilename.to_string(), 4);
+        csvnode 
+    } else {
+        let csvnode = CSVDirNode::new(
+            &arena,
+            format!("{}/{}", DATADIR, "empdir/partition"),
+            vec![],
+            vec![DataType::STR, DataType::INT, DataType::INT],
+            3,
+        );
+        csvnode
+    };
+
+    // name,age,dept_id
+    csvnode
         .filter(&arena, expr) // age > ?
         .project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
             vec![0],
             vec![
-                (AggType::COUNT, 0),
-                (AggType::SUM, 1),
-                (AggType::MIN, 2),
-                (AggType::MAX, 2),
+                (AggType::COUNT, 0),  // count(dept_id)
+                (AggType::SUM, 1),    // sum(age)
+                (AggType::MIN, 2),    // min(name)
+                (AggType::MAX, 2),    // max(name)
             ],
             3,
         )
@@ -147,7 +147,7 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let mut ctx = Env::new(4);
+    let mut ctx = Env::new(1);
 
     run_flow(&mut ctx);
 
