@@ -55,6 +55,7 @@ pub fn run_flow(ctx: &mut Env) {
 }
 
 /***************************************************************************************************/
+/*
 pub fn make_join_flow() -> Flow {
     let arena: NodeArena = Arena::new();
     let empfilename = format!("{}/{}", DATADIR, "emp.csv").to_string();
@@ -77,6 +78,7 @@ pub fn make_join_flow() -> Flow {
         nodes: arena.into_vec(),
     }
 }
+*/
 
 pub fn make_simple_flow() -> Flow {
     let arena: NodeArena = Arena::new();
@@ -88,7 +90,7 @@ pub fn make_simple_flow() -> Flow {
         Box::new(Literal(Datum::INT(10))),
     );
 
-    let use_dir = true;
+    let use_dir = false;
 
     let csvnode = if use_dir == false {
         let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
@@ -111,12 +113,12 @@ pub fn make_simple_flow() -> Flow {
         .project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
-            vec![0],
+            vec![(0,DataType::INT)],      // dept_id    
             vec![
-                (AggType::COUNT, 0),  // count(dept_id)
-                (AggType::SUM, 1),    // sum(age)
-                (AggType::MIN, 2),    // min(name)
-                (AggType::MAX, 2),    // max(name)
+                (AggType::COUNT, 0, DataType::INT),  // count(dept_id)
+                (AggType::SUM, 1, DataType::INT),    // sum(age)
+                (AggType::MIN, 2, DataType::STR),    // min(name)
+                (AggType::MAX, 2, DataType::STR),    // max(name)
             ],
             3,
         )

@@ -93,11 +93,54 @@ impl Node {
     }
 
     pub fn agg<'a>(
-        &self, arena: &'a NodeArena, keycolids: Vec<ColId>,
-        aggcolids: Vec<(AggType, ColId)>, npartitions: usize,
+        &self, arena: &'a NodeArena, keycols: Vec<(ColId, DataType)>,
+        aggcols: Vec<(AggType, ColId, DataType)>, npartitions: usize,
     ) -> &'a Node {
-        let aggnode = AggNode::new(keycolids, aggcolids, true);
+        // Turn single Agg into (Agg-producer + CSVDir + Agg-Consumer). Turn COUNT -> SUM as well.
+        let aggnode = AggNode::new(keycols.clone(), aggcols.clone(), true);
         let aggnode = Node::new(&arena, vec![self.id], npartitions, aggnode);
+
+        let dirname_prefix =
+            format!("{}/flow-99/stage-{}/consumer", TEMPDIR, aggnode.id);
+
+        let mut csvcoltypes: Vec<DataType> = keycols.iter().map(|(_, tp)| *tp).collect();
+        for (aggtype, _, datatype) in aggcols.iter() {
+            match *aggtype {
+                AggType::COUNT => csvcoltypes.push(DataType::INT),
+                _ => csvcoltypes.push(*datatype)
+            };
+        }
+        let colnames = (0..csvcoltypes.len()).map(|ix| format!("agg_col_{}", ix)).collect();
+        let csvdirnode = CSVDirNode::new(
+            &arena,
+            dirname_prefix,
+            colnames,
+            csvcoltypes,
+            npartitions,
+        );
+
+        // Re-number keycols
+        let keycols: Vec<(ColId, DataType)> = keycols
+            .iter()
+            .map(|(id, coltype)| *coltype)
+            .enumerate()
+            .collect();
+        let aggcols: Vec<(AggType, ColId, DataType)> = aggcols
+            .iter()
+            .map(|(aggtype, id, coltype)| {
+                // COUNT turns into SUM with a type of INT
+                let (aggtype, coltype) = match *aggtype {
+                    AggType::COUNT => (AggType::SUM, DataType::INT),
+                    _ => (*aggtype, *coltype),
+                };
+                (aggtype, id + keycols.len(), coltype)
+            })
+            .collect();
+
+        let aggnode = AggNode::new(keycols, aggcols, false);
+        let aggnode =
+            Node::new(&arena, vec![csvdirnode.id], npartitions, aggnode);
+
         aggnode
     }
 
@@ -165,7 +208,7 @@ impl Node {
     pub fn is_endpoint(&self) -> bool {
         match &self.node_inner {
             NodeInner::EmitNode(_) => true,
-            NodeInner::AggNode(_) => true,
+            NodeInner::AggNode(aggnode) => aggnode.is_producer == true,
             _ => false,
         }
     }
@@ -423,19 +466,19 @@ impl JoinNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 struct AggNode {
-    keycolids: Vec<ColId>,
-    aggcolids: Vec<(AggType, ColId)>,
+    keycols: Vec<(ColId, DataType)>,
+    aggcols: Vec<(AggType, ColId, DataType)>,
     is_producer: bool,
 }
 
 impl AggNode {
     fn new(
-        keycolids: Vec<ColId>, aggcolids: Vec<(AggType, ColId)>,
-        is_producer: bool,
+        keycols: Vec<(ColId, DataType)>,
+        aggcols: Vec<(AggType, ColId, DataType)>, is_producer: bool,
     ) -> NodeInner {
         NodeInner::AggNode(AggNode {
-            keycolids,
-            aggcolids,
+            keycols,
+            aggcols,
             is_producer,
         })
     }
@@ -445,8 +488,8 @@ impl AggNode {
             "AggNode-#{} (p={})|by = {:?}, aggs = {:?}",
             supernode.id(),
             supernode.npartitions(),
-            self.keycolids,
-            self.aggcolids
+            self.keycols,
+            self.aggcols
         );
         s
     }
@@ -461,7 +504,7 @@ impl AggNode {
     }
 
     fn run_producer_one_row(&self, accrow: &mut Row, currow: &Row) {
-        for (ix, &(agg_type, agg_colid)) in self.aggcolids.iter().enumerate() {
+        for (ix, &(agg_type, agg_colid, _)) in self.aggcols.iter().enumerate() {
             let acccol = accrow.get_column_mut(ix);
             let curcol = currow.get_column(agg_colid);
 
@@ -494,14 +537,16 @@ impl AggNode {
 
         while let Some(currow) = child.next(flow, stage, task, false) {
             // build key
-            let key = currow.project(&self.keycolids);
+            let keycolids =
+                self.keycols.iter().map(|&e| e.0).collect::<Vec<usize>>();
+            let key = currow.project(&keycolids);
             //debug!("-- key = {}", key);
 
             let acc = htable.entry(key).or_insert_with(|| {
                 let acc_cols: Vec<Datum> = self
-                    .aggcolids
+                    .aggcols
                     .iter()
-                    .map(|&(aggtype, ix)| {
+                    .map(|&(aggtype, ix, _)| {
                         // Build an empty accumumator Row
                         match aggtype {
                             AggType::COUNT => Datum::INT(0),
@@ -639,7 +684,6 @@ fn write_partition(
     drop(file);
 
     let a = 100;
-
 }
 
 /***************************************************************************************************/
@@ -699,7 +743,7 @@ impl CSVDirNode {
 
         if let NodeRuntime::CSVDir { iter } = runtime {
             if let Some(line) = iter.next() {
-                // debug!("line = :{}:", &line.trim_end());
+                debug!("line = :{}:", &line.trim_end());
                 let cols = line
                     .trim_end()
                     .split(',')
