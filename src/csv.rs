@@ -182,7 +182,8 @@ impl Iterator for CSVDirIter {
 
 #[test]
 fn test() {
-    let iter = CSVDirIter::new(&"/Users/adarshrp/Projects/flare/src/temp/flow-99/stage-3/consumer-1/".to_string());
+    let dirname = format!("{}/stage-3/consumer-1/", DATADIR);
+    let iter = CSVDirIter::new(&dirname);
     for row in iter {
         println!(":{}:", row);
     }

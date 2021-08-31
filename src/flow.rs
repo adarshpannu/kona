@@ -683,14 +683,12 @@ fn write_partition(
     file.write("\n".as_bytes());
     file.flush();
     drop(file);
-
-    let a = 100;
 }
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct CSVDirNode {
-    dirname_prefix: String, // E.g.: ~/Projects/flare/src/temp/flow-99/stage  i.e. everything except the "-{partition}"
+    dirname_prefix: String, // E.g.: $TEMPDIR/flow-99/stage  i.e. everything except the "-{partition#}"
     #[serde(skip)]
     colnames: Vec<String>,
     coltypes: Vec<DataType>,

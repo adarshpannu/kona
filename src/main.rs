@@ -90,7 +90,7 @@ pub fn make_simple_flow() -> Flow {
         Box::new(Literal(Datum::INT(10))),
     );
 
-    let use_dir = true;
+    let use_dir = false;
 
     let csvnode = if use_dir == false {
         let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
@@ -149,7 +149,7 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let mut ctx = Env::new(1);
+    let mut ctx = Env::new(4);
 
     run_flow(&mut ctx);
 
