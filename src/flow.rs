@@ -116,7 +116,7 @@ impl Node {
             dirname_prefix,
             colnames,
             csvcoltypes,
-            npartitions,
+            self.npartitions,
         );
 
         // Re-number keycols
@@ -127,7 +127,8 @@ impl Node {
             .collect();
         let aggcols: Vec<(AggType, ColId, DataType)> = aggcols
             .iter()
-            .map(|(aggtype, id, coltype)| {
+            .enumerate()
+            .map(|(id, (aggtype, _, coltype))| {
                 // COUNT turns into SUM with a type of INT
                 let (aggtype, coltype) = match *aggtype {
                     AggType::COUNT => (AggType::SUM, DataType::INT),
@@ -743,7 +744,7 @@ impl CSVDirNode {
 
         if let NodeRuntime::CSVDir { iter } = runtime {
             if let Some(line) = iter.next() {
-                debug!("line = :{}:", &line.trim_end());
+                // debug!("line = :{}:", &line.trim_end());
                 let cols = line
                     .trim_end()
                     .split(',')

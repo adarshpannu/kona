@@ -3,7 +3,7 @@ digraph example1 {
     rankdir=LR;
     splines=polyline;
     nodesep=0.5;
-    Node0[label="CSVNode-#0 (p=4)|emp.csv [\"name\", \"age\", \"dept_id\"]"];
+    Node0[label="CSVDirNode-#0 (p=3)|partition []"];
     Node1[label="FilterNode-#1|($1 &gt; 10)"];
     Node0 -> Node1;
     Node2[label="ProjectNode-#2|[2, 1, 0]"];
@@ -11,7 +11,7 @@ digraph example1 {
     Node3[label="AggNode-#3 (p=3)|by = [(0, INT)], aggs = [(COUNT, 0, INT), (SUM, 1, INT), (MIN, 2, STR), (MAX, 2, STR)]"];
     Node2 -> Node3;
     Node4[label="CSVDirNode-#4 (p=3)|consumer [\"agg_col_0\", \"agg_col_1\", \"agg_col_2\", \"agg_col_3\", \"agg_col_4\"]"];
-    Node5[label="AggNode-#5 (p=3)|by = [(0, INT)], aggs = [(SUM, 1, INT), (SUM, 2, INT), (MIN, 3, STR), (MAX, 3, STR)]"];
+    Node5[label="AggNode-#5 (p=3)|by = [(0, INT)], aggs = [(SUM, 1, INT), (SUM, 2, INT), (MIN, 3, STR), (MAX, 4, STR)]"];
     Node4 -> Node5;
     Node6[label="EmitNode-#6"];
     Node5 -> Node6;

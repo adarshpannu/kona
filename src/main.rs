@@ -90,7 +90,7 @@ pub fn make_simple_flow() -> Flow {
         Box::new(Literal(Datum::INT(10))),
     );
 
-    let use_dir = false;
+    let use_dir = true;
 
     let csvnode = if use_dir == false {
         let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
