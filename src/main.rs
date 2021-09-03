@@ -95,7 +95,7 @@ pub fn make_simple_flow() -> Flow {
     let csvnode = if use_dir == false {
         let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
         let csvnode = CSVNode::new(&arena, csvfilename.to_string(), 4);
-        csvnode 
+        csvnode
     } else {
         let csvnode = CSVDirNode::new(
             &arena,
@@ -113,12 +113,12 @@ pub fn make_simple_flow() -> Flow {
         .project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
-            vec![(0,DataType::INT)],      // dept_id    
+            vec![(0, DataType::INT)], // dept_id
             vec![
-                (AggType::COUNT, 0, DataType::INT),  // count(dept_id)
-                (AggType::SUM, 1, DataType::INT),    // sum(age)
-                (AggType::MIN, 2, DataType::STR),    // min(name)
-                (AggType::MAX, 2, DataType::STR),    // max(name)
+                (AggType::COUNT, 0, DataType::INT), // count(dept_id)
+                (AggType::SUM, 1, DataType::INT),   // sum(age)
+                (AggType::MIN, 2, DataType::STR),   // min(name)
+                (AggType::MAX, 2, DataType::STR),   // max(name)
             ],
             3,
         )
@@ -158,5 +158,36 @@ fn main() -> Result<(), String> {
     debug!("sizeof Node: {}", std::mem::size_of::<flow::Node>());
     debug!("sizeof Flow: {}", std::mem::size_of::<flow::Flow>());
 
+    parse_sql();
+
     Ok(())
+
+}
+
+use sqlparser::dialect::GenericDialect;
+use sqlparser::parser::Parser;
+
+//test]
+fn parse_sql() {
+    let sql = "SELECT a, b \
+           FROM table_1 \
+           WHERE a > 10";
+
+    let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
+
+    let ast = Parser::parse_sql(&dialect, sql).unwrap();
+
+    println!("AST: {:?}", ast);
+
+}
+
+use  arrow2::buffer::Buffer;
+
+#[test]
+fn test_arrow() {
+    let x = Buffer::from(&[1u32, 2, 3]);
+    assert_eq!(x.as_slice(), &[1u32, 2, 3]);
+    
+    let x = x.slice(1, 2);
+    assert_eq!(x.as_slice(), &[2, 3]);
 }
