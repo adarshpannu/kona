@@ -123,11 +123,18 @@ pub struct CSVDirIter {
 
 impl CSVDirIter {
     pub fn new(dirname: &String) -> CSVDirIter {
-        let mut filenames = fs::read_dir(dirname)
-            .unwrap()
-            .map(|res| res.map(|e| e.path()))
-            .collect::<Result<Vec<_>, io::Error>>()
-            .unwrap();
+        dbg!(&dirname);
+        let mut filenames = fs::read_dir(dirname);
+        let mut filenames: Vec<_> = if filenames.is_ok() {
+            filenames
+                .unwrap()
+                .map(|res| res.map(|e| e.path()))
+                .collect::<Result<Vec<_>, io::Error>>()
+                .unwrap()
+        } else {
+            vec![]
+        };
+
         filenames.sort();
 
         CSVDirIter {
@@ -151,9 +158,7 @@ impl Iterator for CSVDirIter {
                 } else {
                     // Open first/next file
                     let filename = &self.filenames[self.cur_file_offset];
-                    let file =
-                        File::open(filename)
-                            .unwrap();
+                    let file = File::open(filename).unwrap();
                     let mut reader = BufReader::new(file);
                     reader.seek(SeekFrom::Start(0));
                     self.reader = Some(reader);

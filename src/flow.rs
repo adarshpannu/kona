@@ -103,14 +103,17 @@ impl Node {
         let dirname_prefix =
             format!("{}/flow-99/stage-{}/consumer", TEMPDIR, aggnode.id);
 
-        let mut csvcoltypes: Vec<DataType> = keycols.iter().map(|(_, tp)| *tp).collect();
+        let mut csvcoltypes: Vec<DataType> =
+            keycols.iter().map(|(_, tp)| *tp).collect();
         for (aggtype, _, datatype) in aggcols.iter() {
             match *aggtype {
                 AggType::COUNT => csvcoltypes.push(DataType::INT),
-                _ => csvcoltypes.push(*datatype)
+                _ => csvcoltypes.push(*datatype),
             };
         }
-        let colnames = (0..csvcoltypes.len()).map(|ix| format!("agg_col_{}", ix)).collect();
+        let colnames = (0..csvcoltypes.len())
+            .map(|ix| format!("agg_col_{}", ix))
+            .collect();
         let csvdirnode = CSVDirNode::new(
             &arena,
             dirname_prefix,
@@ -285,7 +288,7 @@ impl CSVNode {
 
         while let Some(line) = iter.next() {
             let cols: Vec<String> =
-                line.unwrap().split(',').map(|e| e.to_owned()).collect();
+                line.unwrap().split('|').map(|e| e.to_owned()).collect();
             if colnames.len() == 0 {
                 colnames = cols;
             } else {
@@ -302,8 +305,8 @@ impl CSVNode {
                 first_row = false;
             }
         }
-        //dbg!(&colnames);
-        //dbg!(&coltypes);
+        dbg!(&colnames);
+        dbg!(&coltypes);
         (colnames, coltypes)
     }
 }
@@ -343,12 +346,16 @@ impl CSVNode {
                 // debug!("line = :{}:", &line.trim_end());
                 let cols = line
                     .trim_end()
-                    .split(',')
+                    .split('|')
                     .enumerate()
                     .map(|(ix, col)| match self.coltypes[ix] {
                         DataType::INT => {
-                            let ival = col.parse::<isize>().unwrap();
-                            Datum::INT(ival)
+                            let ival = col.parse::<isize>();
+                            if ival.is_err() {
+                                panic!("{} is not an INT", &col);
+                            } else {
+                                Datum::INT(ival.unwrap())
+                            }
                         }
                         DataType::STR => Datum::STR(Box::new(col.to_owned())),
                         _ => unimplemented!(),
@@ -678,7 +685,7 @@ fn write_partition(
 
     file.write(format!("{}", key).as_bytes());
     if let Some(row) = value {
-        file.write(format!(",{}", row).as_bytes());
+        file.write(format!("|{}", row).as_bytes());
     }
     file.write("\n".as_bytes());
     file.flush();
@@ -745,12 +752,16 @@ impl CSVDirNode {
                 // debug!("line = :{}:", &line.trim_end());
                 let cols = line
                     .trim_end()
-                    .split(',')
+                    .split('|')
                     .enumerate()
                     .map(|(ix, col)| match self.coltypes[ix] {
                         DataType::INT => {
-                            let ival = col.parse::<isize>().unwrap();
-                            Datum::INT(ival)
+                            let ival = col.parse::<isize>();
+                            if ival.is_err() {
+                                panic!("{} is not an INT", &col);
+                            } else {
+                                Datum::INT(ival.unwrap())
+                            }
                         }
                         DataType::STR => Datum::STR(Box::new(col.to_owned())),
                         _ => unimplemented!(),

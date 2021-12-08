@@ -8,6 +8,7 @@ use std::fmt;
 use std::ops;
 use Expr::*;
 
+/***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ArithOp {
     Add,
@@ -28,6 +29,7 @@ impl fmt::Display for ArithOp {
     }
 }
 
+/***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum LogOp {
     And,
@@ -47,6 +49,7 @@ impl fmt::Display for LogOp {
     }
 }
 
+/***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RelOp {
     Eq,
@@ -76,6 +79,7 @@ impl fmt::Display for RelOp {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
+    Identifier(String),
     Literal(Datum),
     ArithExpr(Box<Expr>, ArithOp, Box<Expr>),
     RelExpr(Box<Expr>, RelOp, Box<Expr>),
@@ -85,6 +89,7 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CID(cid) => write!(f, "${}", cid),
+            Identifier(id) => write!(f, "${}", id),
             Literal(v) => write!(f, "{}", v),
             ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
             RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),

@@ -1,4 +1,3 @@
-// flare
 #![allow(warnings)]
 
 use crate::includes::*;
@@ -83,17 +82,17 @@ pub fn make_join_flow() -> Flow {
 pub fn make_simple_flow() -> Flow {
     let arena: NodeArena = Arena::new();
 
-    // Expression: $column-1 > ?
+    // Expression: $column-1 < 3
     let expr = RelExpr(
-        Box::new(CID(1)),
-        RelOp::Gt,
-        Box::new(Literal(Datum::INT(10))),
+        Box::new(CID(0)),
+        RelOp::Le,
+        Box::new(Literal(Datum::INT(3))),
     );
 
     let use_dir = false;
 
     let csvnode = if use_dir == false {
-        let csvfilename = format!("{}/{}", DATADIR, "emp.csv");
+        let csvfilename = format!("{}/{}", DATADIR, "customer.tbl");
         let csvnode = CSVNode::new(&arena, csvfilename.to_string(), 4);
         csvnode
     } else {
@@ -110,15 +109,15 @@ pub fn make_simple_flow() -> Flow {
     // name,age,dept_id
     csvnode
         .filter(&arena, expr) // age > ?
-        .project(&arena, vec![2, 1, 0]) // dept_id, age, name
+        //.project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
-            vec![(0, DataType::INT)], // dept_id
+            vec![(3, DataType::INT)], // dept_id
             vec![
                 (AggType::COUNT, 0, DataType::INT), // count(dept_id)
-                (AggType::SUM, 1, DataType::INT),   // sum(age)
-                (AggType::MIN, 2, DataType::STR),   // min(name)
-                (AggType::MAX, 2, DataType::STR),   // max(name)
+                (AggType::SUM, 0, DataType::INT),   // sum(age)
+                (AggType::MIN, 1, DataType::STR),   // min(name)
+                (AggType::MAX, 1, DataType::STR),   // max(name)
             ],
             3,
         )
@@ -133,7 +132,7 @@ pub fn make_simple_flow() -> Flow {
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init();
-
+    
     info!("FLARE {}", "hello");
 
     let args = "cmdname --rank 0"
@@ -149,7 +148,7 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let mut ctx = Env::new(4);
+    let mut ctx = Env::new(1);
 
     run_flow(&mut ctx);
 
@@ -158,36 +157,23 @@ fn main() -> Result<(), String> {
     debug!("sizeof Node: {}", std::mem::size_of::<flow::Node>());
     debug!("sizeof Flow: {}", std::mem::size_of::<flow::Flow>());
 
-    parse_sql();
-
     Ok(())
 
 }
 
-use sqlparser::dialect::GenericDialect;
-use sqlparser::parser::Parser;
+#[macro_use] extern crate lalrpop_util;
 
-//test]
-fn parse_sql() {
-    let sql = "SELECT a, b \
-           FROM table_1 \
-           WHERE a > 10";
-
-    let dialect = GenericDialect {}; // or AnsiDialect, or your own dialect ...
-
-    let ast = Parser::parse_sql(&dialect, sql).unwrap();
-
-    println!("AST: {:?}", ast);
-
-}
-
-use  arrow2::buffer::Buffer;
+lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
 #[test]
-fn test_arrow() {
-    let x = Buffer::from(&[1u32, 2, 3]);
-    assert_eq!(x.as_slice(), &[1u32, 2, 3]);
-    
-    let x = x.slice(1, 2);
-    assert_eq!(x.as_slice(), &[2, 3]);
+fn sqlparser() {
+    /*
+    assert!(sqlparser::ExprParser::new().parse("22").is_ok());
+    assert!(sqlparser::ExprParser::new().parse("(22)").is_ok());
+    assert!(sqlparser::ExprParser::new().parse("((((22))))").is_ok());
+    assert!(sqlparser::ExprParser::new().parse("((22)").is_err());
+    */
+
+    println!("parsed number is {:?}", sqlparser::RelExprParser::new().parse("column1 > 10").unwrap());
+
 }

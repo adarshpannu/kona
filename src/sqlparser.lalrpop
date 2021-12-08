@@ -1,0 +1,40 @@
+use std::str::FromStr;
+use lalrpop_util::ParseError;
+
+use crate::expr::{Expr::*, *};
+use crate::row::*;
+
+grammar;
+
+pub RelExpr: Box<Expr> = {
+    <l:ArithExpr> ">" <r:ArithExpr> => Box::new(Expr::RelExpr(l, RelOp::Gt, r)),
+    <l:ArithExpr> "<" <r:ArithExpr> => Box::new(Expr::RelExpr(l, RelOp::Lt, r)),
+};
+
+pub ArithExpr: Box<Expr> = {
+    <l:ArithExpr> "+" <r:ArithFactor> => Box::new(*l + *r),
+    <l:ArithExpr> "-" <r:ArithFactor> => Box::new(Expr::ArithExpr(l, ArithOp::Sub, r)),
+    ArithFactor,
+};
+
+ArithFactor: Box<Expr> = {
+    <l:ArithFactor> "*" <r:Term> => Box::new(Expr::ArithExpr(l, ArithOp::Mul, r)),
+    <l:ArithFactor> "/" <r:Term> => Box::new(Expr::ArithExpr(l, ArithOp::Div, r)),
+    Term,
+};
+
+Term: Box<Expr> = {
+    Identifier,
+    Num,
+    "(" <ArithExpr> ")",
+};
+
+Num: Box<Expr> = {
+    r"[0-9]+" =>? isize::from_str(<>)
+    .map(|i| Box::new(Literal(Datum::INT(i))))
+    .map_err(|_| ParseError::User { error: "Invalid number" })
+};
+
+Identifier: Box<Expr> = {
+    r"[a-zA-Z][a-zA-Z0-9]+" => Box::new(Identifier(String::from(<>)))
+}
