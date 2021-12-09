@@ -100,38 +100,6 @@ impl fmt::Display for Expr {
 }
 
 /***************************************************************************************************/
-impl ops::Add for Expr {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Expr {
-        Expr::ArithExpr(Box::new(self), ArithOp::Add, Box::new(other))
-    }
-}
-
-impl ops::Sub for Expr {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Expr {
-        Expr::ArithExpr(Box::new(self), ArithOp::Sub, Box::new(other))
-    }
-}
-
-impl ops::Mul for Expr {
-    type Output = Self;
-
-    fn mul(self, other: Self) -> Expr {
-        Expr::ArithExpr(Box::new(self), ArithOp::Mul, Box::new(other))
-    }
-}
-
-impl ops::Div for Expr {
-    type Output = Self;
-
-    fn div(self, other: Self) -> Expr {
-        Expr::ArithExpr(Box::new(self), ArithOp::Div, Box::new(other))
-    }
-}
-
 impl Expr {
     pub fn eval<'a>(&'a self, row: &'a Row) -> Datum {
         match self {
@@ -165,19 +133,5 @@ impl Expr {
             }
             _ => unimplemented!(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test() {
-        let e: Expr = RelExpr(
-            Box::new(CID(0) + CID(1)),
-            RelOp::Gt,
-            Box::new(Literal(Datum::INT(30))),
-        );
-        println!("{}", e)
     }
 }

@@ -31,7 +31,7 @@ RelOp: RelOp = {
 };
 
 pub ArithExpr: Box<Expr> = {
-    <l:ArithExpr> "+" <r:ArithFactor> => Box::new(*l + *r),
+    <l:ArithExpr> "+" <r:ArithFactor> => Box::new(Expr::ArithExpr(l, ArithOp::Add, r)),
     <l:ArithExpr> "-" <r:ArithFactor> => Box::new(Expr::ArithExpr(l, ArithOp::Sub, r)),
     ArithFactor,
 };
