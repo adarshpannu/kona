@@ -6,9 +6,28 @@ use crate::row::*;
 
 grammar;
 
+pub LogExpr: Box<Expr> = {
+    <LogExprFactor>,
+    <l:LogExpr> "or" <r:LogExprFactor> => Box::new(Expr::LogExpr(l, LogOp::Or, r)),
+};
+
+pub LogExprFactor: Box<Expr> = {
+    <l:LogExprFactor> "and" <r:RelExpr> => Box::new(Expr::LogExpr(l, LogOp::And, r)),
+    RelExpr,
+};
+
 pub RelExpr: Box<Expr> = {
-    <l:ArithExpr> ">" <r:ArithExpr> => Box::new(Expr::RelExpr(l, RelOp::Gt, r)),
-    <l:ArithExpr> "<" <r:ArithExpr> => Box::new(Expr::RelExpr(l, RelOp::Lt, r)),
+    <l:ArithExpr> <op:RelOp> <r:ArithExpr> => Box::new(Expr::RelExpr(l, op, r)),
+    "(" <LogExpr> ")",
+};
+
+RelOp: RelOp = {
+    ">" => RelOp::Gt,
+    ">=" => RelOp::Ge,
+    "<" => RelOp::Lt,
+    "<=" => RelOp::Le,
+    "!=" => RelOp::Ne,
+    "=" => RelOp::Eq,
 };
 
 pub ArithExpr: Box<Expr> = {

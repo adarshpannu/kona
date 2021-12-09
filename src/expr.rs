@@ -83,6 +83,7 @@ pub enum Expr {
     Literal(Datum),
     ArithExpr(Box<Expr>, ArithOp, Box<Expr>),
     RelExpr(Box<Expr>, RelOp, Box<Expr>),
+    LogExpr(Box<Expr>, LogOp, Box<Expr>),
 }
 
 impl fmt::Display for Expr {
@@ -93,6 +94,7 @@ impl fmt::Display for Expr {
             Literal(v) => write!(f, "{}", v),
             ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
             RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
+            LogExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
         }
     }
 }
