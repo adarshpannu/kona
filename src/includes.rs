@@ -21,3 +21,4 @@ pub use typed_arena::Arena;
 
 pub type NodeArena = Arena<crate::flow::Node>;
 
+pub type ExprLink = std::rc::Rc<std::cell::RefCell<crate::expr::Expr>>;

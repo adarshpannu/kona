@@ -2,32 +2,43 @@
 
 use crate::includes::*;
 
+pub mod ast;
 pub mod csv;
 pub mod expr;
 pub mod flow;
 pub mod graphviz;
 pub mod includes;
 pub mod logging;
+pub mod metadata;
 pub mod net;
 pub mod row;
 pub mod task;
 
+use ast::AST;
 use bincode;
 use clp::CLParser;
 use expr::{Expr::*, *};
 use flow::*;
+use metadata::Metadata;
 use row::*;
+use std::cell::RefCell;
+use std::fs;
+use std::rc::Rc;
 use task::ThreadPool;
 
 pub struct Env {
     thread_pool: ThreadPool,
+    metadata: Metadata,
 }
 
 impl Env {
     fn new(nthreads: usize) -> Env {
-        // Create thread pool
         let thread_pool = task::ThreadPool::new(nthreads);
-        Env { thread_pool }
+        let metadata = Metadata::new();
+        Env {
+            thread_pool,
+            metadata,
+        }
     }
 }
 
@@ -84,9 +95,9 @@ pub fn make_simple_flow() -> Flow {
 
     // Expression: $column-1 < 3
     let expr = RelExpr(
-        Box::new(CID(0)),
+        Rc::new(RefCell::new(CID(0))),
         RelOp::Le,
-        Box::new(Literal(Datum::INT(3))),
+        Rc::new(RefCell::new(Literal(Datum::INT(3)))),
     );
 
     let use_dir = false;
@@ -129,10 +140,97 @@ pub fn make_simple_flow() -> Flow {
     }
 }
 
+
+#[macro_use]
+extern crate lalrpop_util;
+
+lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
+
+#[test]
+fn sqlparser() {
+    /*
+    assert!(sqlparser::ExprParser::new().parse("22").is_ok());
+    assert!(sqlparser::ExprParser::new().parse("(22)").is_ok());
+    assert!(sqlparser::ExprParser::new().parse("((((22))))").is_ok());
+    assert!(sqlparser::ExprParser::new().parse("((22)").is_err());
+    */
+
+    assert!(sqlparser::LogExprParser::new().parse("col1 = 10").is_ok());
+    assert!(sqlparser::LogExprParser::new().parse("(col1 = 10)").is_ok());
+
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 and col2 < 20")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new().parse("(col2 < 20)").is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 or (col2 < 20)")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 and (col2 < 20)")
+        .is_ok());
+
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 >= 10 or col2 <= 20")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 and col2 < 20 or col3 != 30")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 = 10 or col2 = 20 and col3 > 30")
+        .is_ok());
+
+    //let expr = sqlparser::LogExprParser::new().parse("col1 = 10 and col2 = 20 and (col3 > 30)").unwrap();
+    let expr: Rc<RefCell<Expr>> = sqlparser::LogExprParser::new()
+        .parse("(col2 > 20) and (col3 > 30) or (col4 < 40)")
+        .unwrap();
+    //let mut exprvec= vec![];
+    //dbg!(normalize(&expr, &mut exprvec));
+}
+
+/*
+fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
+    if let LogExpr(left, LogOp::And, right) = **expr {
+        normalize(&left, exprvec);
+        normalize(&right, exprvec);
+    } else {
+        println!("{:?}", expr);
+        exprvec.push(expr);
+    }
+    false
+}
+*/
+
+#[test]
+fn stmtparser() {
+    let stmtstr = r#"CATALOG TABLE emp FROM "emp.csv" ( "TYPE" = "CSV", "HEADER" = "YES" ) "#;
+
+    println!("Parsing :{}:", stmtstr);
+
+    sqlparser::StatementParser::new().parse(stmtstr).unwrap();
+}
+
+/*
+ * Run a job from a file
+ */
+fn run_job(env: &mut Env, filename: &str) {
+    let contents = fs::read_to_string(filename).expect("Cannot open file");
+
+    println!("Job = :{}:", contents);
+
+    let astlist: Vec<AST> =
+        sqlparser::JobParser::new().parse(&contents).unwrap();
+    for ast in astlist {
+        println!("{:?}", ast);
+        match ast {
+            AST::CatalogTable { name, from, opts} => {},
+        }
+    }
+}
+
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init();
-    
+
     info!("FLARE {}", "hello");
 
     let args = "cmdname --rank 0"
@@ -150,57 +248,12 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut ctx = Env::new(1);
 
-    run_flow(&mut ctx);
+    let filename = "/Users/adarshrp/Projects/flare/data/first.sql";
+
+    //run_flow(&mut ctx);
+    run_job(&mut ctx, filename);
 
     info!("End of program");
 
-    debug!("sizeof Node: {}", std::mem::size_of::<flow::Node>());
-    debug!("sizeof Flow: {}", std::mem::size_of::<flow::Flow>());
-
     Ok(())
-
 }
-
-#[macro_use] extern crate lalrpop_util;
-
-lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
-
-#[test]
-fn sqlparser() {
-    /*
-    assert!(sqlparser::ExprParser::new().parse("22").is_ok());
-    assert!(sqlparser::ExprParser::new().parse("(22)").is_ok());
-    assert!(sqlparser::ExprParser::new().parse("((((22))))").is_ok());
-    assert!(sqlparser::ExprParser::new().parse("((22)").is_err());
-    */
-
-    assert!(sqlparser::LogExprParser::new().parse("col1 = 10").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("(col1 = 10)").is_ok());
-
-    assert!(sqlparser::LogExprParser::new().parse("col1 > 10 and col2 < 20").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("(col2 < 20)").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("col1 > 10 or (col2 < 20)").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("col1 > 10 and (col2 < 20)").is_ok());
-
-    assert!(sqlparser::LogExprParser::new().parse("col1 >= 10 or col2 <= 20").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("col1 > 10 and col2 < 20 or col3 != 30").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("col1 = 10 or col2 = 20 and col3 > 30").is_ok());
-
-    //let expr = sqlparser::LogExprParser::new().parse("col1 = 10 and col2 = 20 and (col3 > 30)").unwrap();
-    let expr: Box<Expr> = sqlparser::LogExprParser::new().parse("(col2 > 20) and (col3 > 30) or (col4 < 40)").unwrap();
-    //let mut exprvec= vec![]; 
-    //dbg!(normalize(&expr, &mut exprvec));
-}
-
-/*
-fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
-    if let LogExpr(left, LogOp::And, right) = **expr {
-        normalize(&left, exprvec);
-        normalize(&right, exprvec);
-    } else {
-        println!("{:?}", expr);
-        exprvec.push(expr);
-    }
-    false
-}
-*/

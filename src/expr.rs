@@ -8,6 +8,9 @@ use std::fmt;
 use std::ops;
 use Expr::*;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ArithOp {
@@ -81,9 +84,9 @@ pub enum Expr {
     CID(usize),
     Identifier(String),
     Literal(Datum),
-    ArithExpr(Box<Expr>, ArithOp, Box<Expr>),
-    RelExpr(Box<Expr>, RelOp, Box<Expr>),
-    LogExpr(Box<Expr>, LogOp, Box<Expr>),
+    ArithExpr(ExprLink, ArithOp, ExprLink),
+    RelExpr(ExprLink, RelOp, ExprLink),
+    LogExpr(ExprLink, LogOp, ExprLink),
 }
 
 impl fmt::Display for Expr {
@@ -92,9 +95,9 @@ impl fmt::Display for Expr {
             CID(cid) => write!(f, "${}", cid),
             Identifier(id) => write!(f, "${}", id),
             Literal(v) => write!(f, "{}", v),
-            ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
-            RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
-            LogExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs, op, rhs),
+            ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
+            RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
+            LogExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
         }
     }
 }
@@ -106,8 +109,8 @@ impl Expr {
             CID(cid) => row.get_column(*cid).clone(),
             Literal(lit) => lit.clone(),
             ArithExpr(b1, op, b2) => {
-                let b1 = b1.eval(row);
-                let b2 = b2.eval(row);
+                let b1 = b1.borrow().eval(row);
+                let b2 = b2.borrow().eval(row);
                 let res = match (b1, op, b2) {
                     (Datum::INT(i1), ArithOp::Add, Datum::INT(i2)) => i1 + i2,
                     (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
@@ -118,8 +121,8 @@ impl Expr {
                 Datum::INT(res)
             }
             RelExpr(b1, op, b2) => {
-                let b1 = b1.eval(row);
-                let b2 = b2.eval(row);
+                let b1 = b1.borrow().eval(row);
+                let b2 = b2.borrow().eval(row);
                 let res = match (b1, op, b2) {
                     (Datum::INT(i1), RelOp::Eq, Datum::INT(i2)) => i1 == i2,
                     (Datum::INT(i1), RelOp::Ne, Datum::INT(i2)) => i1 != i2,
