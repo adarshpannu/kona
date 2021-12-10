@@ -140,7 +140,6 @@ pub fn make_simple_flow() -> Flow {
     }
 }
 
-
 #[macro_use]
 extern crate lalrpop_util;
 
@@ -180,7 +179,7 @@ fn sqlparser() {
         .is_ok());
 
     //let expr = sqlparser::LogExprParser::new().parse("col1 = 10 and col2 = 20 and (col3 > 30)").unwrap();
-    let expr: Rc<RefCell<Expr>> = sqlparser::LogExprParser::new()
+    let expr: ExprLink = sqlparser::LogExprParser::new()
         .parse("(col2 > 20) and (col3 > 30) or (col4 < 40)")
         .unwrap();
     //let mut exprvec= vec![];
@@ -222,9 +221,18 @@ fn run_job(env: &mut Env, filename: &str) {
     for ast in astlist {
         println!("{:?}", ast);
         match ast {
-            AST::CatalogTable { name, from, opts} => {},
+            AST::CatalogTable { name, options } => {
+                env.metadata.register_table(name, options)
+            }
+            AST::Query {
+                select_list,
+                from_list,
+                where_clause,
+            } => {}
+            _ => unimplemented!(),
         }
     }
+    dbg!(&env.metadata);
 }
 
 fn main() -> Result<(), String> {

@@ -30,40 +30,51 @@ SemicolonSeparatedList<T>: Vec<T> = {
     }
 };
 
-// -------------------- JOB --------------------
+// -------------------- STATEMENTS --------------------
 pub Job = SemicolonSeparatedList<Statement>;
 
+pub Statement: AST<'input> = {
+    <CatalogTable>,
+    <Query>
+}
+
 // -------------------- CATALOG TABLE --------------------
-pub Statement: AST = {
-    "CATALOG" "TABLE" <name:Identifier> "FROM" <filename:Filename> "(" <opts:Fileopts> ")"  => AST::CatalogTable { name: name, from: filename, opts: opts }
+pub CatalogTable: AST<'input> = {
+    "CATALOG" "TABLE" <name:Identifier> "(" <options:CatalogTableOptions> ")"  => AST::CatalogTable { name: name, options: options }
 }
 
-Filename: String = {
-    QuotedString
-}
+CatalogTableOptions = CommaSeparatedList<CatalogTableOption>;
 
-Fileopts = CommaSeparatedList<Fileopt>;
-
-Fileopt: (String, String) = {
+CatalogTableOption: (&'input str, &'input str) = {
     <opt:QuotedString> "=" <val:QuotedString> => (opt, val)
 }
 
-// -------------------- SELECT --------------------
+// -------------------- QUERY --------------------
 
-pub LogExpr: Rc<RefCell<Expr>> = {
+pub Query: AST<'input> = {
+    "SELECT" <select_list: SelectList> "FROM" <from_list: FromList> "WHERE" <where_clause: LogExpr> => {
+        AST::Query { select_list, from_list, where_clause }
+    }
+}
+
+SelectList = CommaSeparatedList<ArithExpr>;
+
+FromList = CommaSeparatedList<Identifier>;
+
+pub LogExpr: ExprLink = {
     <LogExprFactor>,
     <l:LogExpr> "or" <r:LogExprFactor> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::Or, r))),
-};
+}
 
-LogExprFactor: Rc<RefCell<Expr>> = {
+LogExprFactor: ExprLink = {
     <l:LogExprFactor> "and" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, r))),
     RelExpr,
-};
+}
 
-RelExpr: Rc<RefCell<Expr>> = {
+RelExpr: ExprLink = {
     <l:ArithExpr> <op:RelOp> <r:ArithExpr> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
     "(" <LogExpr> ")",
-};
+}
 
 RelOp: RelOp = {
     ">" => RelOp::Gt,
@@ -72,36 +83,41 @@ RelOp: RelOp = {
     "<=" => RelOp::Le,
     "!=" => RelOp::Ne,
     "=" => RelOp::Eq,
-};
+}
 
-pub ArithExpr: Rc<RefCell<Expr>> = {
+pub ArithExpr: ExprLink = {
     <l:ArithExpr> "+" <r:ArithFactor> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Add, r))),
     <l:ArithExpr> "-" <r:ArithFactor> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Sub, r))),
     ArithFactor,
-};
+}
 
-ArithFactor: Rc<RefCell<Expr>> = {
+ArithFactor: ExprLink = {
     <l:ArithFactor> "*" <r:Term> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Mul, r))),
     <l:ArithFactor> "/" <r:Term> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Div, r))),
     Term,
-};
+}
 
-Term: Rc<RefCell<Expr>> = {
-    Identifier => Rc::new(RefCell::new(Identifier(<>))),
+Term: ExprLink = {
+    <cr:ColumnReference> => Rc::new(RefCell::new(Column { alias: cr.0, name: cr.1 } )),
     Num,
     "(" <ArithExpr> ")",
 };
 
-Num: Rc<RefCell<Expr>> = {
+Num: ExprLink = {
     r"[0-9]+" =>? isize::from_str(<>)
     .map(|i| Rc::new(RefCell::new(Literal(Datum::INT(i)))))
     .map_err(|_| ParseError::User { error: "Invalid number" })
 };
 
-Identifier: String = {
-    r"[a-zA-Z][a-zA-Z0-9]+" => String::from(<>)
+Identifier: &'input str = {
+    r"[a-zA-Z][a-zA-Z0-9]+" => <>
 }
 
-QuotedString: String = {
-    r#""[^"]*""# => String::from(<>)
+ColumnReference: (Option<String>, String) = <alias:(Identifier ".")?> <col:Identifier> => (alias.map(|e| e.0.to_string()), col.to_string());
+
+QuotedString: &'input str = {
+    r#""[^"]*""# => {
+        let s = <>;
+        &s[1..s.len()-1]
+    }
 }

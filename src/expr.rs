@@ -82,7 +82,7 @@ impl fmt::Display for RelOp {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
-    Identifier(String),
+    Column { alias: Option<String>, name: String },
     Literal(Datum),
     ArithExpr(ExprLink, ArithOp, ExprLink),
     RelExpr(ExprLink, RelOp, ExprLink),
@@ -93,7 +93,7 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CID(cid) => write!(f, "${}", cid),
-            Identifier(id) => write!(f, "${}", id),
+            Column { alias, name } => write!(f, "{:?}.{}", alias, name),
             Literal(v) => write!(f, "{}", v),
             ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
             RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
