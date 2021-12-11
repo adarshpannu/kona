@@ -1,12 +1,9 @@
 use crate::includes::*;
 
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::sync::{mpsc, Arc};
-use std::thread::JoinHandle;
-use typed_arena::Arena;
-
+use std::sync::mpsc;
 use std::thread;
+use std::thread::JoinHandle;
 
 use crate::flow::*;
 

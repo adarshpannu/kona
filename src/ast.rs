@@ -14,11 +14,12 @@ pub enum AST<'a> {
 
 enum DistinctProperty {
     Enforce,
+    Preserve,
     Permit
 }
 
 struct QGM<'a> {
-    tables: Vec<&'a TableDesc>,
+    tables: Vec<String>,
     qblocks: Vec<&'a QueryBlock>
 }
 

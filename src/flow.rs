@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::sync::Arc;
-use std::thread::JoinHandle;
+use std::io::Write;
 
-use crate::graphviz::{htmlify, write_flow_to_graphviz};
-use crate::{csv::*, expr::Expr::*, expr::*, includes::*, row::*, task::*};
+use crate::graphviz::htmlify;
+use crate::metadata::CSVDesc;
+use crate::{csv::*, expr::*, includes::*, row::*, task::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum NodeInner {
@@ -239,23 +239,11 @@ pub(crate) struct CSVNode {
     partitions: Vec<TextFilePartition>,
 }
 
-use std::fs::File;
-use std::io::{self, BufRead, Write};
-use std::path::Path;
-
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
 impl CSVNode {
     pub fn new<'a>(
         arena: &'a NodeArena, filename: String, npartitions: usize,
     ) -> &'a Node {
-        let (colnames, coltypes) = Self::infer_metadata(&filename);
+        let (colnames, coltypes) = CSVDesc::infer_metadata(&filename);
 
         let partitions =
             compute_partitions(&filename, npartitions as u64).unwrap();
@@ -267,47 +255,6 @@ impl CSVNode {
         });
         let node = Node::new(arena, vec![], npartitions, csvnode);
         node
-    }
-
-    fn infer_datatype(str: &String) -> DataType {
-        let res = str.parse::<i32>();
-        if res.is_ok() {
-            DataType::INT
-        } else if str.eq("true") || str.eq("false") {
-            DataType::BOOL
-        } else {
-            DataType::STR
-        }
-    }
-
-    fn infer_metadata(filename: &str) -> (Vec<String>, Vec<DataType>) {
-        let mut iter = read_lines(&filename).unwrap();
-        let mut colnames: Vec<String> = vec![];
-        let mut coltypes: Vec<DataType> = vec![];
-        let mut first_row = true;
-
-        while let Some(line) = iter.next() {
-            let cols: Vec<String> =
-                line.unwrap().split('|').map(|e| e.to_owned()).collect();
-            if colnames.len() == 0 {
-                colnames = cols;
-            } else {
-                for (ix, col) in cols.iter().enumerate() {
-                    let datatype = CSVNode::infer_datatype(col);
-                    if first_row {
-                        coltypes.push(datatype)
-                    } else if coltypes[ix] != DataType::STR {
-                        coltypes[ix] = datatype;
-                    } else {
-                        coltypes[ix] = DataType::STR;
-                    }
-                }
-                first_row = false;
-            }
-        }
-        dbg!(&colnames);
-        dbg!(&coltypes);
-        (colnames, coltypes)
     }
 }
 

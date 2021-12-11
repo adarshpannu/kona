@@ -1,9 +1,11 @@
 #![allow(warnings)]
 
+use crate::error::{FlareError, FlareErrorCode, FlareErrorCode::*};
 use crate::includes::*;
 
 pub mod ast;
 pub mod csv;
+pub mod error;
 pub mod expr;
 pub mod flow;
 pub mod graphviz;
@@ -15,7 +17,6 @@ pub mod row;
 pub mod task;
 
 use ast::AST;
-use bincode;
 use clp::CLParser;
 use expr::{Expr::*, *};
 use flow::*;
@@ -211,7 +212,7 @@ fn stmtparser() {
 /*
  * Run a job from a file
  */
-fn run_job(env: &mut Env, filename: &str) {
+fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
     let contents = fs::read_to_string(filename).expect("Cannot open file");
 
     println!("Job = :{}:", contents);
@@ -222,7 +223,7 @@ fn run_job(env: &mut Env, filename: &str) {
         println!("{:?}", ast);
         match ast {
             AST::CatalogTable { name, options } => {
-                env.metadata.register_table(name, options)
+                env.metadata.register_table(name, options)?;
             }
             AST::Query {
                 select_list,
@@ -233,6 +234,7 @@ fn run_job(env: &mut Env, filename: &str) {
         }
     }
     dbg!(&env.metadata);
+    Ok(())
 }
 
 fn main() -> Result<(), String> {
@@ -259,8 +261,12 @@ fn main() -> Result<(), String> {
     let filename = "/Users/adarshrp/Projects/flare/data/first.sql";
 
     //run_flow(&mut ctx);
-    run_job(&mut ctx, filename);
-
+    let jobres = run_job(&mut ctx, filename);
+    if let Err(flare_err) = jobres {
+        let errstr = format!("{:?}", &flare_err);
+        error!("{}", errstr);
+        return Err(errstr)
+    }
     info!("End of program");
 
     Ok(())

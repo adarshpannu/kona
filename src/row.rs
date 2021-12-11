@@ -1,8 +1,7 @@
-//#![allow(dead_code)]
+#![allow(dead_code)]
 
 use core::panic;
 use std::fmt;
-use std::sync::Arc;
 use crate::includes::*;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
