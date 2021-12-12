@@ -6,7 +6,7 @@ use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::includes::*;
-use crate::ast::AST;
+use crate::ast::{AST, NamedExpr, QueryBlock, QGM};
 
 grammar;
 
@@ -33,33 +33,44 @@ SemicolonSeparatedList<T>: Vec<T> = {
 // -------------------- STATEMENTS --------------------
 pub Job = SemicolonSeparatedList<Statement>;
 
-pub Statement: AST<'input> = {
+pub Statement: AST = {
     <CatalogTable>,
+    <DescribeTable>,
     <Query>
 }
 
 // -------------------- CATALOG TABLE --------------------
-pub CatalogTable: AST<'input> = {
+pub CatalogTable: AST = {
     "CATALOG" "TABLE" <name:Identifier> "(" <options:CatalogTableOptions> ")"  => AST::CatalogTable { name: name, options: options }
 }
 
 CatalogTableOptions = CommaSeparatedList<CatalogTableOption>;
 
-CatalogTableOption: (&'input str, &'input str) = {
+CatalogTableOption: (String, String) = {
     <opt:QuotedString> "=" <val:QuotedString> => (opt, val)
+}
+
+// -------------------- DESCRIBE TABLE --------------------
+pub DescribeTable: AST = {
+    "DESCRIBE" "TABLE" <name:Identifier>  => AST::DescribeTable { name: name }
 }
 
 // -------------------- QUERY --------------------
 
-pub Query: AST<'input> = {
-    "SELECT" <select_list: SelectList> "FROM" <from_list: FromList> "WHERE" <where_clause: LogExpr> => {
-        AST::Query { select_list, from_list, where_clause }
+pub Query: AST = {
+    "SELECT" <select_list: SelectList> "FROM" <quns: FromList> "WHERE" <pred_list: LogExpr> => {
+        let pred_list = vec![pred_list];
+        let qblock = QueryBlock { select_list, quns, pred_list};
+        let qgm = QGM { qblocks : vec![qblock] };
+        AST::QGM(qgm)
     }
 }
 
-SelectList = CommaSeparatedList<ArithExpr>;
+SelectList = CommaSeparatedList<NamedExpr>;
 
 FromList = CommaSeparatedList<Identifier>;
+
+NamedExpr: NamedExpr = <expr:ArithExpr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr };
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
@@ -98,7 +109,7 @@ ArithFactor: ExprLink = {
 }
 
 Term: ExprLink = {
-    <cr:ColumnReference> => Rc::new(RefCell::new(Column { alias: cr.0, name: cr.1 } )),
+    <cr:ColumnReference> => Rc::new(RefCell::new(Column { tablename: cr.0, colname: cr.1 } )),
     Num,
     "(" <ArithExpr> ")",
 };
@@ -109,15 +120,15 @@ Num: ExprLink = {
     .map_err(|_| ParseError::User { error: "Invalid number" })
 };
 
-Identifier: &'input str = {
-    r"[a-zA-Z][a-zA-Z0-9]+" => <>
+Identifier: String = {
+    r"[a-zA-Z][a-zA-Z0-9]+" => <>.to_string()
 }
 
-ColumnReference: (Option<String>, String) = <alias:(Identifier ".")?> <col:Identifier> => (alias.map(|e| e.0.to_string()), col.to_string());
+ColumnReference: (Option<String>, String) = <tablename:(Identifier ".")?> <colname:Identifier> => (tablename.map(|e| e.0), colname);
 
-QuotedString: &'input str = {
+QuotedString: String = {
     r#""[^"]*""# => {
         let s = <>;
-        &s[1..s.len()-1]
+        s[1..s.len()-1].to_string()
     }
 }

@@ -3,6 +3,11 @@
 use crate::error::{FlareError, FlareErrorCode, FlareErrorCode::*};
 use crate::includes::*;
 
+#[macro_use]
+extern crate lalrpop_util;
+
+lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
+
 pub mod ast;
 pub mod csv;
 pub mod error;
@@ -12,7 +17,6 @@ pub mod graphviz;
 pub mod includes;
 pub mod logging;
 pub mod metadata;
-pub mod net;
 pub mod row;
 pub mod task;
 
@@ -33,7 +37,7 @@ pub struct Env {
 }
 
 impl Env {
-    fn new(nthreads: usize) -> Env {
+    fn new(nthreads: usize) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
         Env {
@@ -44,8 +48,8 @@ impl Env {
 }
 
 /***************************************************************************************************/
-pub fn run_flow(ctx: &mut Env) {
-    let flow = make_simple_flow();
+pub fn run_flow(env: &mut Env) {
+    let flow = make_simple_flow(env);
 
     let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
 
@@ -58,40 +62,14 @@ pub fn run_flow(ctx: &mut Env) {
     std::fs::remove_dir_all(dirname);
 
     // Run the flow
-    flow.run(&ctx);
+    flow.run(&env);
 
-    ctx.thread_pool.close_all();
+    env.thread_pool.close_all();
 
-    ctx.thread_pool.join();
+    env.thread_pool.join();
 }
 
-/***************************************************************************************************/
-/*
-pub fn make_join_flow() -> Flow {
-    let arena: NodeArena = Arena::new();
-    let empfilename = format!("{}/{}", DATADIR, "emp.csv").to_string();
-    let deptfilename = format!("{}/{}", DATADIR, "dept.csv").to_string();
-
-    let emp = CSVNode::new(&arena, empfilename, 4)
-        .project(&arena, vec![0, 1, 2])
-        .agg(&arena, vec![0], vec![(AggType::COUNT, 1)], 3);
-
-    let dept = CSVNode::new(&arena, deptfilename, 4);
-
-    let join = emp.join(&arena, vec![&dept], vec![(2, RelOp::Eq, 0)]).agg(
-        &arena,
-        vec![0],
-        vec![(AggType::COUNT, 1)],
-        3,
-    );
-    Flow {
-        id: 97,
-        nodes: arena.into_vec(),
-    }
-}
-*/
-
-pub fn make_simple_flow() -> Flow {
+pub fn make_simple_flow(env: &Env) -> Flow {
     let arena: NodeArena = Arena::new();
 
     // Expression: $column-1 < 3
@@ -104,8 +82,9 @@ pub fn make_simple_flow() -> Flow {
     let use_dir = false;
 
     let csvnode = if use_dir == false {
-        let csvfilename = format!("{}/{}", DATADIR, "customer.tbl");
-        let csvnode = CSVNode::new(&arena, csvfilename.to_string(), 4);
+        //let csvfilename = format!("{}/{}", DATADIR, "customer.tbl").to_string();
+        
+        let csvnode = CSVNode::new(env, &arena, "cust".to_string(), 4);
         csvnode
     } else {
         let csvnode = CSVDirNode::new(
@@ -141,99 +120,27 @@ pub fn make_simple_flow() -> Flow {
     }
 }
 
-#[macro_use]
-extern crate lalrpop_util;
-
-lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
-
-#[test]
-fn sqlparser() {
-    /*
-    assert!(sqlparser::ExprParser::new().parse("22").is_ok());
-    assert!(sqlparser::ExprParser::new().parse("(22)").is_ok());
-    assert!(sqlparser::ExprParser::new().parse("((((22))))").is_ok());
-    assert!(sqlparser::ExprParser::new().parse("((22)").is_err());
-    */
-
-    assert!(sqlparser::LogExprParser::new().parse("col1 = 10").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("(col1 = 10)").is_ok());
-
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 and col2 < 20")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("(col2 < 20)").is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 or (col2 < 20)")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 and (col2 < 20)")
-        .is_ok());
-
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 >= 10 or col2 <= 20")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 and col2 < 20 or col3 != 30")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 = 10 or col2 = 20 and col3 > 30")
-        .is_ok());
-
-    //let expr = sqlparser::LogExprParser::new().parse("col1 = 10 and col2 = 20 and (col3 > 30)").unwrap();
-    let expr: ExprLink = sqlparser::LogExprParser::new()
-        .parse("(col2 > 20) and (col3 > 30) or (col4 < 40)")
-        .unwrap();
-    //let mut exprvec= vec![];
-    //dbg!(normalize(&expr, &mut exprvec));
-}
-
-/*
-fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
-    if let LogExpr(left, LogOp::And, right) = **expr {
-        normalize(&left, exprvec);
-        normalize(&right, exprvec);
-    } else {
-        println!("{:?}", expr);
-        exprvec.push(expr);
-    }
-    false
-}
-*/
-
-#[test]
-fn stmtparser() {
-    let stmtstr = r#"CATALOG TABLE emp FROM "emp.csv" ( "TYPE" = "CSV", "HEADER" = "YES" ) "#;
-
-    println!("Parsing :{}:", stmtstr);
-
-    sqlparser::StatementParser::new().parse(stmtstr).unwrap();
-}
-
 /*
  * Run a job from a file
  */
 fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
     let contents = fs::read_to_string(filename).expect("Cannot open file");
-
-    println!("Job = :{}:", contents);
-
     let astlist: Vec<AST> =
         sqlparser::JobParser::new().parse(&contents).unwrap();
     for ast in astlist {
         println!("{:?}", ast);
         match ast {
             AST::CatalogTable { name, options } => {
-                env.metadata.register_table(name, options)?;
+                env.metadata.catalog_table(name, options)?;
             }
-            AST::Query {
-                select_list,
-                from_list,
-                where_clause,
-            } => {}
+            AST::DescribeTable { name } => {
+                env.metadata.describe_table(name)?;
+            }
+            AST::QGM(qgm) => {}
             _ => unimplemented!(),
         }
     }
-    dbg!(&env.metadata);
+    //dbg!(&env.metadata);
     Ok(())
 }
 
@@ -256,17 +163,19 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let mut ctx = Env::new(1);
+    let mut env = Env::new(1);
 
     let filename = "/Users/adarshrp/Projects/flare/data/first.sql";
 
-    //run_flow(&mut ctx);
-    let jobres = run_job(&mut ctx, filename);
+    let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {
         let errstr = format!("{:?}", &flare_err);
         error!("{}", errstr);
-        return Err(errstr)
+        return Err(errstr);
     }
+
+    run_flow(&mut env);
+
     info!("End of program");
 
     Ok(())

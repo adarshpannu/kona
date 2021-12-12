@@ -2,33 +2,94 @@ use crate::includes::*;
 
 use crate::expr::Expr;
 use crate::metadata::TableDesc;
+use crate::sqlparser;
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
+
+type Quantifier = String;
 
 #[derive(Debug)]
-pub enum AST<'a> {
-    CatalogTable { name: &'a str, options: Vec<(&'a str, &'a str)>},
-    Query { select_list: Vec<ExprLink>, from_list: Vec<&'a str>, where_clause: ExprLink }
+pub enum AST {
+    CatalogTable {
+        name: String,
+        options: Vec<(String, String)>,
+    },
+    DescribeTable {
+        name: String,
+    },
+    QGM(QGM)
 }
 
-enum DistinctProperty {
-    Enforce,
-    Preserve,
-    Permit
+#[derive(Debug)]
+pub struct QGM {
+    pub qblocks: Vec<QueryBlock>
 }
 
-struct QGM<'a> {
-    tables: Vec<String>,
-    qblocks: Vec<&'a QueryBlock>
+#[derive(Debug)]
+pub struct NamedExpr {
+    pub name: Option<String>,
+    pub expr: ExprLink,
 }
 
-struct QueryBlock {
-    head: Vec<(String, ExprLink)>,
-    distinct: DistinctProperty
+#[derive(Debug)]
+pub struct QueryBlock {
+    pub select_list: Vec<NamedExpr>,
+    pub quns: Vec<Quantifier>,
+    pub pred_list: Vec<ExprLink>,
 }
 
-enum Quantifier {
-    Table(TableDesc),
-    QueryBlock(QueryBlock) 
+impl QueryBlock {
+    pub fn new(
+        select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
+    ) -> Self {
+        QueryBlock { select_list, quns, pred_list }
+    }
 }
+
+#[test]
+fn sqlparser() {
+    assert!(sqlparser::LogExprParser::new().parse("col1 = 10").is_ok());
+    assert!(sqlparser::LogExprParser::new().parse("(col1 = 10)").is_ok());
+
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 and col2 < 20")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new().parse("(col2 < 20)").is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 or (col2 < 20)")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 and (col2 < 20)")
+        .is_ok());
+
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 >= 10 or col2 <= 20")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 > 10 and col2 < 20 or col3 != 30")
+        .is_ok());
+    assert!(sqlparser::LogExprParser::new()
+        .parse("col1 = 10 or col2 = 20 and col3 > 30")
+        .is_ok());
+
+    //let expr = sqlparser::LogExprParser::new().parse("col1 = 10 and col2 = 20 and (col3 > 30)").unwrap();
+    let expr: ExprLink = sqlparser::LogExprParser::new()
+        .parse("(col2 > 20) and (col3 > 30) or (col4 < 40)")
+        .unwrap();
+    //let mut exprvec= vec![];
+    //dbg!(normalize(&expr, &mut exprvec));
+}
+
+/*
+fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
+    if let LogExpr(left, LogOp::And, right) = **expr {
+        normalize(&left, exprvec);
+        normalize(&right, exprvec);
+    } else {
+        println!("{:?}", expr);
+        exprvec.push(expr);
+    }
+    false
+}
+*/

@@ -241,14 +241,17 @@ pub(crate) struct CSVNode {
 
 impl CSVNode {
     pub fn new<'a>(
-        arena: &'a NodeArena, filename: String, npartitions: usize,
+        env: &Env, arena: &'a NodeArena, name: String, npartitions: usize,
     ) -> &'a Node {
-        let (colnames, coltypes) = CSVDesc::infer_metadata(&filename);
+        let tbldesc = env.metadata.get_tabledesc(&name).unwrap();
+        let (colnames, coltypes) =
+            (tbldesc.colnames().clone(), tbldesc.coltypes().clone());
 
+        let filename = tbldesc.filename();
         let partitions =
-            compute_partitions(&filename, npartitions as u64).unwrap();
+            compute_partitions(filename, npartitions as u64).unwrap();
         let csvnode = NodeInner::CSVNode(CSVNode {
-            filename,
+            filename: filename.clone(),
             colnames,
             coltypes,
             partitions,
@@ -582,10 +585,10 @@ impl Flow {
         stages
     }
 
-    pub fn run(&self, ctx: &Env) {
+    pub fn run(&self, env: &Env) {
         let stages = self.make_stages();
         for stage in stages {
-            stage.run(ctx, self);
+            stage.run(env, self);
         }
     }
 }

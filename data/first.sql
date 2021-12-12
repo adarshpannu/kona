@@ -1,4 +1,5 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE cust ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/tpch-data/sf0.01/customer.tbl", "HEADER" = "YES", "SEPARATOR" = "|" );
 
-SELECT col1, col2 FROM emp WHERE col3 > 10 and col4 > 20;
+DESCRIBE TABLE cust;
+
+SELECT col1 AS colalias, col2 FROM emp WHERE col3 > 10 and col4 > 20;

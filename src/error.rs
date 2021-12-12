@@ -2,6 +2,7 @@
 #[derive(Debug)]
 pub enum FlareErrorCode {
     TableAlreadyCataloged,
+    TableDoesNotExist
 }
 
 #[derive(Debug)]

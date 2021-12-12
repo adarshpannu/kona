@@ -21,7 +21,7 @@ where
 
 #[derive(Debug)]
 pub struct CSVDesc {
-    path: String,
+    filename: String,
     header: bool,
     separator: char,
     colnames: Vec<String>,
@@ -29,10 +29,10 @@ pub struct CSVDesc {
 }
 
 impl CSVDesc {
-    pub fn new(path: String, header: bool, separator: char) -> Self {
-        let (colnames, coltypes) = Self::infer_metadata(&path);
+    pub fn new(filename: String, header: bool, separator: char) -> Self {
+        let (colnames, coltypes) = Self::infer_metadata(&filename, separator);
         CSVDesc {
-            path,
+            filename,
             header,
             separator,
             colnames,
@@ -51,23 +51,20 @@ impl CSVDesc {
         }
     }
 
-    pub fn colnames(&self) -> &Vec<String> {
-        &self.colnames
-    }
-
-    pub fn coltypes(&self) -> &Vec<DataType> {
-        &self.coltypes
-    }
-
-    pub fn infer_metadata(filename: &str) -> (Vec<String>, Vec<DataType>) {
+    pub fn infer_metadata(
+        filename: &str, separator: char,
+    ) -> (Vec<String>, Vec<DataType>) {
         let mut iter = read_lines(&filename).unwrap();
         let mut colnames: Vec<String> = vec![];
         let mut coltypes: Vec<DataType> = vec![];
         let mut first_row = true;
 
         while let Some(line) = iter.next() {
-            let cols: Vec<String> =
-                line.unwrap().split('|').map(|e| e.to_owned()).collect();
+            let cols: Vec<String> = line
+                .unwrap()
+                .split(separator)
+                .map(|e| e.to_owned())
+                .collect();
             if colnames.len() == 0 {
                 colnames = cols;
             } else {
@@ -88,14 +85,28 @@ impl CSVDesc {
     }
 }
 
-#[derive(Debug)]
-pub enum TableDesc {
-    CSVDesc(CSVDesc),
+pub trait TableDesc {
+    fn filename(&self) -> &String;
+    fn colnames(&self) -> &Vec<String>;
+    fn coltypes(&self) -> &Vec<DataType>;
 }
 
-#[derive(Debug)]
+impl TableDesc for CSVDesc {
+    fn colnames(&self) -> &Vec<String> {
+        &self.colnames
+    }
+
+    fn coltypes(&self) -> &Vec<DataType> {
+        &self.coltypes
+    }
+
+    fn filename(&self) -> &String {
+        &self.filename
+    }
+}
+
 pub struct Metadata {
-    tables: HashMap<String, TableDesc>,
+    tables: HashMap<String, Box<dyn TableDesc>>,
 }
 
 impl Metadata {
@@ -105,10 +116,10 @@ impl Metadata {
         }
     }
 
-    pub fn register_table(
-        &mut self, name: &str, options: Vec<(&str, &str)>,
+    pub fn catalog_table(
+        &mut self, name: String, options: Vec<(String, String)>,
     ) -> Result<(), FlareError> {
-        if self.tables.contains_key(name) {
+        if self.tables.contains_key(&name) {
             error!(
                 "{}",
                 format!("Table {} cannot be cataloged more than once.", name)
@@ -118,17 +129,17 @@ impl Metadata {
                 format!("{}", name),
             ));
         }
-        let hm: HashMap<&str, &str> = options.into_iter().collect();
-        match hm.get("TYPE") {
-            Some(&"CSV") => {
+        let hm: HashMap<String, String> = options.into_iter().collect();
+        match hm.get("TYPE").map(|e| &e[..]) {
+            Some("CSV") => {
                 // PATH, HEADER, SEPARATOR
                 let path =
                     hm.get("PATH").expect("PATH not specified").to_string();
-                let header = match hm.get("HEADER") {
-                    Some(&"Y") => true,
+                let header = match hm.get("HEADER").map(|e| &e[..]) {
+                    Some("Y") => true,
                     _ => false,
                 };
-                let separator = match hm.get("SEPARATOR") {
+                let separator = match hm.get("SEPARATOR").map(|e| &e[..]) {
                     Some(sep) => {
                         if sep.len() != 1 {
                             ','
@@ -138,15 +149,33 @@ impl Metadata {
                     }
                     _ => ',',
                 };
-                let csvdesc = CSVDesc::new(path, header, separator);
-                let tabledesc = TableDesc::CSVDesc(csvdesc);
-                self.tables.insert(name.to_string(), tabledesc);
+                let csvdesc = Box::new(CSVDesc::new(path, header, separator));
+                //let tabledesc = TableDesc::CSVDesc(csvdesc);
+                self.tables.insert(name.to_string(), csvdesc);
             }
             _ => {
                 unimplemented!()
             }
         }
         Ok(())
+    }
+
+    pub fn describe_table(&self, name: String) -> Result<(), FlareError> {
+        let tbldesc = self.tables.get(&name);
+        if tbldesc.is_none() {
+            error!("{}", format!("Table {} does not exist.", name));
+            return Err(FlareError::new(
+                TableDoesNotExist,
+                format!("{}", name),
+            ));
+        }
+        let tbldesc = tbldesc.unwrap();
+        //debug!("Table {} {:?}", name, &tbldesc);
+        Ok(())
+    }
+
+    pub fn get_tabledesc(&self, name: &String) -> Option<&Box<dyn TableDesc>> {
+        self.tables.get(name)
     }
 }
 

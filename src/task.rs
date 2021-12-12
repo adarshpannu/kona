@@ -26,14 +26,14 @@ impl Stage {
         }
     }
 
-    pub fn run(&self, ctx: &Env, flow: &Flow) {
+    pub fn run(&self, env: &Env, flow: &Flow) {
         let node = flow.get_node(self.head_node_id);
         let npartitions = self.npartitions_producer;
         for partition_id in 0..npartitions {
             let mut task = Task::new(partition_id);
             //task.run(flow, self);
 
-            let thread_id = partition_id % (ctx.thread_pool.size());
+            let thread_id = partition_id % (env.thread_pool.size());
 
             //let t2sa = Task2SendAcross { flow: flow.clone() };
             let t2sa = &(flow, self, task);
@@ -45,7 +45,7 @@ impl Stage {
 
             //dbg!(&decoded.0);
 
-            ctx.thread_pool.s2t_channels_sx[thread_id]
+            env.thread_pool.s2t_channels_sx[thread_id]
                 .send(ThreadPoolMessage::RunTask(encoded));
         }
     }
