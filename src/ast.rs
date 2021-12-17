@@ -34,6 +34,7 @@ pub struct NamedExpr {
 
 #[derive(Debug)]
 pub struct QueryBlock {
+    pub name: Option<String>,
     pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
     pub pred_list: Vec<ExprLink>,
@@ -41,9 +42,9 @@ pub struct QueryBlock {
 
 impl QueryBlock {
     pub fn new(
-        select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
+        name: Option<String>, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
     ) -> Self {
-        QueryBlock { select_list, quns, pred_list }
+        QueryBlock { name, select_list, quns, pred_list }
     }
 }
 

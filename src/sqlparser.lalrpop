@@ -10,6 +10,41 @@ use crate::ast::{AST, NamedExpr, QueryBlock, QGM};
 
 grammar;
 
+match {
+    r"(?i)CATALOG" => "CATALOG",
+    r"(?i)DESCRIBE" => "DESCRIBE",
+    r"(?i)TABLE" => "TABLE",
+    r"(?i)SELECT" => "SELECT",
+    r"(?i)FROM" => "FROM",
+    r"(?i)WHERE" => "WHERE",
+    r"(?i)AND" => "AND",
+    r"(?i)OR" => "OR",
+    r"(?i)AS" => "AS",
+    r"(?i)WITH" => "WITH",
+    "(",
+    ")",
+    "=",
+    "<",
+    "<=",
+    ">",
+    ">=",
+    "!=",
+    "+",
+    "-",
+    "*",
+    "/",
+    r"[0-9]+",
+    r#""[^"]*""#,
+    ".",
+    ",",
+    ";",
+    r"\s*" => { }, // The default whitespace skipping is disabled an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+} else {
+    r"[a-zA-Z][a-zA-Z0-9]+",
+}
+
 CommaSeparatedList<T>: Vec<T> = {
     <mut v:(<T> ",")*> <e:T?> => match e {
         None => v,
@@ -57,14 +92,30 @@ pub DescribeTable: AST = {
 
 // -------------------- QUERY --------------------
 
-pub Query: AST = {
-    "SELECT" <select_list: SelectList> "FROM" <quns: FromList> "WHERE" <pred_list: LogExpr> => {
-        let pred_list = vec![pred_list];
-        let qblock = QueryBlock { select_list, quns, pred_list};
-        let qgm = QGM { qblocks : vec![qblock] };
-        AST::QGM(qgm)
+pub Query: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
+    let mut qblocks = vec![qblock];
+    if let Some(mut ctelist) = ctelist {
+        qblocks.append(&mut ctelist)
     }
-}
+    let qgm = QGM { qblocks };
+    AST::QGM(qgm)
+};
+
+pub QueryBlock: QueryBlock = {
+    "SELECT" <select_list: SelectList> "FROM" <quns: FromList> <pred_list: WhereClause?> => {
+        let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
+        let qblock = QueryBlock { name: None, select_list, quns, pred_list};
+        qblock
+    }
+};
+
+WhereClause = "WHERE" <LogExpr>;
+
+WithClause: Vec<QueryBlock> = "WITH" <CTEList>;
+
+CTEList = CommaSeparatedList<CTE>;
+
+CTE: QueryBlock = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { qblock.name = Some(name); qblock };
 
 SelectList = CommaSeparatedList<NamedExpr>;
 
@@ -74,11 +125,11 @@ NamedExpr: NamedExpr = <expr:ArithExpr> <name:("AS" Identifier)?> => NamedExpr {
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
-    <l:LogExpr> "or" <r:LogExprFactor> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::Or, r))),
+    <l:LogExpr> "OR" <r:LogExprFactor> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::Or, r))),
 }
 
 LogExprFactor: ExprLink = {
-    <l:LogExprFactor> "and" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, r))),
+    <l:LogExprFactor> "AND" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, r))),
     RelExpr,
 }
 

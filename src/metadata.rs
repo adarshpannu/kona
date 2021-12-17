@@ -29,8 +29,8 @@ pub struct CSVDesc {
 }
 
 impl CSVDesc {
-    pub fn new(filename: String, header: bool, separator: char) -> Self {
-        let (colnames, coltypes) = Self::infer_metadata(&filename, separator);
+    pub fn new(filename: String, separator: char, header: bool) -> Self {
+        let (colnames, coltypes) = Self::infer_metadata(&filename, separator, header);
         CSVDesc {
             filename,
             header,
@@ -52,7 +52,7 @@ impl CSVDesc {
     }
 
     pub fn infer_metadata(
-        filename: &str, separator: char,
+        filename: &str, separator: char, header: bool
     ) -> (Vec<String>, Vec<DataType>) {
         let mut iter = read_lines(&filename).unwrap();
         let mut colnames: Vec<String> = vec![];
@@ -66,7 +66,12 @@ impl CSVDesc {
                 .map(|e| e.to_owned())
                 .collect();
             if colnames.len() == 0 {
-                colnames = cols;
+                if header {
+                    colnames = cols
+                } else {
+                    // Default column names
+                    colnames = (0..cols.len()).map(|ix| format!("col_{}", ix)).collect();
+                }
             } else {
                 for (ix, col) in cols.iter().enumerate() {
                     let datatype = CSVDesc::infer_datatype(col);
@@ -89,6 +94,9 @@ pub trait TableDesc {
     fn filename(&self) -> &String;
     fn colnames(&self) -> &Vec<String>;
     fn coltypes(&self) -> &Vec<DataType>;
+    fn describe(&self) -> String {
+        String::from("")
+    }
 }
 
 impl TableDesc for CSVDesc {
@@ -102,6 +110,10 @@ impl TableDesc for CSVDesc {
 
     fn filename(&self) -> &String {
         &self.filename
+    }
+
+    fn describe(&self) -> String {
+        format!("Type: CSV, {:?}", self)
     }
 }
 
@@ -149,8 +161,7 @@ impl Metadata {
                     }
                     _ => ',',
                 };
-                let csvdesc = Box::new(CSVDesc::new(path, header, separator));
-                //let tabledesc = TableDesc::CSVDesc(csvdesc);
+                let csvdesc = Box::new(CSVDesc::new(path, separator, header));
                 self.tables.insert(name.to_string(), csvdesc);
             }
             _ => {
@@ -170,7 +181,7 @@ impl Metadata {
             ));
         }
         let tbldesc = tbldesc.unwrap();
-        //debug!("Table {} {:?}", name, &tbldesc);
+        info!("Table {}, {:?}", name, tbldesc.describe());
         Ok(())
     }
 

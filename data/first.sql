@@ -1,5 +1,14 @@
-CATALOG TABLE cust ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/tpch-data/sf0.01/customer.tbl", "HEADER" = "YES", "SEPARATOR" = "|" );
+// foo bar
 
-DESCRIBE TABLE cust;
+//cataLog TABLE cust ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/tpch-data/sf0.01/customer.tbl", "HEADER" = "NO", "SEPARATOR" = "|" );
+//DESCRIBE TABLE cust;
 
-SELECT col1 AS colalias, col2 FROM emp WHERE col3 > 10 and col4 > 20;
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+
+DESCRIBE TABLE emp;
+
+
+WITH 
+ CTE1 AS (SELECT col1 FROM emp)
+SELECT col1 FROM CTE1
+;

@@ -125,6 +125,8 @@ pub fn make_simple_flow(env: &Env) -> Flow {
  */
 fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
     let contents = fs::read_to_string(filename).expect("Cannot open file");
+
+    // Remove commented lines
     let astlist: Vec<AST> =
         sqlparser::JobParser::new().parse(&contents).unwrap();
     for ast in astlist {
@@ -174,7 +176,7 @@ fn main() -> Result<(), String> {
         return Err(errstr);
     }
 
-    run_flow(&mut env);
+    //run_flow(&mut env);
 
     info!("End of program");
 
