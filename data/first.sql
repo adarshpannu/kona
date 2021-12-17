@@ -7,8 +7,7 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-
 WITH 
  CTE1 AS (SELECT col1 FROM emp)
-SELECT col1 FROM CTE1
+SELECT col1 FROM CTE1, (SELECT col2 FROM emp) AS EMP2
 ;

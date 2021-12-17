@@ -20,7 +20,7 @@ pub mod metadata;
 pub mod row;
 pub mod task;
 
-use ast::AST;
+use ast::{AST, ParserState};
 use clp::CLParser;
 use expr::{Expr::*, *};
 use flow::*;
@@ -126,9 +126,11 @@ pub fn make_simple_flow(env: &Env) -> Flow {
 fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
     let contents = fs::read_to_string(filename).expect("Cannot open file");
 
+    let mut parser_state = ParserState::new();
+
     // Remove commented lines
     let astlist: Vec<AST> =
-        sqlparser::JobParser::new().parse(&contents).unwrap();
+        sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
     for ast in astlist {
         println!("{:?}", ast);
         match ast {

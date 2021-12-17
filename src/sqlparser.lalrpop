@@ -6,9 +6,9 @@ use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::includes::*;
-use crate::ast::{AST, NamedExpr, QueryBlock, QGM};
+use crate::ast::{AST, NamedExpr, QueryBlock, QGM, ParserState, TableReference};
 
-grammar;
+grammar(parser_state: &mut ParserState);
 
 match {
     r"(?i)CATALOG" => "CATALOG",
@@ -71,7 +71,7 @@ pub Job = SemicolonSeparatedList<Statement>;
 pub Statement: AST = {
     <CatalogTable>,
     <DescribeTable>,
-    <Query>
+    <FullSelect>
 }
 
 // -------------------- CATALOG TABLE --------------------
@@ -92,7 +92,7 @@ pub DescribeTable: AST = {
 
 // -------------------- QUERY --------------------
 
-pub Query: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
+pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
     let mut qblocks = vec![qblock];
     if let Some(mut ctelist) = ctelist {
         qblocks.append(&mut ctelist)
@@ -119,7 +119,14 @@ CTE: QueryBlock = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { q
 
 SelectList = CommaSeparatedList<NamedExpr>;
 
-FromList = CommaSeparatedList<Identifier>;
+FromList = CommaSeparatedList<TableReference>;
+
+TableReference: String = {
+    Identifier => <>,
+    "(" <mut qblock: QueryBlock> ")" correlation_clause? => "FOO".to_string() // TableReference::QueryBlock(qblock)
+}
+
+correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = <expr:ArithExpr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr };
 
@@ -182,4 +189,4 @@ QuotedString: String = {
         let s = <>;
         s[1..s.len()-1].to_string()
     }
-}
+};

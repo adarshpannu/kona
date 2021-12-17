@@ -9,6 +9,16 @@ use std::rc::Rc;
 
 type Quantifier = String;
 
+pub struct ParserState {
+    qblocks: Vec<QueryBlock>
+}
+
+impl ParserState {
+    pub fn new() -> Self {
+        ParserState { qblocks: vec![] }
+    }
+}
+
 #[derive(Debug)]
 pub enum AST {
     CatalogTable {
@@ -48,6 +58,12 @@ impl QueryBlock {
     }
 }
 
+pub enum TableReference {
+    Identifier(String),
+    QueryBlock(QueryBlock)
+}
+
+/*
 #[test]
 fn sqlparser() {
     assert!(sqlparser::LogExprParser::new().parse("col1 = 10").is_ok());
@@ -82,7 +98,6 @@ fn sqlparser() {
     //dbg!(normalize(&expr, &mut exprvec));
 }
 
-/*
 fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
     if let LogExpr(left, LogOp::And, right) = **expr {
         normalize(&left, exprvec);
