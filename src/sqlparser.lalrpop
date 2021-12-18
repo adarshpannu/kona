@@ -97,6 +97,8 @@ pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
     if let Some(mut ctelist) = ctelist {
         qblocks.append(&mut ctelist)
     }
+    qblocks.append(&mut parser_state.qblocks);
+
     let qgm = QGM { qblocks };
     AST::QGM(qgm)
 };
@@ -123,7 +125,11 @@ FromList = CommaSeparatedList<TableReference>;
 
 TableReference: String = {
     Identifier => <>,
-    "(" <mut qblock: QueryBlock> ")" correlation_clause? => "FOO".to_string() // TableReference::QueryBlock(qblock)
+    "(" <mut qblock: QueryBlock> ")" <name:correlation_clause?> => {
+        qblock.name = name;
+        parser_state.add_qblock(qblock);
+        "FOO".to_string() // TableReference::QueryBlock(qblock)
+    }
 }
 
 correlation_clause: String = "AS"? <id:Identifier> => id;

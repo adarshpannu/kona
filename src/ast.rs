@@ -10,12 +10,16 @@ use std::rc::Rc;
 type Quantifier = String;
 
 pub struct ParserState {
-    qblocks: Vec<QueryBlock>
+    pub qblocks: Vec<QueryBlock>
 }
 
 impl ParserState {
     pub fn new() -> Self {
         ParserState { qblocks: vec![] }
+    }
+
+    pub fn add_qblock(&mut self, qblock: QueryBlock) {
+        self.qblocks.push(qblock);
     }
 }
 
