@@ -51,7 +51,7 @@ impl Env {
 pub fn run_flow(env: &mut Env) {
     let flow = make_simple_flow(env);
 
-    let gvfilename = format!("{}/{}", DATADIR, "flow.dot");
+    let gvfilename = format!("{}/{}", GRAPHVIZDIR, "flow.dot");
 
     graphviz::write_flow_to_graphviz(&flow, &gvfilename, false)
         .expect("Cannot write to .dot file.");
@@ -128,6 +128,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
 
     let mut parser_state = ParserState::new();
 
+    let qgmfilename = format!("{}/{}", GRAPHVIZDIR, "qgm.dot");
+
     // Remove commented lines
     let astlist: Vec<AST> =
         sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
@@ -140,7 +142,9 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
             AST::DescribeTable { name } => {
                 env.metadata.describe_table(name)?;
             }
-            AST::QGM(qgm) => {}
+            AST::QGM(qgm) => {
+                qgm.write_to_graphviz(&qgmfilename, false);
+            }
             _ => unimplemented!(),
         }
     }
@@ -169,7 +173,8 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/data/first.sql";
+    //let filename = "/Users/adarshrp/Projects/flare/second.sql";
+    let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {

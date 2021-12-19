@@ -1,0 +1,35 @@
+digraph example1 {
+    node [style=filled,color=white];
+    rankdir=BT;
+    splines=polyline;
+    nodesep=0.5;
+    style=filled;
+    color=lightgrey;
+  subgraph cluster_0 {
+    label =  "qblock0";
+  }
+  subgraph cluster_1 {
+    label =  "qblock1";
+    exprnode0x7f83d460c538[label="And"];
+    exprnode0x7f83d460bfc8 -> exprnode0x7f83d460c538;
+    exprnode0x7f83d460c4e8 -> exprnode0x7f83d460c538;
+    exprnode0x7f83d460bfc8[label="Eq"];
+    exprnode0x7f83d460a6c8 -> exprnode0x7f83d460bfc8;
+    exprnode0x7f83d460bf78 -> exprnode0x7f83d460bfc8;
+    exprnode0x7f83d460a6c8[label="col1"];
+    exprnode0x7f83d460bf78[label="INT(111)"];
+    exprnode0x7f83d460c4e8[label="Eq"];
+    exprnode0x7f83d460c018 -> exprnode0x7f83d460c4e8;
+    exprnode0x7f83d460c498 -> exprnode0x7f83d460c4e8;
+    exprnode0x7f83d460c018[label="col2"];
+    exprnode0x7f83d460c498[label="INT(465)"];
+  }
+  subgraph cluster_2 {
+    label =  "qblock2";
+    exprnode0x7f83d460ce68[label="Eq"];
+    exprnode0x7f83d460cdc8 -> exprnode0x7f83d460ce68;
+    exprnode0x7f83d460ce18 -> exprnode0x7f83d460ce68;
+    exprnode0x7f83d460cdc8[label="col2"];
+    exprnode0x7f83d460ce18[label="INT(222)"];
+  }
+}

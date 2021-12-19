@@ -21,6 +21,7 @@ match {
     r"(?i)OR" => "OR",
     r"(?i)AS" => "AS",
     r"(?i)WITH" => "WITH",
+    r"(?i)NOT" => "NOT",
     "(",
     ")",
     "=",
@@ -35,6 +36,7 @@ match {
     "/",
     r"[0-9]+",
     r#""[^"]*""#,
+    r#"'[^']*'"#,
     ".",
     ",",
     ";",
@@ -134,7 +136,7 @@ TableReference: String = {
 
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
-NamedExpr: NamedExpr = <expr:ArithExpr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr };
+NamedExpr: NamedExpr = <expr:Expr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr };
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
@@ -144,10 +146,11 @@ pub LogExpr: ExprLink = {
 LogExprFactor: ExprLink = {
     <l:LogExprFactor> "AND" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, r))),
     RelExpr,
+    "NOT" <RelExpr>
 }
 
 RelExpr: ExprLink = {
-    <l:ArithExpr> <op:RelOp> <r:ArithExpr> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
+    <l:Expr> <op:RelOp> <r:Expr> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
     "(" <LogExpr> ")",
 }
 
@@ -160,22 +163,24 @@ RelOp: RelOp = {
     "=" => RelOp::Eq,
 }
 
-pub ArithExpr: ExprLink = {
-    <l:ArithExpr> "+" <r:ArithFactor> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Add, r))),
-    <l:ArithExpr> "-" <r:ArithFactor> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Sub, r))),
-    ArithFactor,
+pub Expr: ExprLink = {
+    <l:Expr> "+" <r:Factor> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Add, r))),
+    <l:Expr> "-" <r:Factor> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Sub, r))),
+    Factor,
 }
 
-ArithFactor: ExprLink = {
-    <l:ArithFactor> "*" <r:Term> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Mul, r))),
-    <l:ArithFactor> "/" <r:Term> => Rc::new(RefCell::new(Expr::ArithExpr(l, ArithOp::Div, r))),
+Factor: ExprLink = {
+    <l:Factor> "*" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Mul, r))),
+    <l:Factor> "/" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Div, r))),
     Term,
+    "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>)))
 }
 
 Term: ExprLink = {
     <cr:ColumnReference> => Rc::new(RefCell::new(Column { tablename: cr.0, colname: cr.1 } )),
+    QuotedString => { Rc::new(RefCell::new(Literal(Datum::STR(Box::new(<>))))) },
     Num,
-    "(" <ArithExpr> ")",
+    "(" <Expr> ")",
 };
 
 Num: ExprLink = {
@@ -192,6 +197,10 @@ ColumnReference: (Option<String>, String) = <tablename:(Identifier ".")?> <colna
 
 QuotedString: String = {
     r#""[^"]*""# => {
+        let s = <>;
+        s[1..s.len()-1].to_string()
+    },
+    r#"'[^']*'"# => {
         let s = <>;
         s[1..s.len()-1].to_string()
     }

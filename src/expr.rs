@@ -8,8 +8,8 @@ use std::fmt;
 use std::ops;
 use Expr::*;
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,22 +82,49 @@ impl fmt::Display for RelOp {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
-    Column { tablename: Option<String>, colname: String },
+    Column {
+        tablename: Option<String>,
+        colname: String,
+    },
     Literal(Datum),
-    ArithExpr(ExprLink, ArithOp, ExprLink),
+    NegatedExpr(ExprLink),
+    BinaryExpr(ExprLink, ArithOp, ExprLink),
     RelExpr(ExprLink, RelOp, ExprLink),
     LogExpr(ExprLink, LogOp, ExprLink),
+}
+
+impl Expr {
+    pub fn name(&self) -> String {
+        match self {
+            CID(cid) => format!("CID: {}", cid),
+            Column { tablename, colname } => format!("{}", colname),
+            Literal(v) => format!("{:?}", v),
+            BinaryExpr(lhs, op, rhs) => format!("{:?}", op),
+            NegatedExpr(lhs) => "-".to_string(),
+            RelExpr(lhs, op, rhs) => format!("{:?}", op),
+            LogExpr(lhs, op, rhs) => format!("{:?}", op),
+        }
+    }
 }
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CID(cid) => write!(f, "${}", cid),
-            Column { tablename, colname } => write!(f, "{:?}.{}", tablename, colname),
+            Column { tablename, colname } => {
+                write!(f, "{:?}.{}", tablename, colname)
+            }
             Literal(v) => write!(f, "{}", v),
-            ArithExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
-            RelExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
-            LogExpr(lhs, op, rhs) => write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow()),
+            BinaryExpr(lhs, op, rhs) => {
+                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
+            NegatedExpr(lhs) => write!(f, "-({})", lhs.borrow()),
+            RelExpr(lhs, op, rhs) => {
+                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
+            LogExpr(lhs, op, rhs) => {
+                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
         }
     }
 }
@@ -108,7 +135,7 @@ impl Expr {
         match self {
             CID(cid) => row.get_column(*cid).clone(),
             Literal(lit) => lit.clone(),
-            ArithExpr(b1, op, b2) => {
+            BinaryExpr(b1, op, b2) => {
                 let b1 = b1.borrow().eval(row);
                 let b2 = b2.borrow().eval(row);
                 let res = match (b1, op, b2) {
@@ -116,7 +143,9 @@ impl Expr {
                     (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
                     (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
                     (Datum::INT(i1), ArithOp::Div, Datum::INT(i2)) => i1 / i2,
-                    _ => panic!("Internal error: Operands of ArithOp not resolved yet."),
+                    _ => panic!(
+                        "Internal error: Operands of ArithOp not resolved yet."
+                    ),
                 };
                 Datum::INT(res)
             }
@@ -130,7 +159,9 @@ impl Expr {
                     (Datum::INT(i1), RelOp::Lt, Datum::INT(i2)) => i1 < i2,
                     (Datum::INT(i1), RelOp::Ge, Datum::INT(i2)) => i1 >= i2,
                     (Datum::INT(i1), RelOp::Gt, Datum::INT(i2)) => i1 > i2,
-                    _ => panic!("Internal error: Operands of RelOp not resolved yet."),
+                    _ => panic!(
+                        "Internal error: Operands of RelOp not resolved yet."
+                    ),
                 };
                 Datum::BOOL(res)
             }

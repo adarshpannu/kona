@@ -13,4 +13,5 @@ SELECT col111
 FROM CTE1, (SELECT col2 FROM emp)
 ;
 
-select * from emp;
+
+
