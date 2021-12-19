@@ -20,7 +20,7 @@ pub mod metadata;
 pub mod row;
 pub mod task;
 
-use ast::{AST, ParserState};
+use ast::{ParserState, AST};
 use clp::CLParser;
 use expr::{Expr::*, *};
 use flow::*;
@@ -40,10 +40,7 @@ impl Env {
     fn new(nthreads: usize) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
-        Env {
-            thread_pool,
-            metadata,
-        }
+        Env { thread_pool, metadata }
     }
 }
 
@@ -53,8 +50,7 @@ pub fn run_flow(env: &mut Env) {
 
     let gvfilename = format!("{}/{}", GRAPHVIZDIR, "flow.dot");
 
-    graphviz::write_flow_to_graphviz(&flow, &gvfilename, false)
-        .expect("Cannot write to .dot file.");
+    graphviz::write_flow_to_graphviz(&flow, &gvfilename, false).expect("Cannot write to .dot file.");
 
     let node = &flow.nodes[flow.nodes.len() - 1];
 
@@ -83,7 +79,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
 
     let csvnode = if use_dir == false {
         //let csvfilename = format!("{}/{}", DATADIR, "customer.tbl").to_string();
-        
+
         let csvnode = CSVNode::new(env, &arena, "cust".to_string(), 4);
         csvnode
     } else {
@@ -131,8 +127,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
     let qgmfilename = format!("{}/{}", GRAPHVIZDIR, "qgm.dot");
 
     // Remove commented lines
-    let astlist: Vec<AST> =
-        sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
+    let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
     for ast in astlist {
         println!("{:?}", ast);
         match ast {
@@ -158,10 +153,7 @@ fn main() -> Result<(), String> {
 
     info!("FLARE {}", "hello");
 
-    let args = "cmdname --rank 0"
-        .split(' ')
-        .map(|e| e.to_owned())
-        .collect();
+    let args = "cmdname --rank 0".split(' ').map(|e| e.to_owned()).collect();
 
     let mut clpr = CLParser::new(&args);
 

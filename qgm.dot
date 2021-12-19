@@ -6,30 +6,34 @@ digraph example1 {
     style=filled;
     color=lightgrey;
   subgraph cluster_0 {
+    QUN_CTE1[color=red]
+    QUN_FOO[color=red]
     label =  "qblock0";
   }
   subgraph cluster_1 {
+    QUN_emp[color=red]
     label =  "qblock1";
-    exprnode0x7f83d460c538[label="And"];
-    exprnode0x7f83d460bfc8 -> exprnode0x7f83d460c538;
-    exprnode0x7f83d460c4e8 -> exprnode0x7f83d460c538;
-    exprnode0x7f83d460bfc8[label="Eq"];
-    exprnode0x7f83d460a6c8 -> exprnode0x7f83d460bfc8;
-    exprnode0x7f83d460bf78 -> exprnode0x7f83d460bfc8;
-    exprnode0x7f83d460a6c8[label="col1"];
-    exprnode0x7f83d460bf78[label="INT(111)"];
-    exprnode0x7f83d460c4e8[label="Eq"];
-    exprnode0x7f83d460c018 -> exprnode0x7f83d460c4e8;
-    exprnode0x7f83d460c498 -> exprnode0x7f83d460c4e8;
-    exprnode0x7f83d460c018[label="col2"];
-    exprnode0x7f83d460c498[label="INT(465)"];
+    exprnode0x7ff94e60c538[label="And"];
+    exprnode0x7ff94e60bfc8 -> exprnode0x7ff94e60c538;
+    exprnode0x7ff94e60c4e8 -> exprnode0x7ff94e60c538;
+    exprnode0x7ff94e60bfc8[label="Eq"];
+    exprnode0x7ff94e60a6c8 -> exprnode0x7ff94e60bfc8;
+    exprnode0x7ff94e60bf78 -> exprnode0x7ff94e60bfc8;
+    exprnode0x7ff94e60a6c8[label="col1"];
+    exprnode0x7ff94e60bf78[label="INT(111)"];
+    exprnode0x7ff94e60c4e8[label="Eq"];
+    exprnode0x7ff94e60c018 -> exprnode0x7ff94e60c4e8;
+    exprnode0x7ff94e60c498 -> exprnode0x7ff94e60c4e8;
+    exprnode0x7ff94e60c018[label="col2"];
+    exprnode0x7ff94e60c498[label="INT(465)"];
   }
   subgraph cluster_2 {
+    QUN_emp[color=red]
     label =  "qblock2";
-    exprnode0x7f83d460ce68[label="Eq"];
-    exprnode0x7f83d460cdc8 -> exprnode0x7f83d460ce68;
-    exprnode0x7f83d460ce18 -> exprnode0x7f83d460ce68;
-    exprnode0x7f83d460cdc8[label="col2"];
-    exprnode0x7f83d460ce18[label="INT(222)"];
+    exprnode0x7ff94e60ce68[label="Eq"];
+    exprnode0x7ff94e60cdc8 -> exprnode0x7ff94e60ce68;
+    exprnode0x7ff94e60ce18 -> exprnode0x7ff94e60ce68;
+    exprnode0x7ff94e60cdc8[label="col2"];
+    exprnode0x7ff94e60ce18[label="INT(222)"];
   }
 }

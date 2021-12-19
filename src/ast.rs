@@ -60,8 +60,7 @@ pub struct QueryBlock {
 
 impl QueryBlock {
     pub fn new(
-        name: Option<String>, select_list: Vec<NamedExpr>,
-        quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
+        name: Option<String>, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
     ) -> Self {
         QueryBlock {
             name,
@@ -124,25 +123,32 @@ fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
 }
 */
 
+macro_rules! fprint {
+    ($file:expr, $($args:expr),*) => {{
+        $file.write_all(format!($($args),*).as_bytes());
+    }};
+}
+
 impl QGM {
-    pub(crate) fn write_to_graphviz(
-        &self, filename: &str, open_jpg: bool,
-    ) -> std::io::Result<()> {
+    pub(crate) fn write_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
-        file.write_all("digraph example1 {\n".as_bytes())?;
-        file.write_all("    node [style=filled,color=white];\n".as_bytes())?;
-        file.write_all("    rankdir=BT;\n".as_bytes())?; // direction of DAG
-        file.write_all("    splines=polyline;\n".as_bytes())?;
-        file.write_all("    nodesep=0.5;\n".as_bytes())?;
-        file.write_all("    style=filled;\n".as_bytes())?;
-        file.write_all("    color=lightgrey;\n".as_bytes())?;
-        //file.write_all("    node [style=filled,color=white];\n".as_bytes())?;
+        fprint!(file, "digraph example1 {{\n");
+        fprint!(file, "    node [style=filled,color=white];\n");
+        fprint!(file, "    rankdir=BT;\n"); // direction of DAG
+        fprint!(file, "    splines=polyline;\n");
+        fprint!(file, "    nodesep=0.5;\n");
+        fprint!(file, "    style=filled;\n");
+        fprint!(file, "    color=lightgrey;\n");
+        //fprint!(file, "    node [style=filled,color=white];\n");
 
         for (ix, qblock) in self.qblocks.iter().enumerate() {
-            let nodestr = format!("  subgraph cluster_{} {{\n", ix);
-            file.write_all(nodestr.as_bytes())?;
+            fprint!(file, "  subgraph cluster_{} {{\n", ix);
 
-            file.write_all(format!("    label =  \"qblock{}\";\n", ix).as_bytes());
+            for qun in qblock.quns.iter() {
+                fprint!(file, "    QUN_{}[color=red]\n", qun);
+            }
+
+            fprint!(file, "    label =  \"qblock{}\";\n", ix);
 
             if qblock.pred_list.len() > 0 {
                 QGM::write_expr_to_graphvis(&qblock.pred_list[0], &mut file);
@@ -150,12 +156,12 @@ impl QGM {
             /*
             for child in node.children().iter() {
                 let edge = format!("    Node{} -> Node{};\n", child, node.id());
-                file.write_all(edge.as_bytes())?;
+                file.write_all(edge);
             }
             */
-            file.write_all("  }\n".as_bytes())?;
+            fprint!(file, "  }}\n");
         }
-        file.write_all("}\n".as_bytes())?;
+        fprint!(file, "}}\n");
         drop(file);
 
         let ofilename = format!("{}.jpg", filename);
@@ -179,62 +185,42 @@ impl QGM {
         Ok(())
     }
 
-    fn write_expr_to_graphvis(
-        expr: &ExprLink, file: &mut File,
-    ) -> std::io::Result<()> {
+    fn write_expr_to_graphvis(expr: &ExprLink, file: &mut File) -> std::io::Result<()> {
         let expr = expr.borrow();
         let addr = &*expr as *const Expr;
-        let nodestr = format!("    exprnode{:?}[label=\"{}\"];\n", addr, expr.name());
-        file.write_all(nodestr.as_bytes())?;
+        fprint!(file, "    exprnode{:?}[label=\"{}\"];\n", addr, expr.name());
 
         println!("--- {:?} {:?}", addr, &*expr);
 
         match &*expr {
-            CID(cid) => file.write_all(nodestr.as_bytes())?,
             RelExpr(lhs, op, rhs) => {
                 let childaddr = &*lhs.borrow() as *const Expr;
-                let childstr = format!(
-                    "    exprnode{:?} -> exprnode{:?};\n",
-                    childaddr, addr
-                );
-                file.write_all(childstr.as_bytes())?;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
                 let childaddr = &*rhs.borrow() as *const Expr;
-                let childstr = format!(
-                    "    exprnode{:?} -> exprnode{:?};\n",
-                    childaddr, addr
-                );
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                file.write_all(childstr.as_bytes())?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
                 Self::write_expr_to_graphvis(&rhs, file)?
             }
 
             LogExpr(lhs, op, rhs) => {
                 let childaddr = &*lhs.borrow() as *const Expr;
-                let childstr = format!(
-                    "    exprnode{:?} -> exprnode{:?};\n",
-                    childaddr, addr
-                );
-                file.write_all(childstr.as_bytes())?;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
                 let childaddr = &*rhs.borrow() as *const Expr;
-                let childstr = format!(
-                    "    exprnode{:?} -> exprnode{:?};\n",
-                    childaddr, addr
-                );
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                file.write_all(childstr.as_bytes())?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
                 Self::write_expr_to_graphvis(&rhs, file)?
             }
-            _ => {},
+            _ => {}
         }
         Ok(())
     }
 }
 
-/* 
+/*
 trait GraphVizNode<T> {
     fn name(&self) -> String;
     fn id(&self) -> usize;
