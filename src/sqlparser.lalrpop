@@ -6,7 +6,7 @@ use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::includes::*;
-use crate::ast::{AST, NamedExpr, QueryBlock, QGM, ParserState, TableReference};
+use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlock0, QueryBlockType, QGM, ParserState, TableReference};
 
 grammar(parser_state: &mut ParserState);
 
@@ -95,6 +95,7 @@ pub DescribeTable: AST = {
 // -------------------- QUERY --------------------
 
 pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
+    let qblock = QueryBlock::new(Some(String::from("main")), QueryBlockType::Main, qblock.0, qblock.1, qblock.2);
     let mut qblocks = vec![qblock];
     if let Some(mut ctelist) = ctelist {
         qblocks.append(&mut ctelist)
@@ -105,11 +106,10 @@ pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
     AST::QGM(qgm)
 };
 
-pub QueryBlock: QueryBlock = {
+pub QueryBlock: QueryBlock0 = {
     "SELECT" <select_list: SelectList> "FROM" <quns: FromList> <pred_list: WhereClause?> => {
         let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
-        let qblock = QueryBlock { name: None, select_list, quns, pred_list};
-        qblock
+        (select_list, quns, pred_list)
     }
 };
 
@@ -119,18 +119,19 @@ WithClause: Vec<QueryBlock> = "WITH" <CTEList>;
 
 CTEList = CommaSeparatedList<CTE>;
 
-CTE: QueryBlock = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { qblock.name = Some(name); qblock };
+CTE: QueryBlock = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { 
+    QueryBlock::new(Some(name), QueryBlockType::CTE, qblock.0, qblock.1, qblock.2)
+};
 
 SelectList = CommaSeparatedList<NamedExpr>;
 
 FromList = CommaSeparatedList<TableReference>;
 
 TableReference: String = {
-    Identifier => <>,
-    "(" <mut qblock: QueryBlock> ")" <name:correlation_clause?> => {
-        qblock.name = name;
-        parser_state.add_qblock(qblock);
-        "FOO".to_string() // TableReference::QueryBlock(qblock)
+    <id:Identifier> <alias:correlation_clause?> => id,
+    "(" <mut qblock: QueryBlock> ")" <alias:correlation_clause?> => {
+        let qblock = QueryBlock::new(alias, QueryBlockType::InlineView, qblock.0, qblock.1, qblock.2);
+        parser_state.add_qblock(qblock)
     }
 }
 

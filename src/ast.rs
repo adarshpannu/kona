@@ -22,8 +22,13 @@ impl ParserState {
         ParserState { qblocks: vec![] }
     }
 
-    pub fn add_qblock(&mut self, qblock: QueryBlock) {
+    pub fn add_qblock(&mut self, mut qblock: QueryBlock) -> String {
+        if qblock.name.is_none() {
+            qblock.name = Some(format!("$QB-{}", self.qblocks.len()).to_string());
+        }
+        let retval = qblock.name.clone().unwrap(); // hack
         self.qblocks.push(qblock);
+        retval
     }
 }
 
@@ -51,8 +56,20 @@ pub struct NamedExpr {
 }
 
 #[derive(Debug)]
+pub enum QueryBlockType {
+    Unassigned,
+    Main,
+    CTE,
+    InlineView,
+    Subquery
+}
+
+pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprLink>);
+
+#[derive(Debug)]
 pub struct QueryBlock {
     pub name: Option<String>,
+    pub qbtype: QueryBlockType,
     pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
     pub pred_list: Vec<ExprLink>,
@@ -60,10 +77,11 @@ pub struct QueryBlock {
 
 impl QueryBlock {
     pub fn new(
-        name: Option<String>, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
+        name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Vec<ExprLink>,
     ) -> Self {
         QueryBlock {
             name,
+            qbtype,
             select_list,
             quns,
             pred_list,
@@ -143,22 +161,18 @@ impl QGM {
 
         for (ix, qblock) in self.qblocks.iter().enumerate() {
             fprint!(file, "  subgraph cluster_{} {{\n", ix);
-
-            for qun in qblock.quns.iter() {
-                fprint!(file, "    QUN_{}[color=red]\n", qun);
+            if let Some(ref name) = qblock.name {
+                fprint!(file, "    \"{}\"[shape=point, color=black];\n", ix);
+                fprint!(file, "    label = \"{}\";\n", name);
             }
 
-            fprint!(file, "    label =  \"qblock{}\";\n", ix);
+            for qun in qblock.quns.iter() {
+                fprint!(file, "    \"{}\"[color=red]\n", qun);
+            }
 
             if qblock.pred_list.len() > 0 {
                 QGM::write_expr_to_graphvis(&qblock.pred_list[0], &mut file);
             }
-            /*
-            for child in node.children().iter() {
-                let edge = format!("    Node{} -> Node{};\n", child, node.id());
-                file.write_all(edge);
-            }
-            */
             fprint!(file, "  }}\n");
         }
         fprint!(file, "}}\n");
@@ -214,6 +228,18 @@ impl QGM {
                 Self::write_expr_to_graphvis(&lhs, file)?;
                 Self::write_expr_to_graphvis(&rhs, file)?
             }
+
+            BinaryExpr(lhs, op, rhs) => {
+                let childaddr = &*lhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+
+                Self::write_expr_to_graphvis(&lhs, file)?;
+                Self::write_expr_to_graphvis(&rhs, file)?
+            }
+
             _ => {}
         }
         Ok(())

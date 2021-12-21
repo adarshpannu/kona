@@ -165,8 +165,8 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    //let filename = "/Users/adarshrp/Projects/flare/second.sql";
-    let filename = "/Users/adarshrp/tmp/first.sql";
+    let filename = "/Users/adarshrp/Projects/flare/first.sql";
+    //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {

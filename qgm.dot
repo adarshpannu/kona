@@ -6,34 +6,19 @@ digraph example1 {
     style=filled;
     color=lightgrey;
   subgraph cluster_0 {
-    QUN_CTE1[color=red]
-    QUN_FOO[color=red]
-    label =  "qblock0";
+    "0"[shape=point, color=black];
+    label = "main";
+    "CTE1"[color=red]
+    "$QB-0"[color=red]
   }
   subgraph cluster_1 {
-    QUN_emp[color=red]
-    label =  "qblock1";
-    exprnode0x7ff94e60c538[label="And"];
-    exprnode0x7ff94e60bfc8 -> exprnode0x7ff94e60c538;
-    exprnode0x7ff94e60c4e8 -> exprnode0x7ff94e60c538;
-    exprnode0x7ff94e60bfc8[label="Eq"];
-    exprnode0x7ff94e60a6c8 -> exprnode0x7ff94e60bfc8;
-    exprnode0x7ff94e60bf78 -> exprnode0x7ff94e60bfc8;
-    exprnode0x7ff94e60a6c8[label="col1"];
-    exprnode0x7ff94e60bf78[label="INT(111)"];
-    exprnode0x7ff94e60c4e8[label="Eq"];
-    exprnode0x7ff94e60c018 -> exprnode0x7ff94e60c4e8;
-    exprnode0x7ff94e60c498 -> exprnode0x7ff94e60c4e8;
-    exprnode0x7ff94e60c018[label="col2"];
-    exprnode0x7ff94e60c498[label="INT(465)"];
+    "1"[shape=point, color=black];
+    label = "CTE1";
+    "emp"[color=red]
   }
   subgraph cluster_2 {
-    QUN_emp[color=red]
-    label =  "qblock2";
-    exprnode0x7ff94e60ce68[label="Eq"];
-    exprnode0x7ff94e60cdc8 -> exprnode0x7ff94e60ce68;
-    exprnode0x7ff94e60ce18 -> exprnode0x7ff94e60ce68;
-    exprnode0x7ff94e60cdc8[label="col2"];
-    exprnode0x7ff94e60ce18[label="INT(222)"];
+    "2"[shape=point, color=black];
+    label = "$QB-0";
+    "emp"[color=red]
   }
 }
