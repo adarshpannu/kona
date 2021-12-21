@@ -44,7 +44,7 @@ match {
     r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
     r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
 } else {
-    r"[a-zA-Z][a-zA-Z0-9]+",
+    r"[a-zA-Z][a-zA-Z0-9_-]+",
 }
 
 CommaSeparatedList<T>: Vec<T> = {
@@ -191,7 +191,7 @@ Num: ExprLink = {
 };
 
 Identifier: String = {
-    r"[a-zA-Z][a-zA-Z0-9]+" => <>.to_string()
+    r"[a-zA-Z][a-zA-Z0-9_-]+" => <>.to_string()
 }
 
 ColumnReference: (Option<String>, String) = <tablename:(Identifier ".")?> <colname:Identifier> => (tablename.map(|e| e.0), colname);

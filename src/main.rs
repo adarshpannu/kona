@@ -116,11 +116,14 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     }
 }
 
+fn stringify<E:std::fmt::Debug>(e: E) -> String { format!("xerror: {:?}", e) }
+
+
 /*
  * Run a job from a file
  */
 fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
-    let contents = fs::read_to_string(filename).expect("Cannot open file");
+    let contents = fs::read_to_string(filename).expect(&format!("Cannot open file: {}", &filename));
 
     let mut parser_state = ParserState::new();
 
@@ -165,7 +168,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/first.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/singletable.sql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

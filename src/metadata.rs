@@ -148,7 +148,7 @@ impl Metadata {
                 let path =
                     hm.get("PATH").expect("PATH not specified").to_string();
                 let header = match hm.get("HEADER").map(|e| &e[..]) {
-                    Some("Y") => true,
+                    Some("Y")|Some("YES") => true,
                     _ => false,
                 };
                 let separator = match hm.get("SEPARATOR").map(|e| &e[..]) {

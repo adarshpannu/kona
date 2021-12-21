@@ -8,17 +8,6 @@ digraph example1 {
   subgraph cluster_0 {
     "0"[shape=point, color=black];
     label = "main";
-    "CTE1"[color=red]
-    "$QB-0"[color=red]
-  }
-  subgraph cluster_1 {
-    "1"[shape=point, color=black];
-    label = "CTE1";
-    "emp"[color=red]
-  }
-  subgraph cluster_2 {
-    "2"[shape=point, color=black];
-    label = "$QB-0";
-    "emp"[color=red]
+    "EMP"[color=red]
   }
 }
