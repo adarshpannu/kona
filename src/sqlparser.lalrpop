@@ -148,8 +148,8 @@ Quantifier: Quantifier = {
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = {
-    "*" => NamedExpr { name: None, expr: Rc::new(RefCell::new(Expr::Star)) },
-    <expr:Expr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr }
+    "*" => NamedExpr::new(None, Rc::new(RefCell::new(Expr::Star))),
+    <expr:Expr> <name:("AS" Identifier)?> => NamedExpr::new(name.map(|e| e.1), expr)
 }
 
 pub LogExpr: ExprLink = {
@@ -200,13 +200,13 @@ Term: ExprLink = {
     QuotedString => { Rc::new(RefCell::new(Literal(Datum::STR(Box::new(<>))))) },
     Num,
     "(" <Expr> ")",
-};
+}
 
 Num: ExprLink = {
     r"[0-9]+" =>? isize::from_str(<>)
     .map(|i| Rc::new(RefCell::new(Literal(Datum::INT(i)))))
     .map_err(|_| ParseError::User { error: "Invalid number" })
-};
+}
 
 Identifier: String = {
     r"[a-zA-Z][a-zA-Z0-9_-]*" => <>.to_string()
@@ -223,4 +223,4 @@ QuotedString: String = {
         let s = <>;
         s[1..s.len()-1].to_string()
     }
-};
+}

@@ -14,13 +14,14 @@ use std::process::Command;
 
 pub struct ParserState {
     next_id: RefCell<usize>,
-    pub subqueries: Vec<Rc<QueryBlock>>
+    pub subqueries: Vec<Rc<QueryBlock>>,
 }
 
 impl ParserState {
     pub fn new() -> Self {
         ParserState {
-            next_id: RefCell::new(0), subqueries: vec![]
+            next_id: RefCell::new(0),
+            subqueries: vec![],
         }
     }
 
@@ -57,6 +58,20 @@ pub struct QGM {
 pub struct NamedExpr {
     pub name: Option<String>,
     pub expr: ExprLink,
+}
+
+impl NamedExpr {
+    pub fn new(name: Option<String>, expr: ExprLink) -> Self {
+        let mut name = name;
+        if name.is_none() {
+            if let Expr::Column { tablename, colname} = &*expr.borrow() {
+                name = Some(colname.clone())
+            } else if let Expr::Star = &*expr.borrow() {
+                name = Some("*".to_string())
+            }
+        }
+        NamedExpr { name, expr }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -129,7 +144,7 @@ impl QueryBlock {
     }
 
     pub fn name(&self) -> String {
-        if self.qbtype == QueryBlockType::Main { 
+        if self.qbtype == QueryBlockType::Main {
             format!("QB_main")
         } else {
             format!("QB_{}", self.id)
@@ -196,17 +211,16 @@ impl QueryBlock {
             qblock.write_qblock(file);
         }
 
+        let s = "".to_string();
+        let select_names: Vec<&String> = self.select_list.iter().map(|e| e.name.as_ref().unwrap_or(&s)).collect();
+        let select_names = format!("{:?}", select_names).replace("\"", "");
+
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
+        fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
         fprint!(file, "    \"{}_pt\"[shape=point, color=white];\n", self.name());
-        fprint!(file, "    label = \"{}\";\n", self.name());
 
         for qun in self.quns.iter() {
-            fprint!(
-                file,
-                "    \"{}\"[label=\"{}\", color=red]\n",
-                qun.name(),
-                qun.display()
-            );
+            fprint!(file, "    \"{}\"[label=\"{}\", color=red]\n", qun.name(), qun.display());
             if let Some(qblock) = &qun.qblock {
                 fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
                 qblock.write_qblock(file)?
@@ -216,6 +230,7 @@ impl QueryBlock {
         if self.pred_list.len() > 0 {
             QGM::write_expr_to_graphvis(&self.pred_list[0], file);
         }
+
         fprint!(file, "}}\n");
         Ok(())
     }
