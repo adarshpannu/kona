@@ -2,4 +2,6 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-SELECT name, dept_id from EMP;
+SELECT name, dept_id from EMP
+where dept_id = 1;
+

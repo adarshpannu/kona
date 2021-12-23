@@ -9,11 +9,16 @@ DESCRIBE TABLE emp;
 
 WITH
  CTE1 AS (SELECT col1 FROM emp)
-SELECT col111 
+SELECT col111, 'abc'
 FROM CTE1, (SELECT col2 FROM emp)
+WHERE name in (select name from emp CTE1 where CTE1.age >= 0) 
+
 ;
 
 
-
-
-SELECT
+WITH CTE1 AS (select '--cte1', age, '--cte1' from emp),
+ CTE2 AS (select '--cte2', age, '--cte2' from emp)
+SELECT * FROM CTE1, (select '2nd', dept_id, name from EMP) CTE1
+WHERE name in (select name from emp CTE1 where CTE1.age >= 0) 
+and age in (select CTE2.age from EMP CTE2 where CTE1.age = CTE2.age)
+;

@@ -6,7 +6,7 @@ use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::includes::*;
-use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlock0, QueryBlockType, QGM, ParserState, TableReference};
+use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlock0, QueryBlockType, QGM, ParserState, Quantifier};
 
 grammar(parser_state: &mut ParserState);
 
@@ -22,6 +22,8 @@ match {
     r"(?i)AS" => "AS",
     r"(?i)WITH" => "WITH",
     r"(?i)NOT" => "NOT",
+    r"(?i)IN" => "IN",
+    r"(?i)EXISTS" => "EXISTS",
     "(",
     ")",
     "=",
@@ -44,7 +46,7 @@ match {
     r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
     r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
 } else {
-    r"[a-zA-Z][a-zA-Z0-9_-]+",
+    r"[a-zA-Z][a-zA-Z0-9_-]*",
 }
 
 CommaSeparatedList<T>: Vec<T> = {
@@ -95,49 +97,60 @@ pub DescribeTable: AST = {
 // -------------------- QUERY --------------------
 
 pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
-    let qblock = QueryBlock::new(Some(String::from("main")), QueryBlockType::Main, qblock.0, qblock.1, qblock.2);
-    let mut qblocks = vec![qblock];
+    let mut qblocks: Vec<Rc<QueryBlock>> = vec![];
     if let Some(mut ctelist) = ctelist {
         qblocks.append(&mut ctelist)
     }
-    qblocks.append(&mut parser_state.qblocks);
 
-    let qgm = QGM { qblocks };
+    let qblock = QueryBlock::new(parser_state.next_id(), Some(String::from("main")), QueryBlockType::Main, qblock.0, qblock.1, qblock.2, qblocks);
+    let qgm = QGM { qblock };
     AST::QGM(qgm)
 };
 
 pub QueryBlock: QueryBlock0 = {
-    "SELECT" <select_list: SelectList> "FROM" <quns: FromList> <pred_list: WhereClause?> => {
+    "SELECT" <select_list: SelectList> "FROM" <mut quns: FromList> <pred_list: WhereClause?> => {
         let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
+
+        // Make QUNs from subqueries, if any
+        for subqblock in parser_state.subqueries.iter() {
+            let sq_qun = Quantifier::new(parser_state.next_id(), None, None, Some(Rc::clone(subqblock)));
+            quns.push(sq_qun)
+        }
+        parser_state.subqueries = vec![];
         (select_list, quns, pred_list)
     }
 };
 
-WhereClause = "WHERE" <LogExpr>;
-
-WithClause: Vec<QueryBlock> = "WITH" <CTEList>;
+WithClause = "WITH" <CTEList>;
 
 CTEList = CommaSeparatedList<CTE>;
 
-CTE: QueryBlock = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { 
-    QueryBlock::new(Some(name), QueryBlockType::CTE, qblock.0, qblock.1, qblock.2)
+CTE: Rc<QueryBlock> = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { 
+    Rc::new(QueryBlock::new(parser_state.next_id(), Some(name), QueryBlockType::CTE, qblock.0, qblock.1, qblock.2, vec![]))
 };
 
 SelectList = CommaSeparatedList<NamedExpr>;
 
-FromList = CommaSeparatedList<TableReference>;
+FromList = CommaSeparatedList<Quantifier>;
 
-TableReference: String = {
-    <id:Identifier> <alias:correlation_clause?> => id,
+WhereClause = "WHERE" <LogExpr>;
+
+Quantifier: Quantifier = {
+    <name:Identifier> <alias:correlation_clause?> => {
+        Quantifier::new(parser_state.next_id(), Some(name), alias, None)
+    },
     "(" <mut qblock: QueryBlock> ")" <alias:correlation_clause?> => {
-        let qblock = QueryBlock::new(alias, QueryBlockType::InlineView, qblock.0, qblock.1, qblock.2);
-        parser_state.add_qblock(qblock)
+        let qblock = QueryBlock::new(parser_state.next_id(), alias.clone(), QueryBlockType::InlineView, qblock.0, qblock.1, qblock.2, vec![]);
+        Quantifier::new(parser_state.next_id(), None, alias, Some(Rc::new(qblock)))
     }
 }
 
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
-NamedExpr: NamedExpr = <expr:Expr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr };
+NamedExpr: NamedExpr = {
+    "*" => NamedExpr { name: None, expr: Rc::new(RefCell::new(Expr::Star)) },
+    <expr:Expr> <name:("AS" Identifier)?> => NamedExpr { name: name.map(|e| e.1), expr }
+}
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
@@ -152,7 +165,12 @@ LogExprFactor: ExprLink = {
 
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:Expr> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
-    "(" <LogExpr> ")",
+    "(" <RelExpr> ")",
+    <l:Expr> "IN" "(" <mut qblock: QueryBlock> ")" => {
+        let qblock = QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]);
+        parser_state.add_subquery(Rc::new(qblock));
+        l
+    }
 }
 
 RelOp: RelOp = {
@@ -191,7 +209,7 @@ Num: ExprLink = {
 };
 
 Identifier: String = {
-    r"[a-zA-Z][a-zA-Z0-9_-]+" => <>.to_string()
+    r"[a-zA-Z][a-zA-Z0-9_-]*" => <>.to_string()
 }
 
 ColumnReference: (Option<String>, String) = <tablename:(Identifier ".")?> <colname:Identifier> => (tablename.map(|e| e.0), colname);

@@ -1,13 +1,17 @@
 digraph example1 {
-    node [style=filled,color=white];
     rankdir=BT;
-    splines=polyline;
     nodesep=0.5;
-    style=filled;
-    color=lightgrey;
-  subgraph cluster_0 {
-    "0"[shape=point, color=black];
-    label = "main";
-    "EMP"[color=red]
-  }
+  subgraph cluster_QB_main {
+    "QB_main_pt"[shape=point, color=white];
+    label = "QB_main";
+    "QUN_0"[label="EMP/", color=red]
+    "QUN_3"[label="/", color=red]
+    "QUN_3" -> "QB_2_pt";
+  subgraph cluster_QB_2 {
+    "QB_2_pt"[shape=point, color=white];
+    label = "QB_2";
+    "QUN_1"[label="DEPT/", color=red]
+}
+    exprnode0x7ff948d32988[label="DEPT"];
+}
 }

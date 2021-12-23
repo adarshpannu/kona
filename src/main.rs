@@ -168,7 +168,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/singletable.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/subquery.sql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

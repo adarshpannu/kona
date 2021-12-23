@@ -86,6 +86,7 @@ pub enum Expr {
         tablename: Option<String>,
         colname: String,
     },
+    Star,
     Literal(Datum),
     NegatedExpr(ExprLink),
     BinaryExpr(ExprLink, ArithOp, ExprLink),
@@ -98,6 +99,7 @@ impl Expr {
         match self {
             CID(cid) => format!("CID: {}", cid),
             Column { tablename, colname } => format!("{}", colname),
+            Star => format!("*"),
             Literal(v) => format!("{:?}", v),
             BinaryExpr(lhs, op, rhs) => format!("{:?}", op),
             NegatedExpr(lhs) => "-".to_string(),
@@ -114,6 +116,7 @@ impl fmt::Display for Expr {
             Column { tablename, colname } => {
                 write!(f, "{:?}.{}", tablename, colname)
             }
+            Star => write!(f, "*"),
             Literal(v) => write!(f, "{}", v),
             BinaryExpr(lhs, op, rhs) => {
                 write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
