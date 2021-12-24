@@ -11,7 +11,6 @@ lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 pub mod ast;
 pub mod csv;
 pub mod error;
-pub mod expr;
 pub mod flow;
 pub mod graphviz;
 pub mod includes;
@@ -22,7 +21,7 @@ pub mod task;
 
 use ast::{ParserState, AST};
 use clp::CLParser;
-use expr::{Expr::*, *};
+use ast::{Expr::*, *};
 use flow::*;
 use metadata::Metadata;
 use row::*;
@@ -168,7 +167,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/subquery.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.sql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

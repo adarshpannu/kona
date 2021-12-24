@@ -2,16 +2,13 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
   subgraph cluster_QB_main {
-    label = "QB_main [NAME]";
+    label = "QB_main []";
     "QB_main_pt"[shape=point, color=white];
-    "QUN_0"[label="EMP/", color=red]
-    "QUN_3"[label="/", color=red]
-    "QUN_3" -> "QB_2_pt";
-  subgraph cluster_QB_2 {
-    label = "QB_2 [D]";
-    "QB_2_pt"[shape=point, color=white];
-    "QUN_1"[label="DEPT/", color=red]
-}
-    exprnode0x7ff17e4263d8[label="DEPT"];
+    "QUN_0"[label="table1/", color=red]
+    exprnode0x7fdc16c0bef8[label="="];
+    exprnode0x7fdc16c0bea8 -> exprnode0x7fdc16c0bef8;
+    exprnode0x7fdc16c0b338 -> exprnode0x7fdc16c0bef8;
+    exprnode0x7fdc16c0bea8[label="2"];
+    exprnode0x7fdc16c0b338[label="AGG"];
 }
 }

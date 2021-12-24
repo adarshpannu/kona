@@ -1,4 +1,4 @@
 
-SELECT NAME FROM EMP
-WHERE DEPT IN (SELECT D FROM DEPT)
+select name from EMP
+where age >= (select age from EMP)
 ;

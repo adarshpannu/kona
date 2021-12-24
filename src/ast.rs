@@ -1,16 +1,20 @@
 use crate::includes::*;
 
-use crate::expr::{Expr, Expr::*};
 use crate::metadata::TableDesc;
 use crate::sqlparser;
 
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
 
 use std::process::Command;
+use crate::row::{Datum, Row};
+use core::panic;
+use std::fmt;
+use std::ops;
+
+use Expr::*;
 
 pub struct ParserState {
     next_id: RefCell<usize>,
@@ -54,7 +58,7 @@ pub struct QGM {
     pub qblock: QueryBlock,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NamedExpr {
     pub name: Option<String>,
     pub expr: ExprLink,
@@ -64,7 +68,7 @@ impl NamedExpr {
     pub fn new(name: Option<String>, expr: ExprLink) -> Self {
         let mut name = name;
         if name.is_none() {
-            if let Expr::Column { tablename, colname} = &*expr.borrow() {
+            if let Expr::Column { tablename, colname } = &*expr.borrow() {
                 name = Some(colname.clone())
             } else if let Expr::Star = &*expr.borrow() {
                 name = Some("*".to_string())
@@ -74,7 +78,7 @@ impl NamedExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum QueryBlockType {
     Unassigned,
     Main,
@@ -85,7 +89,7 @@ pub enum QueryBlockType {
 
 pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprLink>);
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Quantifier {
     id: usize,
     name: Option<String>,
@@ -116,7 +120,7 @@ impl Quantifier {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct QueryBlock {
     id: usize,
     pub name: Option<String>,
@@ -152,53 +156,6 @@ impl QueryBlock {
     }
 }
 
-/*
-#[test]
-fn sqlparser() {
-    assert!(sqlparser::LogExprParser::new().parse("col1 = 10").is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("(col1 = 10)").is_ok());
-
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 and col2 < 20")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new().parse("(col2 < 20)").is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 or (col2 < 20)")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 and (col2 < 20)")
-        .is_ok());
-
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 >= 10 or col2 <= 20")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 > 10 and col2 < 20 or col3 != 30")
-        .is_ok());
-    assert!(sqlparser::LogExprParser::new()
-        .parse("col1 = 10 or col2 = 20 and col3 > 30")
-        .is_ok());
-
-    //let expr = sqlparser::LogExprParser::new().parse("col1 = 10 and col2 = 20 and (col3 > 30)").unwrap();
-    let expr: ExprLink = sqlparser::LogExprParser::new()
-        .parse("(col2 > 20) and (col3 > 30) or (col4 < 40)")
-        .unwrap();
-    //let mut exprvec= vec![];
-    //dbg!(normalize(&expr, &mut exprvec));
-}
-
-fn normalize(expr: &Box<Expr>, exprvec: &mut Vec<&Box<Expr>>) -> bool {
-    if let LogExpr(left, LogOp::And, right) = **expr {
-        normalize(&left, exprvec);
-        normalize(&right, exprvec);
-    } else {
-        println!("{:?}", expr);
-        exprvec.push(expr);
-    }
-    false
-}
-*/
-
 macro_rules! fprint {
     ($file:expr, $($args:expr),*) => {{
         $file.write_all(format!($($args),*).as_bytes());
@@ -207,10 +164,7 @@ macro_rules! fprint {
 
 impl QueryBlock {
     pub(crate) fn write_qblock(&self, file: &mut File) -> std::io::Result<()> {
-        for qblock in self.qblocks.iter() {
-            qblock.write_qblock(file);
-        }
-
+        // Write current query block first
         let s = "".to_string();
         let select_names: Vec<&String> = self.select_list.iter().map(|e| e.name.as_ref().unwrap_or(&s)).collect();
         let select_names = format!("{:?}", select_names).replace("\"", "");
@@ -219,7 +173,7 @@ impl QueryBlock {
         fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
         fprint!(file, "    \"{}_pt\"[shape=point, color=white];\n", self.name());
 
-        for qun in self.quns.iter() {
+        for qun in self.quns.iter().rev() {
             fprint!(file, "    \"{}\"[label=\"{}\", color=red]\n", qun.name(), qun.display());
             if let Some(qblock) = &qun.qblock {
                 fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
@@ -229,6 +183,11 @@ impl QueryBlock {
 
         if self.pred_list.len() > 0 {
             QGM::write_expr_to_graphvis(&self.pred_list[0], file);
+        }
+
+        // Write subqueries
+        for qblock in self.qblocks.iter() {
+            qblock.write_qblock(file);
         }
 
         fprint!(file, "}}\n");
@@ -282,37 +241,36 @@ impl QGM {
 
         match &*expr {
             RelExpr(lhs, op, rhs) => {
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
+                Self::write_expr_to_graphvis(&rhs, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?
             }
 
             LogExpr(lhs, op, rhs) => {
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
+                Self::write_expr_to_graphvis(&rhs, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?
             }
 
             BinaryExpr(lhs, op, rhs) => {
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
+                Self::write_expr_to_graphvis(&rhs, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?
             }
+
+            Subquery(subq) => {}
 
             _ => {}
         }
@@ -320,10 +278,189 @@ impl QGM {
     }
 }
 
-/*
-trait GraphVizNode<T> {
-    fn name(&self) -> String;
-    fn id(&self) -> usize;
-    fn children(&self) -> Vec<Box<T>>;
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ArithOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
-*/
+
+impl fmt::Display for ArithOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            ArithOp::Add => '+',
+            ArithOp::Sub => '-',
+            ArithOp::Mul => '*',
+            ArithOp::Div => '/',
+        };
+        write!(f, "{}", display_str)
+    }
+}
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LogOp {
+    And,
+    Or,
+    Not,
+}
+
+impl fmt::Display for LogOp {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            LogOp::And => "&&",
+            LogOp::Or => "||",
+            LogOp::Not => "!",
+        };
+        write!(f, "{}", display_str)
+    }
+}
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub enum RelOp {
+    Eq,
+    Ne,
+    Gt,
+    Ge,
+    Lt,
+    Le,
+    In,
+}
+
+impl fmt::Display for RelOp {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            RelOp::Eq => "=",
+            RelOp::Ne => "!=",
+            RelOp::Gt => ">",
+            RelOp::Ge => ">=",
+            RelOp::Lt => "<",
+            RelOp::Le => "<=",
+            RelOp::In => "IN",
+        };
+        write!(f, "{}", display_str)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum AggType {
+    COUNT,
+    MIN,
+    MAX,
+    SUM,
+    //AVG,
+}
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub enum Expr {
+    CID(usize),
+    Column {
+        tablename: Option<String>,
+        colname: String,
+    },
+    Star,
+    Literal(Datum),
+    NegatedExpr(ExprLink),
+    BinaryExpr(ExprLink, ArithOp, ExprLink),
+    RelExpr(ExprLink, RelOp, ExprLink),
+    LogExpr(ExprLink, LogOp, ExprLink),
+    //AggExpr { aggtype: AggType, expr: ExprLink },
+    Subquery(Rc<QueryBlock>)
+}
+
+impl Expr {
+    pub fn name(&self) -> String {
+        match self {
+            CID(cid) => format!("CID: {}", cid),
+            Column { tablename, colname } => {
+                if let Some(tablename) = tablename {
+                    format!("{}.{}", tablename, colname)
+                } else {
+                    format!("{}", colname)
+                }
+            }
+            Star => format!("*"),
+            Literal(v) => format!("{}", v),
+            BinaryExpr(lhs, op, rhs) => format!("{:?}", op),
+            NegatedExpr(lhs) => "-".to_string(),
+            RelExpr(lhs, op, rhs) => format!("{}", op),
+            LogExpr(lhs, op, rhs) => format!("{:?}", op),
+            Subquery(qblock) => format!("(subquery)"),
+            //AggExpr { aggtype, expr } => format!("{:?}", aggtype),
+        }
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CID(cid) => write!(f, "${}", cid),
+            Column { tablename, colname } => {
+                write!(f, "{:?}.{}", tablename, colname)
+            }
+            Star => write!(f, "*"),
+            Literal(v) => write!(f, "{}", v),
+            BinaryExpr(lhs, op, rhs) => {
+                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
+            NegatedExpr(lhs) => write!(f, "-({})", lhs.borrow()),
+            RelExpr(lhs, op, rhs) => {
+                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
+            LogExpr(lhs, op, rhs) => {
+                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
+            Subquery(qblock) => {
+                write!(f, "(subq)")
+            }
+            //AggExpr { aggtype, expr } => write!("{:?} {}", aggtype, expr.borrow())
+        }
+    }
+}
+
+/***************************************************************************************************/
+impl Expr {
+    pub fn eval<'a>(&'a self, row: &'a Row) -> Datum {
+        match self {
+            CID(cid) => row.get_column(*cid).clone(),
+            Literal(lit) => lit.clone(),
+            BinaryExpr(b1, op, b2) => {
+                let b1 = b1.borrow().eval(row);
+                let b2 = b2.borrow().eval(row);
+                let res = match (b1, op, b2) {
+                    (Datum::INT(i1), ArithOp::Add, Datum::INT(i2)) => i1 + i2,
+                    (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
+                    (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
+                    (Datum::INT(i1), ArithOp::Div, Datum::INT(i2)) => i1 / i2,
+                    _ => panic!(
+                        "Internal error: Operands of ArithOp not resolved yet."
+                    ),
+                };
+                Datum::INT(res)
+            }
+            RelExpr(b1, op, b2) => {
+                let b1 = b1.borrow().eval(row);
+                let b2 = b2.borrow().eval(row);
+                let res = match (b1, op, b2) {
+                    (Datum::INT(i1), RelOp::Eq, Datum::INT(i2)) => i1 == i2,
+                    (Datum::INT(i1), RelOp::Ne, Datum::INT(i2)) => i1 != i2,
+                    (Datum::INT(i1), RelOp::Le, Datum::INT(i2)) => i1 <= i2,
+                    (Datum::INT(i1), RelOp::Lt, Datum::INT(i2)) => i1 < i2,
+                    (Datum::INT(i1), RelOp::Ge, Datum::INT(i2)) => i1 >= i2,
+                    (Datum::INT(i1), RelOp::Gt, Datum::INT(i2)) => i1 > i2,
+                    _ => panic!(
+                        "Internal error: Operands of RelOp not resolved yet."
+                    ),
+                };
+                Datum::BOOL(res)
+            }
+            _ => unimplemented!(),
+        }
+    }
+}

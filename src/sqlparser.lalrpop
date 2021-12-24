@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use lalrpop_util::ParseError;
 
-use crate::expr::{Expr::*, *};
+use crate::ast::{Expr::*, *};
 use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -22,8 +22,17 @@ match {
     r"(?i)AS" => "AS",
     r"(?i)WITH" => "WITH",
     r"(?i)NOT" => "NOT",
-    r"(?i)IN" => "IN",
     r"(?i)EXISTS" => "EXISTS",
+    r"(?i)DISTINCT" => "DISTINCT",
+    r"(?i)IN" => "IN",
+    r"(?i)ANY" => "ANY",
+    r"(?i)SOME" => "SOME",
+    r"(?i)ALL" => "ALL",
+    r"(?i)MIN" => "MIN",
+    r"(?i)MAX" => "MAX",
+    r"(?i)SUM" => "SUM",
+    r"(?i)COUNT" => "COUNT",
+    r"(?i)AVG" => "AVG",
     "(",
     ")",
     "=",
@@ -43,7 +52,8 @@ match {
     ",",
     ";",
     r"\s*" => { }, // The default whitespace skipping is disabled an `ignore pattern` is specified
-    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip // comments
+    r"--[^\n\r]*[\n\r]*" => { }, // Skip -- comments`
     r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
 } else {
     r"[a-zA-Z][a-zA-Z0-9_-]*",
@@ -108,7 +118,7 @@ pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
 };
 
 pub QueryBlock: QueryBlock0 = {
-    "SELECT" <select_list: SelectList> "FROM" <mut quns: FromList> <pred_list: WhereClause?> => {
+    "SELECT" "DISTINCT"? <select_list: SelectList> "FROM" <mut quns: FromList> <pred_list: WhereClause?> => {
         let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
 
         // Make QUNs from subqueries, if any
@@ -166,11 +176,6 @@ LogExprFactor: ExprLink = {
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:Expr> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
     "(" <RelExpr> ")",
-    <l:Expr> "IN" "(" <mut qblock: QueryBlock> ")" => {
-        let qblock = QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]);
-        parser_state.add_subquery(Rc::new(qblock));
-        l
-    }
 }
 
 RelOp: RelOp = {
@@ -192,7 +197,9 @@ Factor: ExprLink = {
     <l:Factor> "*" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Mul, r))),
     <l:Factor> "/" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Div, r))),
     Term,
-    "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>)))
+    "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>))),
+    Function,
+    AggFunction
 }
 
 Term: ExprLink = {
@@ -200,6 +207,32 @@ Term: ExprLink = {
     QuotedString => { Rc::new(RefCell::new(Literal(Datum::STR(Box::new(<>))))) },
     Num,
     "(" <Expr> ")",
+    SubqueryQuantifier? "(" <qblock:QueryBlock> ")" => { 
+        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
+        parser_state.add_subquery(subq.clone());
+        Rc::new(RefCell::new(Subquery(subq)))
+    }
+}
+
+AggFunction: ExprLink = {
+    <name:AggName> "(" Expr ")" => Rc::new(RefCell::new(Literal(Datum::STR(Box::new("AGG".to_string())))))
+}
+
+AggName = {
+    "MIN", "MAX", "SUM", "COUNT", "AVG"
+}
+
+Function: ExprLink = {
+    <name:Identifier> "(" FunctionArgs ")" => Rc::new(RefCell::new(Literal(Datum::STR(Box::new("FUNCTION".to_string())))))
+}
+
+FunctionArgs = CommaSeparatedList<Expr>;
+
+SubqueryQuantifier = {
+    "ALL",
+    "IN",
+    "ANY",
+    "SOME"
 }
 
 Num: ExprLink = {

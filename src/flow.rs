@@ -6,7 +6,7 @@ use std::io::Write;
 
 use crate::graphviz::htmlify;
 use crate::metadata::CSVDesc;
-use crate::{csv::*, expr::*, includes::*, row::*, task::*};
+use crate::{csv::*, ast::*, includes::*, row::*, task::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum NodeInner {
@@ -526,15 +526,6 @@ impl AggNode {
         }
         htable
     }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum AggType {
-    COUNT,
-    MIN,
-    MAX,
-    SUM,
-    //AVG,
 }
 
 /***************************************************************************************************/
