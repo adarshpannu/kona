@@ -270,6 +270,14 @@ impl QGM {
                 Self::write_expr_to_graphvis(&lhs, file)?;
             }
 
+            ScalarFunction {name, args} => {
+                for arg in args {
+                    let childaddr = &*arg.borrow() as *const Expr;
+                    fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                    Self::write_expr_to_graphvis(&arg, file)?;
+                }
+            }
+
             Subquery(subq) => {}
 
             _ => {}
@@ -353,7 +361,7 @@ pub enum AggType {
     MIN,
     MAX,
     SUM,
-    //AVG,
+    AVG,
 }
 
 /***************************************************************************************************/
@@ -370,8 +378,9 @@ pub enum Expr {
     BinaryExpr(ExprLink, ArithOp, ExprLink),
     RelExpr(ExprLink, RelOp, ExprLink),
     LogExpr(ExprLink, LogOp, ExprLink),
-    //AggExpr { aggtype: AggType, expr: ExprLink },
-    Subquery(Rc<QueryBlock>)
+    Subquery(Rc<QueryBlock>),
+    AggFunction { aggtype: AggType, expr: ExprLink },
+    ScalarFunction { name: String, args: Vec<ExprLink> },
 }
 
 impl Expr {
@@ -392,7 +401,8 @@ impl Expr {
             RelExpr(lhs, op, rhs) => format!("{}", op),
             LogExpr(lhs, op, rhs) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
-            //AggExpr { aggtype, expr } => format!("{:?}", aggtype),
+            AggFunction { aggtype, expr } => format!("{:?}", aggtype),
+            ScalarFunction {name, args} => format!("{}()", name),
         }
     }
 }
@@ -419,7 +429,8 @@ impl fmt::Display for Expr {
             Subquery(qblock) => {
                 write!(f, "(subq)")
             }
-            //AggExpr { aggtype, expr } => write!("{:?} {}", aggtype, expr.borrow())
+            AggFunction { aggtype, expr } => write!(f, "{:?} {}", aggtype, expr.borrow()),
+            ScalarFunction { name, args} => write!(f, "{}({:?})", name, args),
         }
     }
 }

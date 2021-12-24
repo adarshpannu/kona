@@ -5,10 +5,12 @@ digraph example1 {
     label = "QB_main []";
     "QB_main_pt"[shape=point, color=white];
     "QUN_0"[label="table1/", color=red]
-    exprnode0x7fdc16c0bef8[label="="];
-    exprnode0x7fdc16c0bea8 -> exprnode0x7fdc16c0bef8;
-    exprnode0x7fdc16c0b338 -> exprnode0x7fdc16c0bef8;
-    exprnode0x7fdc16c0bea8[label="2"];
-    exprnode0x7fdc16c0b338[label="AGG"];
+    exprnode0x7fbc27d385a8[label="="];
+    exprnode0x7fbc27d38558 -> exprnode0x7fbc27d385a8;
+    exprnode0x7fbc27d379c8 -> exprnode0x7fbc27d385a8;
+    exprnode0x7fbc27d38558[label="2"];
+    exprnode0x7fbc27d379c8[label="foo()"];
+    exprnode0x7fbc27d39958 -> exprnode0x7fbc27d379c8;
+    exprnode0x7fbc27d39958[label="col1"];
 }
 }

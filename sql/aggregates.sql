@@ -1,2 +1,2 @@
-select max(col1) from table1
-where min(col1) = 2;
+select foo(col1) from table1
+where foo(col1) = 2;

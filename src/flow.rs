@@ -483,6 +483,10 @@ impl AggNode {
                         accrow.set_column(ix, &curcol)
                     }
                 }
+                AggType::AVG => {
+                    unimplemented!()
+                }
+
             }
         }
     }
@@ -512,6 +516,7 @@ impl AggNode {
                             AggType::MAX | AggType::MIN => {
                                 currow.get_column(ix).clone()
                             }
+                            AggType::AVG => unimplemented!()
                         }
                     })
                     .collect();

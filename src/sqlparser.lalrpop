@@ -198,7 +198,7 @@ Factor: ExprLink = {
     <l:Factor> "/" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Div, r))),
     Term,
     "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>))),
-    Function,
+    ScalarFunction,
     AggFunction
 }
 
@@ -222,8 +222,8 @@ AggName = {
     "MIN", "MAX", "SUM", "COUNT", "AVG"
 }
 
-Function: ExprLink = {
-    <name:Identifier> "(" FunctionArgs ")" => Rc::new(RefCell::new(Literal(Datum::STR(Box::new("FUNCTION".to_string())))))
+ScalarFunction: ExprLink = {
+    <name:Identifier> "(" <args:FunctionArgs> ")" => Rc::new(RefCell::new(ScalarFunction { name, args }))
 }
 
 FunctionArgs = CommaSeparatedList<Expr>;
