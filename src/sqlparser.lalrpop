@@ -26,8 +26,9 @@ match {
     r"(?i)DISTINCT" => "DISTINCT",
     r"(?i)IN" => "IN",
     r"(?i)ANY" => "ANY",
-    r"(?i)SOME" => "SOME",
     r"(?i)ALL" => "ALL",
+    r"(?i)LIKE" => "LIKE",
+    r"(?i)BETWEEN" => "BETWEEN",
     r"(?i)MIN" => "MIN",
     r"(?i)MAX" => "MAX",
     r"(?i)SUM" => "SUM",
@@ -170,12 +171,23 @@ pub LogExpr: ExprLink = {
 LogExprFactor: ExprLink = {
     <l:LogExprFactor> "AND" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, r))),
     RelExpr,
-    "NOT" <RelExpr>
 }
 
 RelExpr: ExprLink = {
-    <l:Expr> <op:RelOp> <r:Expr> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
+    <l:Expr> <op:RelOp> <r:RelExprRHS> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
+    <l:Expr> "NOT"? "IN" InRHS => Rc::new(RefCell::new(Expr::Star)),
+    "EXISTS" "(" <qblock:QueryBlock> ")" => Rc::new(RefCell::new(Expr::Star)),
+    "NOT" <RelExpr>,
     "(" <RelExpr> ")",
+}
+
+RelExprRHS: ExprLink = {
+    <rhs:Expr> => rhs,
+    <prefix:SubqueryQuantifier> "(" <qblock:QueryBlock> ")" => { 
+        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
+        parser_state.add_subquery(subq.clone());
+        Rc::new(RefCell::new(Subquery(subq)))
+    }
 }
 
 RelOp: RelOp = {
@@ -185,6 +197,22 @@ RelOp: RelOp = {
     "<=" => RelOp::Le,
     "!=" => RelOp::Ne,
     "=" => RelOp::Eq,
+    //"IN" => RelOp::In,
+    //"NOT" "IN" => RelOp::In, // FIXME
+    "LIKE" => RelOp::Like,
+    "NOT" "LIKE" => RelOp::Like, // FIXME
+}
+
+InRHS: usize = {
+    "(" QueryBlock ")" => 1,
+    "(" InList ")" => 2
+}
+
+InList = CommaSeparatedList<Expr>;
+
+SubqueryQuantifier = {
+    "ALL",
+    "ANY",
 }
 
 pub Expr: ExprLink = {
@@ -207,7 +235,7 @@ Term: ExprLink = {
     QuotedString => { Rc::new(RefCell::new(Literal(Datum::STR(Box::new(<>))))) },
     Num,
     "(" <Expr> ")",
-    SubqueryQuantifier? "(" <qblock:QueryBlock> ")" => { 
+    "(" <qblock:QueryBlock> ")" => { 
         let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
         parser_state.add_subquery(subq.clone());
         Rc::new(RefCell::new(Subquery(subq)))
@@ -236,13 +264,6 @@ ScalarFunction: ExprLink = {
 }
 
 FunctionArgs = CommaSeparatedList<Expr>;
-
-SubqueryQuantifier = {
-    "ALL",
-    "IN",
-    "ANY",
-    "SOME"
-}
 
 Num: ExprLink = {
     r"[-+]?[0-9]+" =>? isize::from_str(<>)

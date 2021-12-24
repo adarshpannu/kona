@@ -352,6 +352,8 @@ pub enum RelOp {
     Lt,
     Le,
     In,
+    Like,
+    Between
 }
 
 impl fmt::Display for RelOp {
@@ -365,6 +367,8 @@ impl fmt::Display for RelOp {
             RelOp::Lt => "<",
             RelOp::Le => "<=",
             RelOp::In => "IN",
+            RelOp::Like => "LIKE",
+            RelOp::Between => "BETWEEN",
         };
         write!(f, "{}", display_str)
     }
