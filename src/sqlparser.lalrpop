@@ -45,7 +45,7 @@ match {
     "-",
     "*",
     "/",
-    r"[0-9]+",
+    r"[-+]?[0-9]+",
     r#""[^"]*""#,
     r#"'[^']*'"#,
     ".",
@@ -215,11 +215,20 @@ Term: ExprLink = {
 }
 
 AggFunction: ExprLink = {
-    <name:AggName> "(" Expr ")" => Rc::new(RefCell::new(Literal(Datum::STR(Box::new("AGG".to_string())))))
+    <aggtype:AggName> "(" <arg:AggArg> ")" => Rc::new(RefCell::new(AggFunction { aggtype, arg })),
 }
 
-AggName = {
-    "MIN", "MAX", "SUM", "COUNT", "AVG"
+AggName: AggType = {
+    "MIN" => AggType::MIN,
+    "MAX" => AggType::MAX, 
+    "SUM" => AggType::SUM, 
+    "COUNT" => AggType::COUNT, 
+    "AVG" => AggType::AVG
+}
+
+AggArg: ExprLink = {
+    <arg:Expr> => arg,
+    "*" => Rc::new(RefCell::new(Expr::Star))
 }
 
 ScalarFunction: ExprLink = {
@@ -236,7 +245,7 @@ SubqueryQuantifier = {
 }
 
 Num: ExprLink = {
-    r"[0-9]+" =>? isize::from_str(<>)
+    r"[-+]?[0-9]+" =>? isize::from_str(<>)
     .map(|i| Rc::new(RefCell::new(Literal(Datum::INT(i)))))
     .map_err(|_| ParseError::User { error: "Invalid number" })
 }

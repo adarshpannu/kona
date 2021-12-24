@@ -1,16 +1,58 @@
 digraph example1 {
     rankdir=BT;
     nodesep=0.5;
+    ordering="in";
   subgraph cluster_QB_main {
-    label = "QB_main []";
+    label = "QB_main [partno, descr, suppno]";
     "QB_main_pt"[shape=point, color=white];
-    "QUN_0"[label="table1/", color=red]
-    exprnode0x7fbc27d385a8[label="="];
-    exprnode0x7fbc27d38558 -> exprnode0x7fbc27d385a8;
-    exprnode0x7fbc27d379c8 -> exprnode0x7fbc27d385a8;
-    exprnode0x7fbc27d38558[label="2"];
-    exprnode0x7fbc27d379c8[label="foo()"];
-    exprnode0x7fbc27d39958 -> exprnode0x7fbc27d379c8;
-    exprnode0x7fbc27d39958[label="col1"];
+    "QUN_4"[label="/", color=red]
+    "QUN_4" -> "QB_3_pt";
+  subgraph cluster_QB_3 {
+    label = "QB_3 [price]";
+    "QB_3_pt"[shape=point, color=white];
+    "QUN_2"[label="quotations/q3", color=red]
+    exprnode0x7f98d4512fa8[label="="];
+    exprnode0x7f98d4512ee8 -> exprnode0x7f98d4512fa8;
+    exprnode0x7f98d4512f58 -> exprnode0x7f98d4512fa8;
+    exprnode0x7f98d4512ee8[label="q2.partno"];
+    exprnode0x7f98d4512f58[label="q3.partno"];
+}
+    "QUN_1"[label="quotations/q2", color=red]
+    "QUN_0"[label="inventory/ql", color=red]
+    exprnode0x7f98d4513588[label="And"];
+    exprnode0x7f98d4511ce8 -> exprnode0x7f98d4513588;
+    exprnode0x7f98d4513538 -> exprnode0x7f98d4513588;
+    exprnode0x7f98d4511ce8[label="And"];
+    exprnode0x7f98d4510108 -> exprnode0x7f98d4511ce8;
+    exprnode0x7f98d4511c98 -> exprnode0x7f98d4511ce8;
+    exprnode0x7f98d4510108[label="And"];
+    exprnode0x7f98d450ed08 -> exprnode0x7f98d4510108;
+    exprnode0x7f98d45100b8 -> exprnode0x7f98d4510108;
+    exprnode0x7f98d450ed08[label="="];
+    exprnode0x7f98d450e578 -> exprnode0x7f98d450ed08;
+    exprnode0x7f98d450ecb8 -> exprnode0x7f98d450ed08;
+    exprnode0x7f98d450e578[label="ql.partno"];
+    exprnode0x7f98d450ecb8[label="q2.partno"];
+    exprnode0x7f98d45100b8[label="="];
+    exprnode0x7f98d450ed78 -> exprnode0x7f98d45100b8;
+    exprnode0x7f98d450fc28 -> exprnode0x7f98d45100b8;
+    exprnode0x7f98d450ed78[label="q1.descr"];
+    exprnode0x7f98d450fc28[label="engine"];
+    exprnode0x7f98d4511c98[label=">"];
+    exprnode0x7f98d4511b28 -> exprnode0x7f98d4511c98;
+    exprnode0x7f98d4510e58 -> exprnode0x7f98d4511c98;
+    exprnode0x7f98d4511b28[label="FUN()"];
+    exprnode0x7f98d4511178 -> exprnode0x7f98d4511b28;
+    exprnode0x7f98d4511178[label="1"];
+    exprnode0x7f98d45111e8 -> exprnode0x7f98d4511b28;
+    exprnode0x7f98d45111e8[label="2"];
+    exprnode0x7f98d4511668 -> exprnode0x7f98d4511b28;
+    exprnode0x7f98d4511668[label="3"];
+    exprnode0x7f98d4510e58[label="10"];
+    exprnode0x7f98d4513538[label="<="];
+    exprnode0x7f98d4512598 -> exprnode0x7f98d4513538;
+    exprnode0x7f98d45134e8 -> exprnode0x7f98d4513538;
+    exprnode0x7f98d4512598[label="q2.price"];
+    exprnode0x7f98d45134e8[label="(subquery)"];
 }
 }

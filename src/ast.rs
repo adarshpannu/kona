@@ -202,6 +202,8 @@ impl QGM {
         //fprint!(file, "    node [style=filled,color=white];\n");
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG
         fprint!(file, "    nodesep=0.5;\n");
+        fprint!(file, "    ordering=\"in\";\n");
+
         //fprint!(file, "    splines=polyline;\n");
         //fprint!(file, "    style=filled;\n");
         //fprint!(file, "    color=lightgrey;\n");
@@ -241,42 +243,55 @@ impl QGM {
 
         match &*expr {
             RelExpr(lhs, op, rhs) => {
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                Self::write_expr_to_graphvis(&rhs, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
+                Self::write_expr_to_graphvis(&rhs, file)?;
             }
 
             LogExpr(lhs, op, rhs) => {
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                Self::write_expr_to_graphvis(&rhs, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
+                Self::write_expr_to_graphvis(&rhs, file)?;
             }
 
             BinaryExpr(lhs, op, rhs) => {
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
-                Self::write_expr_to_graphvis(&rhs, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
+                Self::write_expr_to_graphvis(&rhs, file)?;
+            }
+
+            NegatedExpr(expr) => {
+                let childaddr = &*expr.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                Self::write_expr_to_graphvis(&expr, file)?;
             }
 
             ScalarFunction {name, args} => {
-                for arg in args {
+                for arg in args.iter() {
                     let childaddr = &*arg.borrow() as *const Expr;
                     fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                     Self::write_expr_to_graphvis(&arg, file)?;
                 }
             }
+
+            AggFunction {aggtype, arg} => {
+                let childaddr = &*arg.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                Self::write_expr_to_graphvis(&arg, file)?;
+            }
+
 
             Subquery(subq) => {}
 
@@ -379,7 +394,7 @@ pub enum Expr {
     RelExpr(ExprLink, RelOp, ExprLink),
     LogExpr(ExprLink, LogOp, ExprLink),
     Subquery(Rc<QueryBlock>),
-    AggFunction { aggtype: AggType, expr: ExprLink },
+    AggFunction { aggtype: AggType, arg: ExprLink },
     ScalarFunction { name: String, args: Vec<ExprLink> },
 }
 
@@ -401,7 +416,7 @@ impl Expr {
             RelExpr(lhs, op, rhs) => format!("{}", op),
             LogExpr(lhs, op, rhs) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
-            AggFunction { aggtype, expr } => format!("{:?}", aggtype),
+            AggFunction { aggtype, arg } => format!("{:?}", aggtype),
             ScalarFunction {name, args} => format!("{}()", name),
         }
     }
@@ -429,7 +444,7 @@ impl fmt::Display for Expr {
             Subquery(qblock) => {
                 write!(f, "(subq)")
             }
-            AggFunction { aggtype, expr } => write!(f, "{:?} {}", aggtype, expr.borrow()),
+            AggFunction { aggtype, arg } => write!(f, "{:?} {}", aggtype, arg.borrow()),
             ScalarFunction { name, args} => write!(f, "{}({:?})", name, args),
         }
     }
