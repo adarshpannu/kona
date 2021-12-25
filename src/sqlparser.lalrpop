@@ -1,11 +1,12 @@
 use std::str::FromStr;
 use lalrpop_util::ParseError;
 
+use crate::includes::*;
+
 use crate::ast::{Expr::*, *};
 use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::includes::*;
 use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlock0, QueryBlockType, QGM, ParserState, Quantifier};
 
 grammar(parser_state: &mut ParserState);
@@ -17,6 +18,12 @@ match {
     r"(?i)SELECT" => "SELECT",
     r"(?i)FROM" => "FROM",
     r"(?i)WHERE" => "WHERE",
+    r"(?i)GROUP" => "GROUP",
+    r"(?i)ORDER" => "ORDER",
+    r"(?i)HAVING" => "HAVING",
+    r"(?i)ASC" => "ASC",
+    r"(?i)DESC" => "DESC",
+    r"(?i)BY" => "BY",
     r"(?i)AND" => "AND",
     r"(?i)OR" => "OR",
     r"(?i)AS" => "AS",
@@ -34,6 +41,8 @@ match {
     r"(?i)SUM" => "SUM",
     r"(?i)COUNT" => "COUNT",
     r"(?i)AVG" => "AVG",
+    r"(?i)CAST" => "CAST",
+    r"(?i)TOP" => "TOP",
     "(",
     ")",
     "=",
@@ -42,11 +51,13 @@ match {
     ">",
     ">=",
     "!=",
+    "<>",
     "+",
     "-",
     "*",
     "/",
     r"[-+]?[0-9]+",
+    r"[-+]?\d*\.\d*",
     r#""[^"]*""#,
     r#"'[^']*'"#,
     ".",
@@ -119,7 +130,7 @@ pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
 };
 
 pub QueryBlock: QueryBlock0 = {
-    "SELECT" "DISTINCT"? <select_list: SelectList> "FROM" <mut quns: FromList> <pred_list: WhereClause?> => {
+    "SELECT" TopN? AllOrDistinct? <select_list: SelectList> "FROM" <mut quns: FromList> <pred_list: WhereClause?> GroupByClause? HavingClause? OrderByClause?  => {
         let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
 
         // Make QUNs from subqueries, if any
@@ -131,6 +142,13 @@ pub QueryBlock: QueryBlock0 = {
         (select_list, quns, pred_list)
     }
 };
+
+TopN = "TOP" Integer;
+
+AllOrDistinct = {
+    "ALL",
+    "DISTINCT"
+}
 
 WithClause = "WITH" <CTEList>;
 
@@ -146,8 +164,21 @@ FromList = CommaSeparatedList<Quantifier>;
 
 WhereClause = "WHERE" <LogExpr>;
 
+GroupByClause = "GROUP" "BY" CommaSeparatedList<Expr>;
+
+HavingClause = "HAVING" <LogExpr>;
+
+OrderByClause = "ORDER" "BY" CommaSeparatedList<OrderCol>;
+
+OrderCol = Expr OrderSort?;
+
+OrderSort = {
+    "ASC",
+    "DESC"
+}
+
 Quantifier: Quantifier = {
-    <name:Identifier> <alias:correlation_clause?> => {
+    <schemaname:(Identifier ".")?> <name:Identifier> <alias:correlation_clause?> => {
         Quantifier::new(parser_state.next_id(), Some(name), alias, None)
     },
     "(" <mut qblock: QueryBlock> ")" <alias:correlation_clause?> => {
@@ -175,10 +206,11 @@ LogExprFactor: ExprLink = {
 
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
+    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Rc::new(RefCell::new(Expr::BetweenExpr(e, l, r))),
     <l:Expr> "NOT"? "IN" InRHS => Rc::new(RefCell::new(Expr::Star)),
     "EXISTS" "(" <qblock:QueryBlock> ")" => Rc::new(RefCell::new(Expr::Star)),
     "NOT" <RelExpr>,
-    "(" <RelExpr> ")",
+    "(" <LogExpr> ")",
 }
 
 RelExprRHS: ExprLink = {
@@ -196,9 +228,8 @@ RelOp: RelOp = {
     "<" => RelOp::Lt,
     "<=" => RelOp::Le,
     "!=" => RelOp::Ne,
+    "<>" => RelOp::Ne,
     "=" => RelOp::Eq,
-    //"IN" => RelOp::In,
-    //"NOT" "IN" => RelOp::In, // FIXME
     "LIKE" => RelOp::Like,
     "NOT" "LIKE" => RelOp::Like, // FIXME
 }
@@ -225,15 +256,15 @@ Factor: ExprLink = {
     <l:Factor> "*" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Mul, r))),
     <l:Factor> "/" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Div, r))),
     Term,
-    "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>))),
-    ScalarFunction,
-    AggFunction
 }
 
 Term: ExprLink = {
     <cr:ColumnReference> => Rc::new(RefCell::new(Column { tablename: cr.0, colname: cr.1 } )),
     QuotedString => { Rc::new(RefCell::new(Literal(Datum::STR(Box::new(<>))))) },
-    Num,
+    Number,
+    ScalarFunction,
+    AggFunction,
+    "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>))),
     "(" <Expr> ")",
     "(" <qblock:QueryBlock> ")" => { 
         let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
@@ -244,13 +275,16 @@ Term: ExprLink = {
 
 AggFunction: ExprLink = {
     <aggtype:AggName> "(" <arg:AggArg> ")" => Rc::new(RefCell::new(AggFunction { aggtype, arg })),
+    "COUNT" "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
+        let aggtype = if distinct.is_some() { AggType::COUNT_DISTINCT } else { AggType::COUNT };
+        Rc::new(RefCell::new(AggFunction { aggtype, arg })) 
+    }
 }
 
 AggName: AggType = {
     "MIN" => AggType::MIN,
     "MAX" => AggType::MAX, 
     "SUM" => AggType::SUM, 
-    "COUNT" => AggType::COUNT, 
     "AVG" => AggType::AVG
 }
 
@@ -260,16 +294,30 @@ AggArg: ExprLink = {
 }
 
 ScalarFunction: ExprLink = {
-    <name:Identifier> "(" <args:FunctionArgs> ")" => Rc::new(RefCell::new(ScalarFunction { name, args }))
+    <name:Identifier> "(" <args:FunctionArgs> ")" => Rc::new(RefCell::new(ScalarFunction { name, args })),
+    "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
+        let datatype = Rc::new(RefCell::new(Literal(Datum::STR(Box::new(datatype.to_string())))));
+        let args = vec![arg, datatype];
+        Rc::new(RefCell::new(ScalarFunction { name: "CAST".to_string(), args }))
+    }
 }
 
 FunctionArgs = CommaSeparatedList<Expr>;
 
-Num: ExprLink = {
-    r"[-+]?[0-9]+" =>? isize::from_str(<>)
-    .map(|i| Rc::new(RefCell::new(Literal(Datum::INT(i)))))
-    .map_err(|_| ParseError::User { error: "Invalid number" })
+Number: ExprLink = {
+    Integer =>? { isize::from_str(<>)
+        .map(|i| Rc::new(RefCell::new(Literal(Datum::INT(i)))))
+        .map_err(|_| ParseError::User { error: "Invalid integer" }) 
+    },
+    Double =>? { f64::from_str(<>)
+        .map(|d| Rc::new(RefCell::new(Literal(Datum::DOUBLE(111, 222)))))
+        .map_err(|_| ParseError::User { error: "Invalid double" }) 
+    },
 }
+
+Integer = r"[-+]?[0-9]+";
+
+Double = r"[-+]?\d*\.\d*";
 
 Identifier: String = {
     r"[a-zA-Z][a-zA-Z0-9_-]*" => <>.to_string()

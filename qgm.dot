@@ -3,21 +3,13 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_QB_main {
-    label = "QB_main [CNTRYCODE, C_ACCTBAL]";
+    label = "QB_main []";
     "QB_main_pt"[shape=point, color=white];
-    "QUN_0"[label="CUSTOMER/", color=red]
-    exprnode0x7ff8dbc32738[label="And"];
-    exprnode0x7ff8dbc318b8 -> exprnode0x7ff8dbc32738;
-    exprnode0x7ff8dbc34148 -> exprnode0x7ff8dbc32738;
-    exprnode0x7ff8dbc318b8[label="And"];
-    exprnode0x7ff8dbc304a8 -> exprnode0x7ff8dbc318b8;
-    exprnode0x7ff8dbc31b48 -> exprnode0x7ff8dbc318b8;
-    exprnode0x7ff8dbc304a8[label="*"];
-    exprnode0x7ff8dbc31b48[label=">"];
-    exprnode0x7ff8dbc2e6e8 -> exprnode0x7ff8dbc31b48;
-    exprnode0x7ff8dbc31818 -> exprnode0x7ff8dbc31b48;
-    exprnode0x7ff8dbc2e6e8[label="C_ACCTBAL"];
-    exprnode0x7ff8dbc31818[label="(subquery)"];
-    exprnode0x7ff8dbc34148[label="*"];
+    "QUN_0"[label="LINEITEM/", color=red]
+    exprnode0x7fea6b70d338[label=">"];
+    exprnode0x7fea6b70d1a8 -> exprnode0x7fea6b70d338;
+    exprnode0x7fea6b7100c8 -> exprnode0x7fea6b70d338;
+    exprnode0x7fea6b70d1a8[label="A"];
+    exprnode0x7fea6b7100c8[label="B"];
 }
 }

@@ -239,7 +239,7 @@ impl QGM {
         let addr = &*expr as *const Expr;
         fprint!(file, "    exprnode{:?}[label=\"{}\"];\n", addr, expr.name());
 
-        println!("--- {:?} {:?}", addr, &*expr);
+        //println!("--- {:?} {:?}", addr, &*expr);
 
         match &*expr {
             RelExpr(lhs, op, rhs) => {
@@ -248,6 +248,19 @@ impl QGM {
                 let childaddr = &*rhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
 
+                Self::write_expr_to_graphvis(&lhs, file)?;
+                Self::write_expr_to_graphvis(&rhs, file)?;
+            }
+
+            BetweenExpr(e, lhs, rhs) => {
+                let childaddr = &*e.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                let childaddr = &*lhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+
+                Self::write_expr_to_graphvis(&e, file)?;
                 Self::write_expr_to_graphvis(&lhs, file)?;
                 Self::write_expr_to_graphvis(&rhs, file)?;
             }
@@ -353,7 +366,6 @@ pub enum RelOp {
     Le,
     In,
     Like,
-    Between
 }
 
 impl fmt::Display for RelOp {
@@ -368,7 +380,6 @@ impl fmt::Display for RelOp {
             RelOp::Le => "<=",
             RelOp::In => "IN",
             RelOp::Like => "LIKE",
-            RelOp::Between => "BETWEEN",
         };
         write!(f, "{}", display_str)
     }
@@ -377,6 +388,7 @@ impl fmt::Display for RelOp {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AggType {
     COUNT,
+    COUNT_DISTINCT,
     MIN,
     MAX,
     SUM,
@@ -396,6 +408,7 @@ pub enum Expr {
     NegatedExpr(ExprLink),
     BinaryExpr(ExprLink, ArithOp, ExprLink),
     RelExpr(ExprLink, RelOp, ExprLink),
+    BetweenExpr(ExprLink, ExprLink, ExprLink),
     LogExpr(ExprLink, LogOp, ExprLink),
     Subquery(Rc<QueryBlock>),
     AggFunction { aggtype: AggType, arg: ExprLink },
@@ -418,6 +431,7 @@ impl Expr {
             BinaryExpr(lhs, op, rhs) => format!("{:?}", op),
             NegatedExpr(lhs) => "-".to_string(),
             RelExpr(lhs, op, rhs) => format!("{}", op),
+            BetweenExpr(e, l, r) => format!("BETWEEEN"),
             LogExpr(lhs, op, rhs) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
             AggFunction { aggtype, arg } => format!("{:?}", aggtype),
@@ -441,6 +455,9 @@ impl fmt::Display for Expr {
             NegatedExpr(lhs) => write!(f, "-({})", lhs.borrow()),
             RelExpr(lhs, op, rhs) => {
                 write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+            }
+            BetweenExpr(e, lhs, rhs) => {
+                write!(f, "({} {} {})", e.borrow(), lhs.borrow(), rhs.borrow())
             }
             LogExpr(lhs, op, rhs) => {
                 write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())

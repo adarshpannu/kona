@@ -486,7 +486,9 @@ impl AggNode {
                 AggType::AVG => {
                     unimplemented!()
                 }
-
+                AggType::COUNT_DISTINCT => {
+                    unimplemented!()
+                }
             }
         }
     }
@@ -516,7 +518,7 @@ impl AggNode {
                             AggType::MAX | AggType::MIN => {
                                 currow.get_column(ix).clone()
                             }
-                            AggType::AVG => unimplemented!()
+                            AggType::AVG | AggType::COUNT_DISTINCT => unimplemented!()
                         }
                     })
                     .collect();

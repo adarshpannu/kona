@@ -130,8 +130,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
 
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
-    for ast in astlist {
-        println!("{:?}", ast);
+    for (ix, ast) in astlist.into_iter().enumerate() {
+        println!("--- Parsed stmt {} ---", ix);
         match ast {
             AST::CatalogTable { name, options } => {
                 env.metadata.catalog_table(name, options)?;
@@ -152,7 +152,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init();
-
+    
     info!("FLARE {}", "hello");
 
     let args = "cmdname --rank 0".split(' ').map(|e| e.to_owned()).collect();
