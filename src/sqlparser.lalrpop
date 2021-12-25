@@ -196,20 +196,20 @@ NamedExpr: NamedExpr = {
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
-    <l:LogExpr> "OR" <r:LogExprFactor> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::Or, r))),
+    <l:LogExpr> "OR" <r:LogExprFactor> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::Or, Some(r)))),
 }
 
 LogExprFactor: ExprLink = {
-    <l:LogExprFactor> "AND" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, r))),
+    <l:LogExprFactor> "AND" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, Some(r)))),
     RelExpr,
 }
 
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
     <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Rc::new(RefCell::new(Expr::BetweenExpr(e, l, r))),
-    <l:Expr> "NOT"? "IN" InRHS => Rc::new(RefCell::new(Expr::Star)),
+    <e:Expr> "NOT"? "IN" InRHS => Rc::new(RefCell::new(Expr::Star)),
     "EXISTS" "(" <qblock:QueryBlock> ")" => Rc::new(RefCell::new(Expr::Star)),
-    "NOT" <RelExpr>,
+    "NOT" <e:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(e, LogOp::Not, None))),
     "(" <LogExpr> ")",
 }
 

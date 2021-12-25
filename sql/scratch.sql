@@ -1,3 +1,4 @@
 
 SELECT 1 FROM LINEITEM 
-where NOT A > B
+where A IN (SELECT MAX(COL) FROM B);
+

@@ -6,10 +6,6 @@ digraph example1 {
     label = "QB_main []";
     "QB_main_pt"[shape=point, color=white];
     "QUN_0"[label="LINEITEM/", color=red]
-    exprnode0x7fea6b70d338[label=">"];
-    exprnode0x7fea6b70d1a8 -> exprnode0x7fea6b70d338;
-    exprnode0x7fea6b7100c8 -> exprnode0x7fea6b70d338;
-    exprnode0x7fea6b70d1a8[label="A"];
-    exprnode0x7fea6b7100c8[label="B"];
+    exprnode0x7f9539504ae8[label="*"];
 }
 }

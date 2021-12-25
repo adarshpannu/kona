@@ -268,11 +268,14 @@ impl QGM {
             LogExpr(lhs, op, rhs) => {
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
+                if let Some(rhs) = rhs {
+                    let childaddr = &*rhs.borrow() as *const Expr;
+                    fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                }
                 Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?;
+                if let Some(rhs) = rhs {
+                    Self::write_expr_to_graphvis(&rhs, file)?;
+                }
             }
 
             BinaryExpr(lhs, op, rhs) => {
@@ -305,8 +308,10 @@ impl QGM {
                 Self::write_expr_to_graphvis(&arg, file)?;
             }
 
+            Subquery(subq) => {
+                fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", addr, subq.name());
 
-            Subquery(subq) => {}
+            }
 
             _ => {}
         }
@@ -409,7 +414,7 @@ pub enum Expr {
     BinaryExpr(ExprLink, ArithOp, ExprLink),
     RelExpr(ExprLink, RelOp, ExprLink),
     BetweenExpr(ExprLink, ExprLink, ExprLink),
-    LogExpr(ExprLink, LogOp, ExprLink),
+    LogExpr(ExprLink, LogOp, Option<ExprLink>),
     Subquery(Rc<QueryBlock>),
     AggFunction { aggtype: AggType, arg: ExprLink },
     ScalarFunction { name: String, args: Vec<ExprLink> },
@@ -460,7 +465,11 @@ impl fmt::Display for Expr {
                 write!(f, "({} {} {})", e.borrow(), lhs.borrow(), rhs.borrow())
             }
             LogExpr(lhs, op, rhs) => {
-                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+                if let Some(rhs) = rhs {
+                    write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+                } else {
+                    write!(f, "({} {})", lhs.borrow(), op)
+                }
             }
             Subquery(qblock) => {
                 write!(f, "(subq)")
