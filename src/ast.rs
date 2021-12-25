@@ -313,6 +313,35 @@ impl QGM {
 
             }
 
+            InSubqExpr(lhs, rhs) => {
+                let childaddr = &*lhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                let childaddr = &*rhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+
+                Self::write_expr_to_graphvis(&lhs, file)?;
+                Self::write_expr_to_graphvis(&rhs, file)?;
+            }
+
+            InListExpr(lhs, args) => {
+                let childaddr = &*lhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+
+                for arg in args.iter() {
+                    let childaddr = &*arg.borrow() as *const Expr;
+                    fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                    Self::write_expr_to_graphvis(&arg, file)?;
+                }
+                Self::write_expr_to_graphvis(&lhs, file)?;
+            }
+            
+            ExistsExpr(lhs) => {
+                let childaddr = &*lhs.borrow() as *const Expr;
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
+                Self::write_expr_to_graphvis(&lhs, file)?;
+            }
+
+
             _ => {}
         }
         Ok(())
@@ -369,7 +398,6 @@ pub enum RelOp {
     Ge,
     Lt,
     Le,
-    In,
     Like,
 }
 
@@ -383,7 +411,6 @@ impl fmt::Display for RelOp {
             RelOp::Ge => ">=",
             RelOp::Lt => "<",
             RelOp::Le => "<=",
-            RelOp::In => "IN",
             RelOp::Like => "LIKE",
         };
         write!(f, "{}", display_str)
@@ -414,6 +441,9 @@ pub enum Expr {
     BinaryExpr(ExprLink, ArithOp, ExprLink),
     RelExpr(ExprLink, RelOp, ExprLink),
     BetweenExpr(ExprLink, ExprLink, ExprLink),
+    InListExpr(ExprLink, Vec<ExprLink>),
+    InSubqExpr(ExprLink, ExprLink),
+    ExistsExpr(ExprLink),
     LogExpr(ExprLink, LogOp, Option<ExprLink>),
     Subquery(Rc<QueryBlock>),
     AggFunction { aggtype: AggType, arg: ExprLink },
@@ -437,6 +467,9 @@ impl Expr {
             NegatedExpr(lhs) => "-".to_string(),
             RelExpr(lhs, op, rhs) => format!("{}", op),
             BetweenExpr(e, l, r) => format!("BETWEEEN"),
+            InListExpr(_, _) => format!("IN"),
+            InSubqExpr(_, _) => format!("IN_SUBQ"),
+            ExistsExpr(_) => format!("EXISTS"),
             LogExpr(lhs, op, rhs) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
             AggFunction { aggtype, arg } => format!("{:?}", aggtype),
@@ -458,12 +491,15 @@ impl fmt::Display for Expr {
                 write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
             }
             NegatedExpr(lhs) => write!(f, "-({})", lhs.borrow()),
+            ExistsExpr(lhs) => unimplemented!(),
             RelExpr(lhs, op, rhs) => {
                 write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
             }
             BetweenExpr(e, lhs, rhs) => {
                 write!(f, "({} {} {})", e.borrow(), lhs.borrow(), rhs.borrow())
             }
+            InListExpr(_, _) => unimplemented!(),
+            InSubqExpr(_, _) => unimplemented!(),
             LogExpr(lhs, op, rhs) => {
                 if let Some(rhs) = rhs {
                     write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())

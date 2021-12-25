@@ -5,7 +5,17 @@ digraph example1 {
   subgraph cluster_QB_main {
     label = "QB_main []";
     "QB_main_pt"[shape=point, color=white];
+    "QUN_3"[label="/", color=red]
+    "QUN_3" -> "QB_2_pt";
+  subgraph cluster_QB_2 {
+    label = "QB_2 []";
+    "QB_2_pt"[shape=point, color=white];
+    "QUN_1"[label="T/", color=red]
+}
     "QUN_0"[label="LINEITEM/", color=red]
-    exprnode0x7f9539504ae8[label="*"];
+    exprnode0x7faaa3042818[label="EXISTS"];
+    exprnode0x7faaa30040d8 -> exprnode0x7faaa3042818;
+    exprnode0x7faaa30040d8[label="(subquery)"];
+    exprnode0x7faaa30040d8 -> "QB_2_pt";
 }
 }

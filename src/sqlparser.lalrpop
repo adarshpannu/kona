@@ -207,8 +207,26 @@ LogExprFactor: ExprLink = {
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
     <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Rc::new(RefCell::new(Expr::BetweenExpr(e, l, r))),
-    <e:Expr> "NOT"? "IN" InRHS => Rc::new(RefCell::new(Expr::Star)),
-    "EXISTS" "(" <qblock:QueryBlock> ")" => Rc::new(RefCell::new(Expr::Star)),
+    <e:Expr> <not:"NOT"?> "IN" <mut inexpr:InExprRHS> => {
+        let expr = if inexpr.0 {
+            let subq = inexpr.1.pop().unwrap();
+            Rc::new(RefCell::new(Expr::InSubqExpr(e, subq)))
+        } else {
+            let args = inexpr.1;
+            Rc::new(RefCell::new(Expr::InListExpr(e, args)))
+        };
+        if not.is_some() {
+            Rc::new(RefCell::new(Expr::LogExpr(expr, LogOp::Not, None)))
+        } else {
+            expr
+        }
+    },
+    "EXISTS" "(" <qblock:QueryBlock> ")" => { 
+        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
+        parser_state.add_subquery(subq.clone());
+        let subq = Rc::new(RefCell::new(Subquery(subq)));
+        Rc::new(RefCell::new(ExistsExpr(subq)))
+    },
     "NOT" <e:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(e, LogOp::Not, None))),
     "(" <LogExpr> ")",
 }
@@ -234,9 +252,13 @@ RelOp: RelOp = {
     "NOT" "LIKE" => RelOp::Like, // FIXME
 }
 
-InRHS: usize = {
-    "(" QueryBlock ")" => 1,
-    "(" InList ")" => 2
+InExprRHS: (bool, Vec<ExprLink>) = {
+    "(" <qblock:QueryBlock> ")" => { 
+        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
+        parser_state.add_subquery(subq.clone());
+        (true, vec![Rc::new(RefCell::new(Subquery(subq)))])
+    },
+    "(" <InList> ")" => (false, <>)
 }
 
 InList = CommaSeparatedList<Expr>;
