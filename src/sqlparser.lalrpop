@@ -119,7 +119,7 @@ pub DescribeTable: AST = {
 // -------------------- QUERY --------------------
 
 pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
-    let mut qblocks: Vec<Rc<QueryBlock>> = vec![];
+    let mut qblocks: Vec<QueryBlockLink> = vec![];
     if let Some(mut ctelist) = ctelist {
         qblocks.append(&mut ctelist)
     }
@@ -134,13 +134,19 @@ pub QueryBlock: QueryBlock0 = {
         let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
 
         // Make QUNs from subqueries, if any
-        for subqblock in parser_state.subqueries.iter() {
-            let sq_qun = Quantifier::new(parser_state.next_id(), None, None, Some(Rc::clone(subqblock)));
-            quns.push(sq_qun)
-        }
+        //for subqblock in parser_state.subqueries.iter() {
+        //    let sq_qun = Quantifier::new(parser_state.next_id(), None, None, Some(Rc::clone(subqblock)));
+        //    quns.push(sq_qun)
+        //}
         parser_state.subqueries = vec![];
         (select_list, quns, pred_list)
     }
+};
+
+Subquery: QueryBlockLink = "(" <qblock:QueryBlock> ")" => {
+    let subq = Rc::new(RefCell::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![])));
+    parser_state.add_subquery(subq.clone());
+    subq
 };
 
 TopN = "TOP" Integer;
@@ -154,8 +160,8 @@ WithClause = "WITH" <CTEList>;
 
 CTEList = CommaSeparatedList<CTE>;
 
-CTE: Rc<QueryBlock> = <name:Identifier> "AS" "(" <mut qblock: QueryBlock> ")" => { 
-    Rc::new(QueryBlock::new(parser_state.next_id(), Some(name), QueryBlockType::CTE, qblock.0, qblock.1, qblock.2, vec![]))
+CTE: QueryBlockLink = <name:Identifier> "AS" <mut subq:Subquery> => { 
+    subq
 };
 
 SelectList = CommaSeparatedList<NamedExpr>;
@@ -181,9 +187,8 @@ Quantifier: Quantifier = {
     <schemaname:(Identifier ".")?> <name:Identifier> <alias:correlation_clause?> => {
         Quantifier::new(parser_state.next_id(), Some(name), alias, None)
     },
-    "(" <mut qblock: QueryBlock> ")" <alias:correlation_clause?> => {
-        let qblock = QueryBlock::new(parser_state.next_id(), alias.clone(), QueryBlockType::InlineView, qblock.0, qblock.1, qblock.2, vec![]);
-        Quantifier::new(parser_state.next_id(), None, alias, Some(Rc::new(qblock)))
+    <subq:Subquery> <alias:correlation_clause?> => {
+        Quantifier::new(parser_state.next_id(), None, alias, Some(subq))
     }
 }
 
@@ -221,9 +226,7 @@ RelExpr: ExprLink = {
             expr
         }
     },
-    "EXISTS" "(" <qblock:QueryBlock> ")" => { 
-        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
-        parser_state.add_subquery(subq.clone());
+    "EXISTS" <subq:Subquery> => { 
         let subq = Rc::new(RefCell::new(Subquery(subq)));
         Rc::new(RefCell::new(ExistsExpr(subq)))
     },
@@ -233,9 +236,7 @@ RelExpr: ExprLink = {
 
 RelExprRHS: ExprLink = {
     <rhs:Expr> => rhs,
-    <prefix:SubqueryQuantifier> "(" <qblock:QueryBlock> ")" => { 
-        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
-        parser_state.add_subquery(subq.clone());
+    <prefix:SubqueryQuantifier> <subq:Subquery> => { 
         Rc::new(RefCell::new(Subquery(subq)))
     }
 }
@@ -253,9 +254,7 @@ RelOp: RelOp = {
 }
 
 InExprRHS: (bool, Vec<ExprLink>) = {
-    "(" <qblock:QueryBlock> ")" => { 
-        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
-        parser_state.add_subquery(subq.clone());
+    <subq:Subquery> => { 
         (true, vec![Rc::new(RefCell::new(Subquery(subq)))])
     },
     "(" <InList> ")" => (false, <>)
@@ -288,9 +287,7 @@ Term: ExprLink = {
     AggFunction,
     "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>))),
     "(" <Expr> ")",
-    "(" <qblock:QueryBlock> ")" => { 
-        let subq = Rc::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![]));
-        parser_state.add_subquery(subq.clone());
+    <subq:Subquery> => { 
         Rc::new(RefCell::new(Subquery(subq)))
     }
 }

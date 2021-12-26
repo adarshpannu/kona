@@ -8,17 +8,17 @@ use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
 
-use std::process::Command;
 use crate::row::{Datum, Row};
 use core::panic;
 use std::fmt;
 use std::ops;
+use std::process::Command;
 
 use Expr::*;
 
 pub struct ParserState {
     next_id: RefCell<usize>,
-    pub subqueries: Vec<Rc<QueryBlock>>,
+    pub subqueries: Vec<QueryBlockLink>,
 }
 
 impl ParserState {
@@ -29,7 +29,7 @@ impl ParserState {
         }
     }
 
-    pub fn add_subquery(&mut self, mut qblock: Rc<QueryBlock>) {
+    pub fn add_subquery(&mut self, mut qblock: QueryBlockLink) {
         self.subqueries.push(qblock);
     }
 
@@ -94,11 +94,11 @@ pub struct Quantifier {
     id: usize,
     name: Option<String>,
     alias: Option<String>,
-    qblock: Option<Rc<QueryBlock>>,
+    qblock: Option<QueryBlockLink>,
 }
 
 impl Quantifier {
-    pub fn new(id: usize, name: Option<String>, alias: Option<String>, qblock: Option<Rc<QueryBlock>>) -> Self {
+    pub fn new(id: usize, name: Option<String>, alias: Option<String>, qblock: Option<QueryBlockLink>) -> Self {
         Quantifier {
             id,
             name,
@@ -109,15 +109,22 @@ impl Quantifier {
 
     pub fn display(&self) -> String {
         format!(
-            "{}/{}",
+            "{}/{} {}",
             self.name.as_ref().unwrap_or(&"".to_string()),
-            self.alias.as_ref().unwrap_or(&"".to_string())
+            self.alias.as_ref().unwrap_or(&"".to_string()),
+            if self.qblock.is_some() { "subq" } else { "" }
         )
     }
 
     pub fn name(&self) -> String {
         format!("QUN_{}", self.id)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum Ordering {
+    Asc,
+    Desc,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -128,13 +135,18 @@ pub struct QueryBlock {
     pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
     pub pred_list: Vec<ExprLink>,
-    pub qblocks: Vec<Rc<QueryBlock>>,
+    pub qblocks: Vec<QueryBlockLink>,
+    //pub group_by: Vec<ExprLink>,
+    //pub having_clause: Vec<ExprLink>,
+    //pub order_by: Vec<(ExprLink, Ordering)>,
 }
 
 impl QueryBlock {
     pub fn new(
         id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Vec<ExprLink>, qblocks: Vec<Rc<QueryBlock>>,
+        pred_list: Vec<ExprLink>, qblocks: Vec<QueryBlockLink>, 
+        // group_by: Vec<ExprLink>, having_clause: Vec<ExprLink>,
+        // order_by: Vec<(ExprLink, Ordering)>,
     ) -> Self {
         QueryBlock {
             id,
@@ -144,6 +156,9 @@ impl QueryBlock {
             quns,
             pred_list,
             qblocks,
+            //group_by,
+            //having_clause,
+            //order_by
         }
     }
 
@@ -153,6 +168,10 @@ impl QueryBlock {
         } else {
             format!("QB_{}", self.id)
         }
+    }
+
+    pub fn set_name(&mut self, name: Option<String>) {
+        self.name = name
     }
 }
 
@@ -173,9 +192,19 @@ impl QueryBlock {
         fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
         fprint!(file, "    \"{}_pt\"[shape=point, color=white];\n", self.name());
 
+        /*
+        for nexpr in self.select_list.iter() {
+            let expr = &nexpr.expr;
+            let childaddr = &*expr.borrow() as *const Expr;
+            fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", childaddr, self.name());
+            QGM::write_expr_to_graphvis(expr, file)?;
+        }
+        */
+
         for qun in self.quns.iter().rev() {
             fprint!(file, "    \"{}\"[label=\"{}\", color=red]\n", qun.name(), qun.display());
             if let Some(qblock) = &qun.qblock {
+                let qblock = &*qblock.borrow();
                 fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
                 qblock.write_qblock(file)?
             }
@@ -187,6 +216,7 @@ impl QueryBlock {
 
         // Write subqueries
         for qblock in self.qblocks.iter() {
+            let qblock = &*qblock.borrow();
             qblock.write_qblock(file);
         }
 
@@ -294,7 +324,7 @@ impl QGM {
                 Self::write_expr_to_graphvis(&expr, file)?;
             }
 
-            ScalarFunction {name, args} => {
+            ScalarFunction { name, args } => {
                 for arg in args.iter() {
                     let childaddr = &*arg.borrow() as *const Expr;
                     fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
@@ -302,15 +332,14 @@ impl QGM {
                 }
             }
 
-            AggFunction {aggtype, arg} => {
+            AggFunction { aggtype, arg } => {
                 let childaddr = &*arg.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 Self::write_expr_to_graphvis(&arg, file)?;
             }
 
             Subquery(subq) => {
-                fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", addr, subq.name());
-
+                fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", addr, &*subq.borrow().name());
             }
 
             InSubqExpr(lhs, rhs) => {
@@ -334,13 +363,12 @@ impl QGM {
                 }
                 Self::write_expr_to_graphvis(&lhs, file)?;
             }
-            
+
             ExistsExpr(lhs) => {
                 let childaddr = &*lhs.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 Self::write_expr_to_graphvis(&lhs, file)?;
             }
-
 
             _ => {}
         }
@@ -431,10 +459,7 @@ pub enum AggType {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
-    Column {
-        tablename: Option<String>,
-        colname: String,
-    },
+    Column { tablename: Option<String>, colname: String },
     Star,
     Literal(Datum),
     NegatedExpr(ExprLink),
@@ -445,7 +470,7 @@ pub enum Expr {
     InSubqExpr(ExprLink, ExprLink),
     ExistsExpr(ExprLink),
     LogExpr(ExprLink, LogOp, Option<ExprLink>),
-    Subquery(Rc<QueryBlock>),
+    Subquery(QueryBlockLink),
     AggFunction { aggtype: AggType, arg: ExprLink },
     ScalarFunction { name: String, args: Vec<ExprLink> },
 }
@@ -473,7 +498,7 @@ impl Expr {
             LogExpr(lhs, op, rhs) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
             AggFunction { aggtype, arg } => format!("{:?}", aggtype),
-            ScalarFunction {name, args} => format!("{}()", name),
+            ScalarFunction { name, args } => format!("{}()", name),
         }
     }
 }
@@ -511,7 +536,7 @@ impl fmt::Display for Expr {
                 write!(f, "(subq)")
             }
             AggFunction { aggtype, arg } => write!(f, "{:?} {}", aggtype, arg.borrow()),
-            ScalarFunction { name, args} => write!(f, "{}({:?})", name, args),
+            ScalarFunction { name, args } => write!(f, "{}({:?})", name, args),
         }
     }
 }
@@ -530,9 +555,7 @@ impl Expr {
                     (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
                     (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
                     (Datum::INT(i1), ArithOp::Div, Datum::INT(i2)) => i1 / i2,
-                    _ => panic!(
-                        "Internal error: Operands of ArithOp not resolved yet."
-                    ),
+                    _ => panic!("Internal error: Operands of ArithOp not resolved yet."),
                 };
                 Datum::INT(res)
             }
@@ -546,9 +569,7 @@ impl Expr {
                     (Datum::INT(i1), RelOp::Lt, Datum::INT(i2)) => i1 < i2,
                     (Datum::INT(i1), RelOp::Ge, Datum::INT(i2)) => i1 >= i2,
                     (Datum::INT(i1), RelOp::Gt, Datum::INT(i2)) => i1 > i2,
-                    _ => panic!(
-                        "Internal error: Operands of RelOp not resolved yet."
-                    ),
+                    _ => panic!("Internal error: Operands of RelOp not resolved yet."),
                 };
                 Datum::BOOL(res)
             }

@@ -3,19 +3,25 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_QB_main {
-    label = "QB_main []";
+    label = "QB_main [COL2a]";
     "QB_main_pt"[shape=point, color=white];
-    "QUN_3"[label="/", color=red]
-    "QUN_3" -> "QB_2_pt";
-  subgraph cluster_QB_2 {
-    label = "QB_2 []";
-    "QB_2_pt"[shape=point, color=white];
-    "QUN_1"[label="T/", color=red]
+    "QUN_5"[label="/ subq", color=red]
+    "QUN_5" -> "QB_4_pt";
+  subgraph cluster_QB_4 {
+    label = "QB_4 [COL3a]";
+    "QB_4_pt"[shape=point, color=white];
+    "QUN_3"[label="T3/ ", color=red]
 }
-    "QUN_0"[label="LINEITEM/", color=red]
-    exprnode0x7faaa3042818[label="EXISTS"];
-    exprnode0x7faaa30040d8 -> exprnode0x7faaa3042818;
-    exprnode0x7faaa30040d8[label="(subquery)"];
-    exprnode0x7faaa30040d8 -> "QB_2_pt";
+    "QUN_2"[label="T2/ ", color=red]
+    exprnode0x7fa844c33ac8[label=">"];
+    exprnode0x7fa844c32ca8 -> exprnode0x7fa844c33ac8;
+    exprnode0x7fa844c33a78 -> exprnode0x7fa844c33ac8;
+    exprnode0x7fa844c32ca8[label="COL2B"];
+    exprnode0x7fa844c33a78[label="100"];
+  subgraph cluster_QB_1 {
+    label = "QB_1 [COL1a]";
+    "QB_1_pt"[shape=point, color=white];
+    "QUN_0"[label="T1/ ", color=red]
+}
 }
 }

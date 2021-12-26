@@ -22,6 +22,7 @@ pub use typed_arena::Arena;
 pub type NodeArena = Arena<crate::flow::Node>;
 
 pub type ExprLink = std::rc::Rc<std::cell::RefCell<crate::ast::Expr>>;
+pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::ast::QueryBlock>>;
 
 macro_rules! mkrcrc {
     ($arg:expr) => {{
