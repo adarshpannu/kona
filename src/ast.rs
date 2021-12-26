@@ -1,39 +1,17 @@
 use crate::includes::*;
-
-use crate::metadata::TableDesc;
 use crate::sqlparser;
+use Expr::*;
+use crate::row::{Datum, Row};
 
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
 
-use crate::row::{Datum, Row};
 use core::panic;
 use std::fmt;
 use std::ops;
 use std::process::Command;
-
-use Expr::*;
-
-pub struct ParserState {
-    next_id: RefCell<usize>,
-}
-
-impl ParserState {
-    pub fn new() -> Self {
-        ParserState {
-            next_id: RefCell::new(0),
-        }
-    }
-
-    pub fn next_id(&self) -> usize {
-        let mut id = self.next_id.borrow_mut();
-        let retval = *id;
-        *id = *id + 1;
-        retval
-    }
-}
 
 #[derive(Debug)]
 pub enum AST {
@@ -223,6 +201,24 @@ impl QueryBlock {
         fprint!(file, "}}\n");
 
         Ok(())
+    }
+}
+
+pub struct ParserState {
+    next_id: usize,
+}
+
+impl ParserState {
+    pub fn new() -> Self {
+        ParserState {
+            next_id: 0,
+        }
+    }
+
+    pub fn next_id(&mut self) -> usize {
+        let retval = self.next_id;
+        self.next_id += 1;
+        retval
     }
 }
 
@@ -501,7 +497,7 @@ impl Expr {
                 }
             }
             Star => format!("*"),
-            Literal(v) => format!("{}", v),
+            Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
             BinaryExpr(lhs, op, rhs) => format!("{:?}", op),
             NegatedExpr(lhs) => "-".to_string(),
             RelExpr(lhs, op, rhs) => format!("{}", op),

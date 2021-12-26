@@ -1,0 +1,5 @@
+
+
+SELECT COL1 FROM T1
+WHERE COL2 NOT LIKE "abc%"
+;

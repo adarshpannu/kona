@@ -3,42 +3,30 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [COL1a, COL2a]";
+    label = "main [name, DEPT_ID]";
     "main_pt"[shape=point, color=white];
-    "QUN_8"[label="/SQ1 subq", color=red]
-    "QUN_8" -> "QB_7_pt";
-  subgraph cluster_QB_7 {
-    label = "QB_7 [COL3a]";
-    "QB_7_pt"[shape=point, color=white];
-    "QUN_4"[label="T3/ ", color=red]
-    exprnode0x7fd09155fad8[label=">="];
-    exprnode0x7fd09155e1c8 -> exprnode0x7fd09155fad8;
-    exprnode0x7fd09155fa88 -> exprnode0x7fd09155fad8;
-    exprnode0x7fd09155e1c8[label="COL3b"];
-    exprnode0x7fd09155fa88[label="(subquery)"];
-    exprnode0x7fd09155fa88 -> "QB_6_pt";
-  subgraph cluster_QB_6 {
-    label = "QB_6 []";
-    "QB_6_pt"[shape=point, color=white];
-    "QUN_5"[label="T4/ ", color=red]
-    exprnode0x7fd09155f968[label="="];
-    exprnode0x7fd09155ef58 -> exprnode0x7fd09155f968;
-    exprnode0x7fd09155f918 -> exprnode0x7fd09155f968;
-    exprnode0x7fd09155ef58[label="COL4b"];
-    exprnode0x7fd09155f918[label="999"];
-}
-}
-    "QUN_3"[label="T2/ ", color=red]
-    "QUN_2"[label="CTE1/ ", color=red]
-    exprnode0x7fd09155c428[label=">"];
-    exprnode0x7fd09155fc38 -> exprnode0x7fd09155c428;
-    exprnode0x7fd09155c3d8 -> exprnode0x7fd09155c428;
-    exprnode0x7fd09155fc38[label="COL2B"];
-    exprnode0x7fd09155c3d8[label="100"];
-}
-  subgraph cluster_CTE1 {
-    label = "CTE1 [COL1a]";
-    "CTE1_pt"[shape=point, color=white];
-    "QUN_0"[label="T1/ ", color=red]
+    "QUN_1"[label="DEPT/ ", color=red]
+    "QUN_0"[label="EMP/ ", color=red]
+    exprnode0x7f9711d35d08[label="And"];
+    exprnode0x7f9711d35b68 -> exprnode0x7f9711d35d08;
+    exprnode0x7f9711d35cb8 -> exprnode0x7f9711d35d08;
+    exprnode0x7f9711d35b68[label="And"];
+    exprnode0x7f9711d34bf8 -> exprnode0x7f9711d35b68;
+    exprnode0x7f9711d35b18 -> exprnode0x7f9711d35b68;
+    exprnode0x7f9711d34bf8[label="="];
+    exprnode0x7f9711d344a8 -> exprnode0x7f9711d34bf8;
+    exprnode0x7f9711d34ba8 -> exprnode0x7f9711d34bf8;
+    exprnode0x7f9711d344a8[label="EMP.DEPT_ID"];
+    exprnode0x7f9711d34ba8[label="DEPT.DEPT_ID"];
+    exprnode0x7f9711d35b18[label=">"];
+    exprnode0x7f9711d350c8 -> exprnode0x7f9711d35b18;
+    exprnode0x7f9711d35ac8 -> exprnode0x7f9711d35b18;
+    exprnode0x7f9711d350c8[label="EMP.age"];
+    exprnode0x7f9711d35ac8[label="35"];
+    exprnode0x7f9711d35cb8[label="="];
+    exprnode0x7f9711d35bf8 -> exprnode0x7f9711d35cb8;
+    exprnode0x7f9711d35c68 -> exprnode0x7f9711d35cb8;
+    exprnode0x7f9711d35bf8[label="DEPT.NAME"];
+    exprnode0x7f9711d35c68[label="\"Engineering\""];
 }
 }

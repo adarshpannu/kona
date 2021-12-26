@@ -35,7 +35,7 @@ impl fmt::Display for Column {
         match self {
             Column::INT(il) => write!(f, "{}", il),
             Column::DOUBLE(i1, i2) => write!(f, "{}.{}", i1, i2),
-            Column::STR(sl) => write!(f, "{}", sl),
+            Column::STR(sl) => write!(f, "\"{}\"", sl),
             Column::BOOL(bl) => write!(f, "{}", bl),
         }
     }

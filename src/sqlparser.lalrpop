@@ -210,6 +210,14 @@ LogExprFactor: ExprLink = {
 
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => Expr::newlink(RelExpr(l, op, r)),
+    <l:Expr> <not:"NOT"?> "LIKE" <r:RelExprRHS> => {
+        let expr = Expr::newlink(RelExpr(l, RelOp::Like, r));
+        if not.is_some() {
+            Expr::newlink(LogExpr(expr, LogOp::Not, None))
+        } else {
+            expr
+        }
+    },
     <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Expr::newlink(BetweenExpr(e, l, r)),
     <e:Expr> <not:"NOT"?> "IN" <mut inexpr:InExprRHS> => {
         let expr = if inexpr.0 {
@@ -246,8 +254,6 @@ RelOp: RelOp = {
     "!=" => RelOp::Ne,
     "<>" => RelOp::Ne,
     "=" => RelOp::Eq,
-    "LIKE" => RelOp::Like,
-    "NOT" "LIKE" => RelOp::Like, // FIXME
 }
 
 InExprRHS: (bool, Vec<ExprLink>) = {
