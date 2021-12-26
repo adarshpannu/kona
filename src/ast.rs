@@ -50,6 +50,7 @@ pub enum AST {
 #[derive(Debug)]
 pub struct QGM {
     pub qblock: QueryBlock,
+    pub cte_list: Vec<QueryBlockLink>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,9 +117,15 @@ impl Quantifier {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-enum Ordering {
+pub enum Ordering {
     Asc,
     Desc,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum DistinctProperty {
+    All,
+    Distinct
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -126,21 +133,23 @@ pub struct QueryBlock {
     id: usize,
     pub name: Option<String>,
     pub qbtype: QueryBlockType,
-    pub select_list: Vec<NamedExpr>,
-    pub quns: Vec<Quantifier>,
-    pub pred_list: Vec<ExprLink>,
-    pub qblocks: Vec<QueryBlockLink>,
-    //pub group_by: Vec<ExprLink>,
-    //pub having_clause: Vec<ExprLink>,
-    //pub order_by: Vec<(ExprLink, Ordering)>,
+    select_list: Vec<NamedExpr>,
+    quns: Vec<Quantifier>,
+    pred_list: Vec<ExprLink>,
+    group_by: Option<Vec<ExprLink>>,
+    having_clause: Option<ExprLink>,
+    order_by: Option<Vec<(ExprLink, Ordering)>>,
+    distinct: DistinctProperty,
+    topN: Option<usize>
 }
 
 impl QueryBlock {
     pub fn new(
         id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Vec<ExprLink>, qblocks: Vec<QueryBlockLink>, 
-        // group_by: Vec<ExprLink>, having_clause: Vec<ExprLink>,
-        // order_by: Vec<(ExprLink, Ordering)>,
+        pred_list: Vec<ExprLink>, group_by: Option<Vec<ExprLink>>, having_clause: Option<ExprLink>,
+        order_by: Option<Vec<(ExprLink, Ordering)>>,
+        distinct: DistinctProperty,
+        topN: Option<usize>
     ) -> Self {
         QueryBlock {
             id,
@@ -149,10 +158,11 @@ impl QueryBlock {
             select_list,
             quns,
             pred_list,
-            qblocks,
-            //group_by,
-            //having_clause,
-            //order_by
+            group_by,
+            having_clause,
+            order_by,
+            distinct,
+            topN
         }
     }
 
@@ -212,12 +222,6 @@ impl QueryBlock {
 
         fprint!(file, "}}\n");
 
-        // Write subqueries (CTEs)
-        for qblock in self.qblocks.iter() {
-            let qblock = &*qblock.borrow();
-            qblock.write_to_graphviz(file);
-        }
-        
         Ok(())
     }
 }
@@ -237,6 +241,13 @@ impl QGM {
         //fprint!(file, "    node [style=filled,color=white];\n");
 
         self.qblock.write_to_graphviz(&mut file);
+
+        // Write subqueries (CTEs)
+        for qblock in self.cte_list.iter() {
+            let qblock = &*qblock.borrow();
+            qblock.write_to_graphviz(&mut file);
+        }
+
         fprint!(file, "}}\n");
 
         drop(file);
