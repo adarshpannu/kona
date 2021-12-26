@@ -7,7 +7,7 @@ use crate::ast::{Expr::*, *};
 use crate::row::*;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlock0, QueryBlockType, QGM, ParserState, Quantifier};
+use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier};
 
 grammar(parser_state: &mut ParserState);
 
@@ -118,33 +118,29 @@ pub DescribeTable: AST = {
 
 // -------------------- QUERY --------------------
 
-pub FullSelect: AST = <mut ctelist:WithClause?> <qblock:QueryBlock> => {
+pub FullSelect: AST = <mut ctelist:WithClause?> <mut qblock:QueryBlock> => {
     let mut qblocks: Vec<QueryBlockLink> = vec![];
     if let Some(mut ctelist) = ctelist {
         qblocks.append(&mut ctelist)
     }
 
-    let qblock = QueryBlock::new(parser_state.next_id(), Some(String::from("main")), QueryBlockType::Main, qblock.0, qblock.1, qblock.2, qblocks);
+    qblock.name = Some(String::from("main"));
+    qblock.qbtype = QueryBlockType::Main;
+    qblock.qblocks = qblocks;
+
     let qgm = QGM { qblock };
     AST::QGM(qgm)
 };
 
-pub QueryBlock: QueryBlock0 = {
+pub QueryBlock: QueryBlock = {
     "SELECT" TopN? AllOrDistinct? <select_list: SelectList> "FROM" <mut quns: FromList> <pred_list: WhereClause?> GroupByClause? HavingClause? OrderByClause?  => {
         let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
-
-        // Make QUNs from subqueries, if any
-        //for subqblock in parser_state.subqueries.iter() {
-        //    let sq_qun = Quantifier::new(parser_state.next_id(), None, None, Some(Rc::clone(subqblock)));
-        //    quns.push(sq_qun)
-        //}
-        parser_state.subqueries = vec![];
-        (select_list, quns, pred_list)
+        QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, select_list, quns, pred_list, vec![])
     }
 };
 
 Subquery: QueryBlockLink = "(" <qblock:QueryBlock> ")" => {
-    let subq = Rc::new(RefCell::new(QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, qblock.0, qblock.1, qblock.2, vec![])));
+    let subq = Rc::new(RefCell::new(qblock));
     parser_state.add_subquery(subq.clone());
     subq
 };
@@ -160,8 +156,10 @@ WithClause = "WITH" <CTEList>;
 
 CTEList = CommaSeparatedList<CTE>;
 
-CTE: QueryBlockLink = <name:Identifier> "AS" <mut subq:Subquery> => { 
-    subq
+CTE: QueryBlockLink = <name:Identifier> "AS" <mut subqlink:Subquery> => {
+    let mut subq = &mut *subqlink.borrow_mut();
+    subq.name = Some(name);
+    subqlink.clone()
 };
 
 SelectList = CommaSeparatedList<NamedExpr>;
@@ -195,49 +193,49 @@ Quantifier: Quantifier = {
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = {
-    "*" => NamedExpr::new(None, Rc::new(RefCell::new(Expr::Star))),
+    "*" => NamedExpr::new(None, Expr::newlink(Expr::Star)),
     <expr:Expr> <name:("AS" Identifier)?> => NamedExpr::new(name.map(|e| e.1), expr)
 }
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
-    <l:LogExpr> "OR" <r:LogExprFactor> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::Or, Some(r)))),
+    <l:LogExpr> "OR" <r:LogExprFactor> => Expr::newlink(Expr::LogExpr(l, LogOp::Or, Some(r))),
 }
 
 LogExprFactor: ExprLink = {
-    <l:LogExprFactor> "AND" <r:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(l, LogOp::And, Some(r)))),
+    <l:LogExprFactor> "AND" <r:RelExpr> => Expr::newlink(Expr::LogExpr(l, LogOp::And, Some(r))),
     RelExpr,
 }
 
 RelExpr: ExprLink = {
-    <l:Expr> <op:RelOp> <r:RelExprRHS> => Rc::new(RefCell::new(Expr::RelExpr(l, op, r))),
-    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Rc::new(RefCell::new(Expr::BetweenExpr(e, l, r))),
+    <l:Expr> <op:RelOp> <r:RelExprRHS> => Expr::newlink(RelExpr(l, op, r)),
+    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Expr::newlink(BetweenExpr(e, l, r)),
     <e:Expr> <not:"NOT"?> "IN" <mut inexpr:InExprRHS> => {
         let expr = if inexpr.0 {
             let subq = inexpr.1.pop().unwrap();
-            Rc::new(RefCell::new(Expr::InSubqExpr(e, subq)))
+            Expr::newlink(Expr::InSubqExpr(e, subq))
         } else {
             let args = inexpr.1;
-            Rc::new(RefCell::new(Expr::InListExpr(e, args)))
+            Expr::newlink(Expr::InListExpr(e, args))
         };
         if not.is_some() {
-            Rc::new(RefCell::new(Expr::LogExpr(expr, LogOp::Not, None)))
+            Expr::newlink(Expr::LogExpr(expr, LogOp::Not, None))
         } else {
             expr
         }
     },
     "EXISTS" <subq:Subquery> => { 
-        let subq = Rc::new(RefCell::new(Subquery(subq)));
-        Rc::new(RefCell::new(ExistsExpr(subq)))
+        let subq = Expr::newlink(Subquery(subq));
+        Expr::newlink(ExistsExpr(subq))
     },
-    "NOT" <e:RelExpr> => Rc::new(RefCell::new(Expr::LogExpr(e, LogOp::Not, None))),
+    "NOT" <e:RelExpr> => Expr::newlink(Expr::LogExpr(e, LogOp::Not, None)),
     "(" <LogExpr> ")",
 }
 
 RelExprRHS: ExprLink = {
     <rhs:Expr> => rhs,
     <prefix:SubqueryQuantifier> <subq:Subquery> => { 
-        Rc::new(RefCell::new(Subquery(subq)))
+        Expr::newlink(Subquery(subq))
     }
 }
 
@@ -255,7 +253,7 @@ RelOp: RelOp = {
 
 InExprRHS: (bool, Vec<ExprLink>) = {
     <subq:Subquery> => { 
-        (true, vec![Rc::new(RefCell::new(Subquery(subq)))])
+        (true, vec![Expr::newlink(Subquery(subq))])
     },
     "(" <InList> ")" => (false, <>)
 }
@@ -268,35 +266,35 @@ SubqueryQuantifier = {
 }
 
 pub Expr: ExprLink = {
-    <l:Expr> "+" <r:Factor> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Add, r))),
-    <l:Expr> "-" <r:Factor> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Sub, r))),
+    <l:Expr> "+" <r:Factor> => Expr::newlink(BinaryExpr(l, ArithOp::Add, r)),
+    <l:Expr> "-" <r:Factor> => Expr::newlink(BinaryExpr(l, ArithOp::Sub, r)),
     Factor,
 }
 
 Factor: ExprLink = {
-    <l:Factor> "*" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Mul, r))),
-    <l:Factor> "/" <r:Term> => Rc::new(RefCell::new(BinaryExpr(l, ArithOp::Div, r))),
+    <l:Factor> "*" <r:Term> => Expr::newlink(BinaryExpr(l, ArithOp::Mul, r)),
+    <l:Factor> "/" <r:Term> => Expr::newlink(BinaryExpr(l, ArithOp::Div, r)),
     Term,
 }
 
 Term: ExprLink = {
-    <cr:ColumnReference> => Rc::new(RefCell::new(Column { tablename: cr.0, colname: cr.1 } )),
-    QuotedString => { Rc::new(RefCell::new(Literal(Datum::STR(Box::new(<>))))) },
+    <cr:ColumnReference> => Expr::newlink(Column { tablename: cr.0, colname: cr.1 } ),
+    QuotedString => { Expr::newlink(Literal(Datum::STR(Box::new(<>)))) },
     Number,
     ScalarFunction,
     AggFunction,
-    "-" <Term> => Rc::new(RefCell::new(NegatedExpr(<>))),
+    "-" <Term> => Expr::newlink(NegatedExpr(<>)),
     "(" <Expr> ")",
     <subq:Subquery> => { 
-        Rc::new(RefCell::new(Subquery(subq)))
+        Expr::newlink(Subquery(subq))
     }
 }
 
 AggFunction: ExprLink = {
-    <aggtype:AggName> "(" <arg:AggArg> ")" => Rc::new(RefCell::new(AggFunction { aggtype, arg })),
+    <aggtype:AggName> "(" <arg:AggArg> ")" => Expr::newlink(AggFunction { aggtype, arg }),
     "COUNT" "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
         let aggtype = if distinct.is_some() { AggType::COUNT_DISTINCT } else { AggType::COUNT };
-        Rc::new(RefCell::new(AggFunction { aggtype, arg })) 
+        Expr::newlink(AggFunction { aggtype, arg }) 
     }
 }
 
@@ -309,15 +307,15 @@ AggName: AggType = {
 
 AggArg: ExprLink = {
     <arg:Expr> => arg,
-    "*" => Rc::new(RefCell::new(Expr::Star))
+    "*" => Expr::newlink(Expr::Star)
 }
 
 ScalarFunction: ExprLink = {
-    <name:Identifier> "(" <args:FunctionArgs> ")" => Rc::new(RefCell::new(ScalarFunction { name, args })),
+    <name:Identifier> "(" <args:FunctionArgs> ")" => Expr::newlink(ScalarFunction { name, args }),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
-        let datatype = Rc::new(RefCell::new(Literal(Datum::STR(Box::new(datatype.to_string())))));
+        let datatype = Expr::newlink(Literal(Datum::STR(Box::new(datatype.to_string()))));
         let args = vec![arg, datatype];
-        Rc::new(RefCell::new(ScalarFunction { name: "CAST".to_string(), args }))
+        Expr::newlink(ScalarFunction { name: "CAST".to_string(), args })
     }
 }
 
@@ -325,11 +323,11 @@ FunctionArgs = CommaSeparatedList<Expr>;
 
 Number: ExprLink = {
     Integer =>? { isize::from_str(<>)
-        .map(|i| Rc::new(RefCell::new(Literal(Datum::INT(i)))))
+        .map(|i| Expr::newlink(Literal(Datum::INT(i))))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
     Double =>? { f64::from_str(<>)
-        .map(|d| Rc::new(RefCell::new(Literal(Datum::DOUBLE(111, 222)))))
+        .map(|d| Expr::newlink(Literal(Datum::DOUBLE(111, 222))))
         .map_err(|_| ParseError::User { error: "Invalid double" }) 
     },
 }

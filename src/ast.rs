@@ -163,7 +163,9 @@ impl QueryBlock {
     }
 
     pub fn name(&self) -> String {
-        if self.qbtype == QueryBlockType::Main {
+        if self.name.is_some() {
+            format!("{}", self.name.as_ref().unwrap())
+        } else if self.qbtype == QueryBlockType::Main {
             format!("QB_main")
         } else {
             format!("QB_{}", self.id)
@@ -476,6 +478,10 @@ pub enum Expr {
 }
 
 impl Expr {
+    pub fn newlink(expr: Expr) -> ExprLink {
+        Rc::new(RefCell::new(expr))
+    }
+    
     pub fn name(&self) -> String {
         match self {
             CID(cid) => format!("CID: {}", cid),
