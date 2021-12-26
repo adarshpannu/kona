@@ -3,25 +3,42 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [COL2a]";
+    label = "main [COL1a, COL2a]";
     "main_pt"[shape=point, color=white];
-    "QUN_5"[label="/ subq", color=red]
-    "QUN_5" -> "QB_4_pt";
-  subgraph cluster_QB_4 {
-    label = "QB_4 [COL3a]";
-    "QB_4_pt"[shape=point, color=white];
-    "QUN_3"[label="T3/ ", color=red]
+    "QUN_8"[label="/SQ1 subq", color=red]
+    "QUN_8" -> "QB_7_pt";
+  subgraph cluster_QB_7 {
+    label = "QB_7 [COL3a]";
+    "QB_7_pt"[shape=point, color=white];
+    "QUN_4"[label="T3/ ", color=red]
+    exprnode0x7fd0ee40e858[label=">="];
+    exprnode0x7fd0ee405578 -> exprnode0x7fd0ee40e858;
+    exprnode0x7fd0ee40e808 -> exprnode0x7fd0ee40e858;
+    exprnode0x7fd0ee405578[label="COL3b"];
+    exprnode0x7fd0ee40e808[label="(subquery)"];
+    exprnode0x7fd0ee40e808 -> "QB_6_pt";
+  subgraph cluster_QB_6 {
+    label = "QB_6 []";
+    "QB_6_pt"[shape=point, color=white];
+    "QUN_5"[label="T4/ ", color=red]
+    exprnode0x7fd0ee40e708[label="="];
+    exprnode0x7fd0ee406338 -> exprnode0x7fd0ee40e708;
+    exprnode0x7fd0ee40e6b8 -> exprnode0x7fd0ee40e708;
+    exprnode0x7fd0ee406338[label="COL4b"];
+    exprnode0x7fd0ee40e6b8[label="999"];
 }
-    "QUN_2"[label="T2/ ", color=red]
-    exprnode0x7feed3e09738[label=">"];
-    exprnode0x7feed3e055b8 -> exprnode0x7feed3e09738;
-    exprnode0x7feed3e096e8 -> exprnode0x7feed3e09738;
-    exprnode0x7feed3e055b8[label="COL2B"];
-    exprnode0x7feed3e096e8[label="100"];
+}
+    "QUN_3"[label="T2/ ", color=red]
+    "QUN_2"[label="CTE1/ ", color=red]
+    exprnode0x7fd0ee40ee88[label=">"];
+    exprnode0x7fd0ee40e9d8 -> exprnode0x7fd0ee40ee88;
+    exprnode0x7fd0ee40ee38 -> exprnode0x7fd0ee40ee88;
+    exprnode0x7fd0ee40e9d8[label="COL2B"];
+    exprnode0x7fd0ee40ee38[label="100"];
+}
   subgraph cluster_CTE1 {
     label = "CTE1 [COL1a]";
     "CTE1_pt"[shape=point, color=white];
     "QUN_0"[label="T1/ ", color=red]
-}
 }
 }

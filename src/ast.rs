@@ -18,19 +18,13 @@ use Expr::*;
 
 pub struct ParserState {
     next_id: RefCell<usize>,
-    pub subqueries: Vec<QueryBlockLink>,
 }
 
 impl ParserState {
     pub fn new() -> Self {
         ParserState {
             next_id: RefCell::new(0),
-            subqueries: vec![],
         }
-    }
-
-    pub fn add_subquery(&mut self, mut qblock: QueryBlockLink) {
-        self.subqueries.push(qblock);
     }
 
     pub fn next_id(&self) -> usize {
@@ -184,7 +178,7 @@ macro_rules! fprint {
 }
 
 impl QueryBlock {
-    pub(crate) fn write_qblock(&self, file: &mut File) -> std::io::Result<()> {
+    pub(crate) fn write_to_graphviz(&self, file: &mut File) -> std::io::Result<()> {
         // Write current query block first
         let s = "".to_string();
         let select_names: Vec<&String> = self.select_list.iter().map(|e| e.name.as_ref().unwrap_or(&s)).collect();
@@ -208,7 +202,7 @@ impl QueryBlock {
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
                 fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
-                qblock.write_qblock(file)?
+                qblock.write_to_graphviz(file)?
             }
         }
 
@@ -216,13 +210,14 @@ impl QueryBlock {
             QGM::write_expr_to_graphvis(&self.pred_list[0], file);
         }
 
-        // Write subqueries
+        fprint!(file, "}}\n");
+
+        // Write subqueries (CTEs)
         for qblock in self.qblocks.iter() {
             let qblock = &*qblock.borrow();
-            qblock.write_qblock(file);
+            qblock.write_to_graphviz(file);
         }
-
-        fprint!(file, "}}\n");
+        
         Ok(())
     }
 }
@@ -241,7 +236,7 @@ impl QGM {
         //fprint!(file, "    color=lightgrey;\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
 
-        self.qblock.write_qblock(&mut file);
+        self.qblock.write_to_graphviz(&mut file);
         fprint!(file, "}}\n");
 
         drop(file);
@@ -341,7 +336,9 @@ impl QGM {
             }
 
             Subquery(subq) => {
-                fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", addr, &*subq.borrow().name());
+                let subq = &*subq.borrow();
+                fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", addr, subq.name());
+                subq.write_to_graphviz(file);
             }
 
             InSubqExpr(lhs, rhs) => {
@@ -481,7 +478,7 @@ impl Expr {
     pub fn newlink(expr: Expr) -> ExprLink {
         Rc::new(RefCell::new(expr))
     }
-    
+
     pub fn name(&self) -> String {
         match self {
             CID(cid) => format!("CID: {}", cid),

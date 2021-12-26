@@ -141,7 +141,6 @@ pub QueryBlock: QueryBlock = {
 
 Subquery: QueryBlockLink = "(" <qblock:QueryBlock> ")" => {
     let subq = Rc::new(RefCell::new(qblock));
-    parser_state.add_subquery(subq.clone());
     subq
 };
 
@@ -159,6 +158,7 @@ CTEList = CommaSeparatedList<CTE>;
 CTE: QueryBlockLink = <name:Identifier> "AS" <mut subqlink:Subquery> => {
     let mut subq = &mut *subqlink.borrow_mut();
     subq.name = Some(name);
+    subq.qbtype = QueryBlockType::CTE;
     subqlink.clone()
 };
 
@@ -193,17 +193,17 @@ Quantifier: Quantifier = {
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = {
-    "*" => NamedExpr::new(None, Expr::newlink(Expr::Star)),
+    "*" => NamedExpr::new(None, Expr::newlink(Star)),
     <expr:Expr> <name:("AS" Identifier)?> => NamedExpr::new(name.map(|e| e.1), expr)
 }
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
-    <l:LogExpr> "OR" <r:LogExprFactor> => Expr::newlink(Expr::LogExpr(l, LogOp::Or, Some(r))),
+    <l:LogExpr> "OR" <r:LogExprFactor> => Expr::newlink(LogExpr(l, LogOp::Or, Some(r))),
 }
 
 LogExprFactor: ExprLink = {
-    <l:LogExprFactor> "AND" <r:RelExpr> => Expr::newlink(Expr::LogExpr(l, LogOp::And, Some(r))),
+    <l:LogExprFactor> "AND" <r:RelExpr> => Expr::newlink(LogExpr(l, LogOp::And, Some(r))),
     RelExpr,
 }
 
@@ -213,13 +213,13 @@ RelExpr: ExprLink = {
     <e:Expr> <not:"NOT"?> "IN" <mut inexpr:InExprRHS> => {
         let expr = if inexpr.0 {
             let subq = inexpr.1.pop().unwrap();
-            Expr::newlink(Expr::InSubqExpr(e, subq))
+            Expr::newlink(InSubqExpr(e, subq))
         } else {
             let args = inexpr.1;
-            Expr::newlink(Expr::InListExpr(e, args))
+            Expr::newlink(InListExpr(e, args))
         };
         if not.is_some() {
-            Expr::newlink(Expr::LogExpr(expr, LogOp::Not, None))
+            Expr::newlink(LogExpr(expr, LogOp::Not, None))
         } else {
             expr
         }
@@ -228,15 +228,13 @@ RelExpr: ExprLink = {
         let subq = Expr::newlink(Subquery(subq));
         Expr::newlink(ExistsExpr(subq))
     },
-    "NOT" <e:RelExpr> => Expr::newlink(Expr::LogExpr(e, LogOp::Not, None)),
+    "NOT" <e:RelExpr> => Expr::newlink(LogExpr(e, LogOp::Not, None)),
     "(" <LogExpr> ")",
 }
 
 RelExprRHS: ExprLink = {
     <rhs:Expr> => rhs,
-    <prefix:SubqueryQuantifier> <subq:Subquery> => { 
-        Expr::newlink(Subquery(subq))
-    }
+    <prefix:SubqueryQuantifier> <subq:Subquery> => Expr::newlink(Subquery(subq))
 }
 
 RelOp: RelOp = {
@@ -252,9 +250,7 @@ RelOp: RelOp = {
 }
 
 InExprRHS: (bool, Vec<ExprLink>) = {
-    <subq:Subquery> => { 
-        (true, vec![Expr::newlink(Subquery(subq))])
-    },
+    <subq:Subquery> => (true, vec![Expr::newlink(Subquery(subq))]),
     "(" <InList> ")" => (false, <>)
 }
 
@@ -279,15 +275,13 @@ Factor: ExprLink = {
 
 Term: ExprLink = {
     <cr:ColumnReference> => Expr::newlink(Column { tablename: cr.0, colname: cr.1 } ),
-    QuotedString => { Expr::newlink(Literal(Datum::STR(Box::new(<>)))) },
+    QuotedString => Expr::newlink(Literal(Datum::STR(Box::new(<>)))),
     Number,
     ScalarFunction,
     AggFunction,
     "-" <Term> => Expr::newlink(NegatedExpr(<>)),
     "(" <Expr> ")",
-    <subq:Subquery> => { 
-        Expr::newlink(Subquery(subq))
-    }
+    <subq:Subquery> => Expr::newlink(Subquery(subq))
 }
 
 AggFunction: ExprLink = {
@@ -307,7 +301,7 @@ AggName: AggType = {
 
 AggArg: ExprLink = {
     <arg:Expr> => arg,
-    "*" => Expr::newlink(Expr::Star)
+    "*" => Expr::newlink(Star)
 }
 
 ScalarFunction: ExprLink = {
@@ -315,7 +309,7 @@ ScalarFunction: ExprLink = {
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
         let datatype = Expr::newlink(Literal(Datum::STR(Box::new(datatype.to_string()))));
         let args = vec![arg, datatype];
-        Expr::newlink(ScalarFunction { name: "CAST".to_string(), args })
+        Expr::newlink(ScalarFunction { name: String::from("CAST"), args })
     }
 }
 
@@ -327,7 +321,7 @@ Number: ExprLink = {
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
     Double =>? { f64::from_str(<>)
-        .map(|d| Expr::newlink(Literal(Datum::DOUBLE(111, 222))))
+        .map(|d| Expr::newlink(Literal(Datum::DOUBLE(111, 222)))) // FIXME
         .map_err(|_| ParseError::User { error: "Invalid double" }) 
     },
 }
