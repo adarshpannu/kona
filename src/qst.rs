@@ -36,6 +36,13 @@ impl QGM {
     }
 
     fn check(exprlink: &ExprLink) {
-        
+
+    }
+}
+
+impl Expr {
+    pub fn children() -> Vec<ExprLink> {
+        let retval = vec![];
+        retval
     }
 }

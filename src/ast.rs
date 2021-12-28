@@ -328,7 +328,7 @@ impl QGM {
                 Self::write_expr_to_graphvis(&expr, file)?;
             }
 
-            ScalarFunction { name, args } => {
+            ScalarFunction(name, args) => {
                 for arg in args.iter() {
                     let childaddr = &*arg.borrow() as *const Expr;
                     fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
@@ -336,7 +336,7 @@ impl QGM {
                 }
             }
 
-            AggFunction { aggtype, arg } => {
+            AggFunction(aggtype, arg) => {
                 let childaddr = &*arg.borrow() as *const Expr;
                 fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
                 Self::write_expr_to_graphvis(&arg, file)?;
@@ -477,8 +477,8 @@ pub enum Expr {
     ExistsExpr(ExprLink),
     LogExpr(ExprLink, LogOp, Option<ExprLink>),
     Subquery(QueryBlockLink),
-    AggFunction { aggtype: AggType, arg: ExprLink },
-    ScalarFunction { name: String, args: Vec<ExprLink> },
+    AggFunction(AggType, ExprLink),
+    ScalarFunction(String, Vec<ExprLink>)
 }
 
 impl Expr {
@@ -507,8 +507,8 @@ impl Expr {
             ExistsExpr(_) => format!("EXISTS"),
             LogExpr(lhs, op, rhs) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
-            AggFunction { aggtype, arg } => format!("{:?}", aggtype),
-            ScalarFunction { name, args } => format!("{}()", name),
+            AggFunction (aggtype, arg ) => format!("{:?}", aggtype),
+            ScalarFunction(name, args ) => format!("{}()", name),
         }
     }
 }
@@ -545,8 +545,8 @@ impl fmt::Display for Expr {
             Subquery(qblock) => {
                 write!(f, "(subq)")
             }
-            AggFunction { aggtype, arg } => write!(f, "{:?} {}", aggtype, arg.borrow()),
-            ScalarFunction { name, args } => write!(f, "{}({:?})", name, args),
+            AggFunction (aggtype, arg) => write!(f, "{:?} {}", aggtype, arg.borrow()),
+            ScalarFunction ( name, args) => write!(f, "{}({:?})", name, args),
         }
     }
 }
