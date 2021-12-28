@@ -134,7 +134,7 @@ pub QueryBlock: QueryBlock = {
     <group_by:GroupByClause?> 
     <having:HavingClause?> 
     <order_by:OrderByClause?>  => {
-        let pred_list = if pred_list.is_some() { vec![pred_list.unwrap()] } else { vec![] };
+        //let pred_list = if pred_list.is_some() { Some(pred_list.unwrap()) } else { None };
         QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, 
             select_list, quns, pred_list, group_by, having, order_by, distinct.unwrap_or(DistinctProperty::All), None)
     }
@@ -292,10 +292,10 @@ Term: ExprLink = {
 }
 
 AggFunction: ExprLink = {
-    <aggtype:AggName> "(" <arg:AggArg> ")" => Expr::newlink(AggFunction { aggtype, arg }),
+    <aggtype:AggName> "(" <arg:AggArg> ")" => Expr::newlink(AggFunction(aggtype, arg)),
     "COUNT" "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
         let aggtype = if distinct.is_some() { AggType::COUNT_DISTINCT } else { AggType::COUNT };
-        Expr::newlink(AggFunction { aggtype, arg }) 
+        Expr::newlink(AggFunction(aggtype, arg)) 
     }
 }
 
@@ -312,11 +312,11 @@ AggArg: ExprLink = {
 }
 
 ScalarFunction: ExprLink = {
-    <name:Identifier> "(" <args:FunctionArgs> ")" => Expr::newlink(ScalarFunction { name, args }),
+    <name:Identifier> "(" <args:FunctionArgs> ")" => Expr::newlink(ScalarFunction(name, args)),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
         let datatype = Expr::newlink(Literal(Datum::STR(Box::new(datatype.to_string()))));
         let args = vec![arg, datatype];
-        Expr::newlink(ScalarFunction { name: String::from("CAST"), args })
+        Expr::newlink(ScalarFunction(String::from("CAST"), args))
     }
 }
 

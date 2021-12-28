@@ -113,7 +113,7 @@ pub struct QueryBlock {
     pub qbtype: QueryBlockType,
     select_list: Vec<NamedExpr>,
     quns: Vec<Quantifier>,
-    pub pred_list: Vec<ExprLink>,
+    pub pred_list: Option<ExprLink>,
     group_by: Option<Vec<ExprLink>>,
     having_clause: Option<ExprLink>,
     order_by: Option<Vec<(ExprLink, Ordering)>>,
@@ -124,7 +124,7 @@ pub struct QueryBlock {
 impl QueryBlock {
     pub fn new(
         id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Vec<ExprLink>, group_by: Option<Vec<ExprLink>>, having_clause: Option<ExprLink>,
+        pred_list: Option<ExprLink>, group_by: Option<Vec<ExprLink>>, having_clause: Option<ExprLink>,
         order_by: Option<Vec<(ExprLink, Ordering)>>,
         distinct: DistinctProperty,
         topN: Option<usize>
@@ -194,8 +194,8 @@ impl QueryBlock {
             }
         }
 
-        if self.pred_list.len() > 0 {
-            QGM::write_expr_to_graphvis(&self.pred_list[0], file);
+        if self.pred_list.is_some() {
+            QGM::write_expr_to_graphvis(&self.pred_list.as_ref().unwrap(), file);
         }
 
         fprint!(file, "}}\n");
