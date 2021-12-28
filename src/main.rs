@@ -18,6 +18,7 @@ pub mod logging;
 pub mod metadata;
 pub mod row;
 pub mod task;
+pub mod qst;
 
 use ast::{ParserState, AST};
 use clp::CLParser;
@@ -130,8 +131,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
 
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
-    for (ix, ast) in astlist.into_iter().enumerate() {
-        println!("--- Parsed stmt {} ---", ix);
+    for (ix, mut ast) in astlist.into_iter().enumerate() {
+        info!("Parsed stmt {}", ix);
         match ast {
             AST::CatalogTable { name, options } => {
                 env.metadata.catalog_table(name, options)?;
@@ -139,8 +140,9 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
             AST::DescribeTable { name } => {
                 env.metadata.describe_table(name)?;
             }
-            AST::QGM(qgm) => {
+            AST::QGM(mut qgm) => {
                 qgm.write_to_graphviz(&qgmfilename, false);
+                qgm.normalize();
             }
             _ => unimplemented!(),
         }
@@ -167,7 +169,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/join.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/scratch.sql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

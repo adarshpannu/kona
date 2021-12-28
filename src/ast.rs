@@ -113,7 +113,7 @@ pub struct QueryBlock {
     pub qbtype: QueryBlockType,
     select_list: Vec<NamedExpr>,
     quns: Vec<Quantifier>,
-    pred_list: Vec<ExprLink>,
+    pub pred_list: Vec<ExprLink>,
     group_by: Option<Vec<ExprLink>>,
     having_clause: Option<ExprLink>,
     order_by: Option<Vec<(ExprLink, Ordering)>>,
