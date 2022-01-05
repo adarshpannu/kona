@@ -1,9 +1,13 @@
 
 
-select R3, S3
-FROM R, S
-where R.R1 = 10
-and S.S1 = 20
-and R.R2 = S.S2
-;
-
+WITH cte_org AS (
+    SELECT 
+        e.staff_id, 
+        e.first_name,
+        e.manager_id
+    FROM 
+        sales.staffs e
+        , cte_org o 
+            where o.staff_id = e.manager_id and col1 is not null
+)
+SELECT * FROM cte_org;

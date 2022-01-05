@@ -6,6 +6,7 @@ use crate::includes::*;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
 pub enum Datum {
+    NULL,
     STR(Box<String>),
     INT(isize),
     DOUBLE(isize, isize), // integral and fractional parts
@@ -37,6 +38,7 @@ impl fmt::Display for Column {
             Column::DOUBLE(i1, i2) => write!(f, "{}.{}", i1, i2),
             Column::STR(sl) => write!(f, "\"{}\"", sl),
             Column::BOOL(bl) => write!(f, "{}", bl),
+            NULL => write!(f, "{}", "NULL"),
         }
     }
 }

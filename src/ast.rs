@@ -432,6 +432,7 @@ pub enum RelOp {
     Ge,
     Lt,
     Le,
+    Is,
     Like,
 }
 
@@ -445,6 +446,7 @@ impl fmt::Display for RelOp {
             RelOp::Ge => ">=",
             RelOp::Lt => "<",
             RelOp::Le => "<=",
+            RelOp::Is => "IS",
             RelOp::Like => "LIKE",
         };
         write!(f, "{}", display_str)
@@ -586,4 +588,16 @@ impl Expr {
             _ => unimplemented!(),
         }
     }
+}
+
+enum E {
+    A,
+    B(String, String),
+}
+
+#[test]
+fn foo() {
+    dbg!("sizeof Expr: {}", std::mem::size_of::<Expr>());
+    dbg!("sizeof QueryBlock: {}", std::mem::size_of::<QueryBlock>());
+    dbg!("sizeof E: {}", std::mem::size_of::<E>());
 }

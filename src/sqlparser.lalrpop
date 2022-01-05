@@ -43,6 +43,8 @@ match {
     r"(?i)AVG" => "AVG",
     r"(?i)CAST" => "CAST",
     r"(?i)TOP" => "TOP",
+    r"(?i)IS" => "IS",
+    r"(?i)NULL" => "NULL",
     "(",
     ")",
     "=",
@@ -210,6 +212,14 @@ LogExprFactor: ExprLink = {
 
 RelExpr: ExprLink = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => Expr::newlink(RelExpr(l, op, r)),
+    <l:Expr> "IS" <not:"NOT"?> "NULL" => {
+        let expr = Expr::newlink(RelExpr(l, RelOp::Is, Expr::newlink(Literal(Datum::NULL))));
+        if not.is_some() {
+            Expr::newlink(LogExpr(expr, LogOp::Not, None))
+        } else {
+            expr
+        }
+    },
     <l:Expr> <not:"NOT"?> "LIKE" <r:RelExprRHS> => {
         let expr = Expr::newlink(RelExpr(l, RelOp::Like, r));
         if not.is_some() {

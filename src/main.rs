@@ -19,6 +19,7 @@ pub mod metadata;
 pub mod row;
 pub mod task;
 pub mod qst;
+pub mod graph;
 
 use ast::{ParserState, AST};
 use clp::CLParser;

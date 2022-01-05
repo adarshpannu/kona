@@ -3,30 +3,29 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [R3, S3]";
+    label = "main [*]";
     "main_pt"[shape=point, color=white];
-    "QUN_1"[label="S/ ", color=red]
-    "QUN_0"[label="R/ ", color=red]
-    exprnode0x7fa9e5c33858[label="And"];
-    exprnode0x7fa9e5c33308 -> exprnode0x7fa9e5c33858;
-    exprnode0x7fa9e5c33808 -> exprnode0x7fa9e5c33858;
-    exprnode0x7fa9e5c33308[label="And"];
-    exprnode0x7fa9e5c331c8 -> exprnode0x7fa9e5c33308;
-    exprnode0x7fa9e5c332b8 -> exprnode0x7fa9e5c33308;
-    exprnode0x7fa9e5c331c8[label="="];
-    exprnode0x7fa9e5c320d8 -> exprnode0x7fa9e5c331c8;
-    exprnode0x7fa9e5c33178 -> exprnode0x7fa9e5c331c8;
-    exprnode0x7fa9e5c320d8[label="R.R1"];
-    exprnode0x7fa9e5c33178[label="10"];
-    exprnode0x7fa9e5c332b8[label="="];
-    exprnode0x7fa9e5c33218 -> exprnode0x7fa9e5c332b8;
-    exprnode0x7fa9e5c33268 -> exprnode0x7fa9e5c332b8;
-    exprnode0x7fa9e5c33218[label="S.S1"];
-    exprnode0x7fa9e5c33268[label="20"];
-    exprnode0x7fa9e5c33808[label="="];
-    exprnode0x7fa9e5c33358 -> exprnode0x7fa9e5c33808;
-    exprnode0x7fa9e5c337b8 -> exprnode0x7fa9e5c33808;
-    exprnode0x7fa9e5c33358[label="R.R2"];
-    exprnode0x7fa9e5c337b8[label="S.S2"];
+    "QUN_3"[label="cte_org/ ", color=red]
+}
+  subgraph cluster_cte_org {
+    label = "cte_org [staff_id, first_name, manager_id]";
+    "cte_org_pt"[shape=point, color=white];
+    "QUN_1"[label="cte_org/o ", color=red]
+    "QUN_0"[label="staffs/e ", color=red]
+    exprnode0x7ffa09c0d7d8[label="And"];
+    exprnode0x7ffa09c0bd88 -> exprnode0x7ffa09c0d7d8;
+    exprnode0x7ffa09c0d788 -> exprnode0x7ffa09c0d7d8;
+    exprnode0x7ffa09c0bd88[label="="];
+    exprnode0x7ffa09c0b5f8 -> exprnode0x7ffa09c0bd88;
+    exprnode0x7ffa09c0bd38 -> exprnode0x7ffa09c0bd88;
+    exprnode0x7ffa09c0b5f8[label="o.staff_id"];
+    exprnode0x7ffa09c0bd38[label="e.manager_id"];
+    exprnode0x7ffa09c0d788[label="Not"];
+    exprnode0x7ffa09c0d738 -> exprnode0x7ffa09c0d788;
+    exprnode0x7ffa09c0d738[label="IS"];
+    exprnode0x7ffa09c0c488 -> exprnode0x7ffa09c0d738;
+    exprnode0x7ffa09c0d6e8 -> exprnode0x7ffa09c0d738;
+    exprnode0x7ffa09c0c488[label="col1"];
+    exprnode0x7ffa09c0d6e8[label="NULL"];
 }
 }
