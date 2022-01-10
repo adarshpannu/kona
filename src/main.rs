@@ -18,13 +18,14 @@ pub mod logging;
 pub mod metadata;
 pub mod row;
 pub mod task;
-pub mod qst;
+//pub mod qst;
 pub mod graph;
 
 use ast::{ParserState, AST};
 use clp::CLParser;
 use ast::{Expr::*, *};
 use flow::*;
+use graph::Graph;
 use metadata::Metadata;
 use row::*;
 use std::cell::RefCell;
@@ -69,12 +70,12 @@ pub fn run_flow(env: &mut Env) {
 pub fn make_simple_flow(env: &Env) -> Flow {
     let arena: NodeArena = Arena::new();
 
+    let mut qgm: Graph<Expr> = Graph::new();
+
     // Expression: $column-1 < 3
-    let expr = RelExpr(
-        Rc::new(RefCell::new(CID(0))),
-        RelOp::Le,
-        Rc::new(RefCell::new(Literal(Datum::INT(3)))),
-    );
+    let lhs = qgm.add_node(CID(0), None);
+    let rhs = qgm.add_node(Literal(Datum::INT(3)), None);
+    let expr = qgm.add_node(RelExpr(RelOp::Le), Some(vec![lhs, rhs]));
 
     let use_dir = false;
 
@@ -96,7 +97,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
 
     // name,age,dept_id
     csvnode
-        .filter(&arena, expr) // age > ?
+        //.filter(&arena, expr) // age > ?
         //.project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
@@ -142,8 +143,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
                 env.metadata.describe_table(name)?;
             }
             AST::QGM(mut qgm) => {
-                qgm.write_to_graphviz(&qgmfilename, false);
-                qgm.normalize();
+                qgm.write_qgm_to_graphviz(&qgmfilename, false);
+                //qgm.normalize();
             }
             _ => unimplemented!(),
         }

@@ -2,6 +2,7 @@ use crate::includes::*;
 use crate::sqlparser;
 use Expr::*;
 use crate::row::{Datum, Row};
+use crate::graph::Graph;
 
 use std::cell::RefCell;
 use std::fs::File;
@@ -29,6 +30,7 @@ pub enum AST {
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
+    pub graph: Graph<Expr>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,6 +41,7 @@ pub struct NamedExpr {
 
 impl NamedExpr {
     pub fn new(name: Option<String>, expr: ExprLink) -> Self {
+        /*
         let mut name = name;
         if name.is_none() {
             if let Expr::Column { tablename, colname } = &*expr.borrow() {
@@ -47,6 +50,7 @@ impl NamedExpr {
                 name = Some("*".to_string())
             }
         }
+        */
         NamedExpr { name, expr }
     }
 }
@@ -166,7 +170,7 @@ macro_rules! fprint {
 }
 
 impl QueryBlock {
-    pub(crate) fn write_to_graphviz(&self, file: &mut File) -> std::io::Result<()> {
+    pub(crate) fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
         // Write current query block first
         let s = "".to_string();
         let select_names: Vec<&String> = self.select_list.iter().map(|e| e.name.as_ref().unwrap_or(&s)).collect();
@@ -190,12 +194,12 @@ impl QueryBlock {
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
                 fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
-                qblock.write_to_graphviz(file)?
+                qblock.write_qblock_to_graphviz(qgm, file)?
             }
         }
 
         if self.pred_list.is_some() {
-            QGM::write_expr_to_graphvis(&self.pred_list.as_ref().unwrap(), file);
+            QGM::write_expr_to_graphvis(qgm, self.pred_list.unwrap(), file);
         }
 
         fprint!(file, "}}\n");
@@ -206,12 +210,13 @@ impl QueryBlock {
 
 pub struct ParserState {
     next_id: usize,
+    pub graph: Graph<Expr>
 }
 
 impl ParserState {
     pub fn new() -> Self {
         ParserState {
-            next_id: 0,
+            next_id: 0, graph: Graph::new()
         }
     }
 
@@ -223,7 +228,7 @@ impl ParserState {
 }
 
 impl QGM {
-    pub(crate) fn write_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
+    pub(crate) fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
@@ -236,12 +241,12 @@ impl QGM {
         //fprint!(file, "    color=lightgrey;\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
 
-        self.qblock.write_to_graphviz(&mut file);
+        self.qblock.write_qblock_to_graphviz(self, &mut file);
 
         // Write subqueries (CTEs)
         for qblock in self.cte_list.iter() {
             let qblock = &*qblock.borrow();
-            qblock.write_to_graphviz(&mut file);
+            qblock.write_qblock_to_graphviz(self, &mut file);
         }
 
         fprint!(file, "}}\n");
@@ -268,115 +273,19 @@ impl QGM {
         Ok(())
     }
 
-    fn write_expr_to_graphvis(expr: &ExprLink, file: &mut File) -> std::io::Result<()> {
-        let expr = expr.borrow();
-        let addr = &*expr as *const Expr;
-        fprint!(file, "    exprnode{:?}[label=\"{}\"];\n", addr, expr.name());
+    fn write_expr_to_graphvis(qgm: &QGM, expr: ExprLink, file: &mut File) -> std::io::Result<()> {
+        let node = qgm.graph.get_node(expr);
 
-        //println!("--- {:?} {:?}", addr, &*expr);
+        let id = expr;
+        let expr = &node.inner;
+        let children = node.children.as_ref();
 
-        match &*expr {
-            RelExpr(lhs, op, rhs) => {
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
-                Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?;
+        fprint!(file, "    exprnode{:?}[label=\"{}\"];\n", id, expr.name());
+        if let Some(children) = children {
+            for &childid in children {
+                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childid, id);
+                Self::write_expr_to_graphvis(qgm, childid, file)?;
             }
-
-            BetweenExpr(e, lhs, rhs) => {
-                let childaddr = &*e.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
-                Self::write_expr_to_graphvis(&e, file)?;
-                Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?;
-            }
-
-            LogExpr(lhs, op, rhs) => {
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                if let Some(rhs) = rhs {
-                    let childaddr = &*rhs.borrow() as *const Expr;
-                    fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                }
-                Self::write_expr_to_graphvis(&lhs, file)?;
-                if let Some(rhs) = rhs {
-                    Self::write_expr_to_graphvis(&rhs, file)?;
-                }
-            }
-
-            BinaryExpr(lhs, op, rhs) => {
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
-                Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?;
-            }
-
-            NegatedExpr(expr) => {
-                let childaddr = &*expr.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                Self::write_expr_to_graphvis(&expr, file)?;
-            }
-
-            ScalarFunction(name, args) => {
-                for arg in args.iter() {
-                    let childaddr = &*arg.borrow() as *const Expr;
-                    fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                    Self::write_expr_to_graphvis(&arg, file)?;
-                }
-            }
-
-            AggFunction(aggtype, arg) => {
-                let childaddr = &*arg.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                Self::write_expr_to_graphvis(&arg, file)?;
-            }
-
-            Subquery(subq) => {
-                let subq = &*subq.borrow();
-                fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", addr, subq.name());
-                subq.write_to_graphviz(file);
-            }
-
-            InSubqExpr(lhs, rhs) => {
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                let childaddr = &*rhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
-                Self::write_expr_to_graphvis(&lhs, file)?;
-                Self::write_expr_to_graphvis(&rhs, file)?;
-            }
-
-            InListExpr(lhs, args) => {
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-
-                for arg in args.iter() {
-                    let childaddr = &*arg.borrow() as *const Expr;
-                    fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                    Self::write_expr_to_graphvis(&arg, file)?;
-                }
-                Self::write_expr_to_graphvis(&lhs, file)?;
-            }
-
-            ExistsExpr(lhs) => {
-                let childaddr = &*lhs.borrow() as *const Expr;
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childaddr, addr);
-                Self::write_expr_to_graphvis(&lhs, file)?;
-            }
-
-            _ => {}
         }
         Ok(())
     }
@@ -470,24 +379,20 @@ pub enum Expr {
     Column { tablename: Option<String>, colname: String },
     Star,
     Literal(Datum),
-    NegatedExpr(ExprLink),
-    BinaryExpr(ExprLink, ArithOp, ExprLink),
-    RelExpr(ExprLink, RelOp, ExprLink),
-    BetweenExpr(ExprLink, ExprLink, ExprLink),
-    InListExpr(ExprLink, Vec<ExprLink>),
-    InSubqExpr(ExprLink, ExprLink),
-    ExistsExpr(ExprLink),
-    LogExpr(ExprLink, LogOp, Option<ExprLink>),
+    NegatedExpr,
+    BinaryExpr(ArithOp),
+    RelExpr(RelOp),
+    BetweenExpr,
+    InListExpr,
+    InSubqExpr,
+    ExistsExpr,
+    LogExpr(LogOp),
     Subquery(QueryBlockLink),
-    AggFunction(AggType, ExprLink),
-    ScalarFunction(String, Vec<ExprLink>)
+    AggFunction(AggType),
+    ScalarFunction(String)
 }
 
 impl Expr {
-    pub fn newlink(expr: Expr) -> ExprLink {
-        Rc::new(RefCell::new(expr))
-    }
-
     pub fn name(&self) -> String {
         match self {
             CID(cid) => format!("CID: {}", cid),
@@ -500,23 +405,25 @@ impl Expr {
             }
             Star => format!("*"),
             Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
-            BinaryExpr(lhs, op, rhs) => format!("{:?}", op),
-            NegatedExpr(lhs) => "-".to_string(),
-            RelExpr(lhs, op, rhs) => format!("{}", op),
-            BetweenExpr(e, l, r) => format!("BETWEEEN"),
-            InListExpr(_, _) => format!("IN"),
-            InSubqExpr(_, _) => format!("IN_SUBQ"),
-            ExistsExpr(_) => format!("EXISTS"),
-            LogExpr(lhs, op, rhs) => format!("{:?}", op),
+            BinaryExpr(op) => format!("{:?}", op),
+            NegatedExpr => "-".to_string(),
+            RelExpr(op) => format!("{}", op),
+            BetweenExpr => format!("BETWEEEN"),
+            InListExpr => format!("IN"),
+            InSubqExpr => format!("IN_SUBQ"),
+            ExistsExpr => format!("EXISTS"),
+            LogExpr(op) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
-            AggFunction (aggtype, arg ) => format!("{:?}", aggtype),
-            ScalarFunction(name, args ) => format!("{}()", name),
+            AggFunction (aggtype ) => format!("{:?}", aggtype),
+            ScalarFunction(name ) => format!("{}()", name),
         }
     }
 }
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        unimplemented!();
+        /*
         match self {
             CID(cid) => write!(f, "${}", cid),
             Column { tablename, colname } => {
@@ -550,6 +457,8 @@ impl fmt::Display for Expr {
             AggFunction (aggtype, arg) => write!(f, "{:?} {}", aggtype, arg.borrow()),
             ScalarFunction ( name, args) => write!(f, "{}({:?})", name, args),
         }
+        */
+        Ok(())
     }
 }
 
@@ -557,6 +466,7 @@ impl fmt::Display for Expr {
 impl Expr {
     pub fn eval<'a>(&'a self, row: &'a Row) -> Datum {
         match self {
+            /*
             CID(cid) => row.get_column(*cid).clone(),
             Literal(lit) => lit.clone(),
             BinaryExpr(b1, op, b2) => {
@@ -585,6 +495,7 @@ impl Expr {
                 };
                 Datum::BOOL(res)
             }
+            */
             _ => unimplemented!(),
         }
     }

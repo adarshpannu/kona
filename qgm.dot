@@ -3,29 +3,29 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [*]";
+    label = "main []";
     "main_pt"[shape=point, color=white];
     "QUN_3"[label="cte_org/ ", color=red]
 }
   subgraph cluster_cte_org {
-    label = "cte_org [staff_id, first_name, manager_id]";
+    label = "cte_org [, , ]";
     "cte_org_pt"[shape=point, color=white];
     "QUN_1"[label="cte_org/o ", color=red]
     "QUN_0"[label="staffs/e ", color=red]
-    exprnode0x7ffa09c0d7d8[label="And"];
-    exprnode0x7ffa09c0bd88 -> exprnode0x7ffa09c0d7d8;
-    exprnode0x7ffa09c0d788 -> exprnode0x7ffa09c0d7d8;
-    exprnode0x7ffa09c0bd88[label="="];
-    exprnode0x7ffa09c0b5f8 -> exprnode0x7ffa09c0bd88;
-    exprnode0x7ffa09c0bd38 -> exprnode0x7ffa09c0bd88;
-    exprnode0x7ffa09c0b5f8[label="o.staff_id"];
-    exprnode0x7ffa09c0bd38[label="e.manager_id"];
-    exprnode0x7ffa09c0d788[label="Not"];
-    exprnode0x7ffa09c0d738 -> exprnode0x7ffa09c0d788;
-    exprnode0x7ffa09c0d738[label="IS"];
-    exprnode0x7ffa09c0c488 -> exprnode0x7ffa09c0d738;
-    exprnode0x7ffa09c0d6e8 -> exprnode0x7ffa09c0d738;
-    exprnode0x7ffa09c0c488[label="col1"];
-    exprnode0x7ffa09c0d6e8[label="NULL"];
+    exprnode10[label="And"];
+    exprnode5 -> exprnode10;
+    exprnode5[label="="];
+    exprnode3 -> exprnode5;
+    exprnode3[label="o.staff_id"];
+    exprnode4 -> exprnode5;
+    exprnode4[label="e.manager_id"];
+    exprnode9 -> exprnode10;
+    exprnode9[label="Not"];
+    exprnode8 -> exprnode9;
+    exprnode8[label="IS"];
+    exprnode6 -> exprnode8;
+    exprnode6[label="col1"];
+    exprnode7 -> exprnode8;
+    exprnode7[label="NULL"];
 }
 }

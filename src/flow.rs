@@ -21,15 +21,15 @@ enum NodeInner {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
-    id: NodeId,
-    children: Vec<NodeId>,
+    id: FlowNodeId,
+    children: Vec<FlowNodeId>,
     npartitions: usize,
     node_inner: NodeInner,
 }
 
 impl Node {
     fn new<'a>(
-        arena: &'a NodeArena, children: Vec<NodeId>, npartitions: usize,
+        arena: &'a NodeArena, children: Vec<FlowNodeId>, npartitions: usize,
         node_inner: NodeInner,
     ) -> &'a Node {
         let id = arena.len();
@@ -148,11 +148,11 @@ impl Node {
         aggnode
     }
 
-    pub fn id(&self) -> NodeId {
+    pub fn id(&self) -> FlowNodeId {
         self.id
     }
 
-    pub fn children(&self) -> &Vec<NodeId> {
+    pub fn children(&self) -> &Vec<FlowNodeId> {
         &self.children
     }
 
@@ -173,7 +173,7 @@ impl Node {
         self.children.len()
     }
 
-    pub fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a Node {
+    pub fn child<'a>(&self, flow: &'a Flow, ix: FlowNodeId) -> &'a Node {
         let children = &self.children;
         flow.get_node(children[ix])
     }
@@ -566,7 +566,7 @@ pub struct Flow {
 }
 
 impl Flow {
-    pub fn get_node(&self, node_id: NodeId) -> &Node {
+    pub fn get_node(&self, node_id: FlowNodeId) -> &Node {
         &self.nodes[node_id]
     }
 

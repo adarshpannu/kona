@@ -5,6 +5,7 @@ use crate::includes::*;
 
 use crate::ast::{Expr::*, *};
 use crate::row::*;
+use crate::graph::Graph;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
@@ -124,7 +125,9 @@ pub FullSelect: AST = <cte_list:WithClause?> <mut qblock:QueryBlock> => {
     qblock.name = Some(String::from("main"));
     qblock.qbtype = QueryBlockType::Main;
 
-    let qgm = QGM { qblock, cte_list: cte_list.unwrap_or(vec![]) };
+    let graph = std::mem::replace(&mut parser_state.graph, Graph::new());
+
+    let qgm = QGM { qblock, cte_list: cte_list.unwrap_or(vec![]), graph };
     AST::QGM(qgm)
 };
 
@@ -196,64 +199,67 @@ Quantifier: Quantifier = {
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = {
-    "*" => NamedExpr::new(None, Expr::newlink(Star)),
+    "*" => NamedExpr::new(None, parser_state.graph.add_node(Star, None)),
     <expr:Expr> <name:("AS" Identifier)?> => NamedExpr::new(name.map(|e| e.1), expr)
 }
 
 pub LogExpr: ExprLink = {
     <LogExprFactor>,
-    <l:LogExpr> "OR" <r:LogExprFactor> => Expr::newlink(LogExpr(l, LogOp::Or, Some(r))),
+    <l:LogExpr> "OR" <r:LogExprFactor> => parser_state.graph.add_node(LogExpr(LogOp::Or), Some(vec![l, r]))
 }
 
 LogExprFactor: ExprLink = {
-    <l:LogExprFactor> "AND" <r:RelExpr> => Expr::newlink(LogExpr(l, LogOp::And, Some(r))),
+    <l:LogExprFactor> "AND" <r:RelExpr> => parser_state.graph.add_node(LogExpr(LogOp::And), Some(vec![l, r])),
     RelExpr,
 }
 
 RelExpr: ExprLink = {
-    <l:Expr> <op:RelOp> <r:RelExprRHS> => Expr::newlink(RelExpr(l, op, r)),
+    <l:Expr> <op:RelOp> <r:RelExprRHS> => parser_state.graph.add_node(RelExpr(op), Some(vec![l, r])),
     <l:Expr> "IS" <not:"NOT"?> "NULL" => {
-        let expr = Expr::newlink(RelExpr(l, RelOp::Is, Expr::newlink(Literal(Datum::NULL))));
+        let r = parser_state.graph.add_node(Literal(Datum::NULL), None);
+        let expr = parser_state.graph.add_node(RelExpr(RelOp::Is), Some(vec![l, r]));
         if not.is_some() {
-            Expr::newlink(LogExpr(expr, LogOp::Not, None))
+            parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
         } else {
             expr
         }
     },
     <l:Expr> <not:"NOT"?> "LIKE" <r:RelExprRHS> => {
-        let expr = Expr::newlink(RelExpr(l, RelOp::Like, r));
+        let expr = parser_state.graph.add_node(RelExpr(RelOp::Like), Some(vec!(l, r)));
         if not.is_some() {
-            Expr::newlink(LogExpr(expr, LogOp::Not, None))
+            parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
         } else {
             expr
         }
     },
-    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => Expr::newlink(BetweenExpr(e, l, r)),
+    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => parser_state.graph.add_node(BetweenExpr, Some(vec![e, l, r])),
     <e:Expr> <not:"NOT"?> "IN" <mut inexpr:InExprRHS> => {
         let expr = if inexpr.0 {
             let subq = inexpr.1.pop().unwrap();
-            Expr::newlink(InSubqExpr(e, subq))
+            parser_state.graph.add_node(InSubqExpr, Some(vec![e, subq]))
         } else {
-            let args = inexpr.1;
-            Expr::newlink(InListExpr(e, args))
+            let mut args = inexpr.1;
+            let mut children = vec![e];
+            children.append(&mut args);
+            parser_state.graph.add_node(InListExpr, Some(children))
         };
         if not.is_some() {
-            Expr::newlink(LogExpr(expr, LogOp::Not, None))
+            parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
         } else {
             expr
         }
     },
     "EXISTS" <subq:Subquery> => { 
-        let subq = Expr::newlink(Subquery(subq));
-        Expr::newlink(ExistsExpr(subq))
+        let subq = parser_state.graph.add_node(Subquery(subq), None);
+        parser_state.graph.add_node(ExistsExpr, Some(vec![subq]))
     },
-    "NOT" <e:RelExpr> => Expr::newlink(LogExpr(e, LogOp::Not, None)),
+    "NOT" <expr:RelExpr> => parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr])),
     "(" <LogExpr> ")",
 }
 
 RelExprRHS: ExprLink = {
     <rhs:Expr> => rhs,
-    <prefix:SubqueryQuantifier> <subq:Subquery> => Expr::newlink(Subquery(subq))
+    <prefix:SubqueryQuantifier> <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
 }
 
 RelOp: RelOp = {
@@ -267,7 +273,7 @@ RelOp: RelOp = {
 }
 
 InExprRHS: (bool, Vec<ExprLink>) = {
-    <subq:Subquery> => (true, vec![Expr::newlink(Subquery(subq))]),
+    <subq:Subquery> => (true, vec![parser_state.graph.add_node(Subquery(subq), None)]),
     "(" <InList> ")" => (false, <>)
 }
 
@@ -279,33 +285,33 @@ SubqueryQuantifier = {
 }
 
 pub Expr: ExprLink = {
-    <l:Expr> "+" <r:Factor> => Expr::newlink(BinaryExpr(l, ArithOp::Add, r)),
-    <l:Expr> "-" <r:Factor> => Expr::newlink(BinaryExpr(l, ArithOp::Sub, r)),
+    <l:Expr> "+" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Add), Some(vec!(l, r))),
+    <l:Expr> "-" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Sub), Some(vec!(l, r))),
     Factor,
 }
 
 Factor: ExprLink = {
-    <l:Factor> "*" <r:Term> => Expr::newlink(BinaryExpr(l, ArithOp::Mul, r)),
-    <l:Factor> "/" <r:Term> => Expr::newlink(BinaryExpr(l, ArithOp::Div, r)),
+    <l:Factor> "*" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Mul), Some(vec!(l, r))),
+    <l:Factor> "/" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Div), Some(vec!(l, r))),
     Term,
 }
 
 Term: ExprLink = {
-    <cr:ColumnReference> => Expr::newlink(Column { tablename: cr.0, colname: cr.1 } ),
-    QuotedString => Expr::newlink(Literal(Datum::STR(Box::new(<>)))),
+    <cr:ColumnReference> => parser_state.graph.add_node(Column { tablename: cr.0, colname: cr.1 }, None),
+    QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Box::new(<>))), None),
     Number,
     ScalarFunction,
     AggFunction,
-    "-" <Term> => Expr::newlink(NegatedExpr(<>)),
+    "-" <Term> => parser_state.graph.add_node(NegatedExpr, Some(vec![<>])),
     "(" <Expr> ")",
-    <subq:Subquery> => Expr::newlink(Subquery(subq))
+    <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
 }
 
 AggFunction: ExprLink = {
-    <aggtype:AggName> "(" <arg:AggArg> ")" => Expr::newlink(AggFunction(aggtype, arg)),
+    <aggtype:AggName> "(" <arg:AggArg> ")" => parser_state.graph.add_node(AggFunction(aggtype), Some(vec![arg])),
     "COUNT" "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
         let aggtype = if distinct.is_some() { AggType::COUNT_DISTINCT } else { AggType::COUNT };
-        Expr::newlink(AggFunction(aggtype, arg)) 
+        parser_state.graph.add_node(AggFunction(aggtype), Some(vec![arg]))
     }
 }
 
@@ -318,15 +324,15 @@ AggName: AggType = {
 
 AggArg: ExprLink = {
     <arg:Expr> => arg,
-    "*" => Expr::newlink(Star)
+    "*" => parser_state.graph.add_node(Star, None)
 }
 
 ScalarFunction: ExprLink = {
-    <name:Identifier> "(" <args:FunctionArgs> ")" => Expr::newlink(ScalarFunction(name, args)),
+    <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.graph.add_node(ScalarFunction(name), Some(args)),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
-        let datatype = Expr::newlink(Literal(Datum::STR(Box::new(datatype.to_string()))));
+        let datatype = parser_state.graph.add_node(Literal(Datum::STR(Box::new(datatype.to_string()))), None);
         let args = vec![arg, datatype];
-        Expr::newlink(ScalarFunction(String::from("CAST"), args))
+        parser_state.graph.add_node(ScalarFunction(String::from("CAST")), Some(args))
     }
 }
 
@@ -334,11 +340,11 @@ FunctionArgs = CommaSeparatedList<Expr>;
 
 Number: ExprLink = {
     Integer =>? { isize::from_str(<>)
-        .map(|i| Expr::newlink(Literal(Datum::INT(i))))
+        .map(|i| parser_state.graph.add_node(Literal(Datum::INT(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
     Double =>? { f64::from_str(<>)
-        .map(|d| Expr::newlink(Literal(Datum::DOUBLE(111, 222)))) // FIXME
+        .map(|d| parser_state.graph.add_node(Literal(Datum::DOUBLE(111, 222)), None))
         .map_err(|_| ParseError::User { error: "Invalid double" }) 
     },
 }

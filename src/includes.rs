@@ -7,7 +7,7 @@ pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
 pub const TEMPDIR: &str = "/Users/adarshrp/Projects/flare/temp";
 pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/flare";
 
-pub type NodeId = usize;
+pub type FlowNodeId = usize;
 pub type ColId = usize;
 pub type PartitionId = usize;
 
@@ -21,7 +21,7 @@ pub use typed_arena::Arena;
 
 pub type NodeArena = Arena<crate::flow::Node>;
 
-pub type ExprLink = std::rc::Rc<std::cell::RefCell<crate::ast::Expr>>;
+pub type ExprLink = crate::graph::NodeId;
 pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::ast::QueryBlock>>;
 
 macro_rules! mkrcrc {

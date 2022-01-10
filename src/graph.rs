@@ -1,10 +1,10 @@
 
-type NodeId = usize;
+pub type NodeId = usize;
 
 #[derive(Debug)]
-struct Node<T> {
-    inner: T,
-    children: Option<Vec<NodeId>>
+pub struct Node<T> {
+    pub inner: T,
+    pub children: Option<Vec<NodeId>>
 }
 
 impl<T> Node<T> {
@@ -14,7 +14,7 @@ impl<T> Node<T> {
 }
 
 #[derive(Debug)]
-struct Graph<T> {
+pub struct Graph<T> {
     nodes: Vec<Node<T>>
 }
 
@@ -30,7 +30,11 @@ impl<T> Graph<T> {
         self.nodes.len() - 1
     }
 
-    pub fn get_node(&mut self, ix: NodeId) -> &T {
+    pub fn get_node(&self, ix: NodeId) ->&Node<T> {
+        &self.nodes[ix]
+    }
+
+    pub fn get_node_inner(&mut self, ix: NodeId) -> &T {
         &self.nodes[ix].inner
     }
 
@@ -107,7 +111,7 @@ pub fn test_graph() {
 }
 
 fn qst(g: &mut Graph<Expr>, ix: NodeId) {
-    let expr = g.get_node(ix);
+    let expr = g.get_node_inner(ix);
     match expr {
         Expr::Relop(_) => {
 

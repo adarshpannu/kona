@@ -10,13 +10,13 @@ use crate::flow::*;
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stage {
-    pub head_node_id: NodeId,
+    pub head_node_id: FlowNodeId,
     pub npartitions_producer: usize,
     pub npartitions_consumer: usize,
 }
 
 impl Stage {
-    pub fn new(top: NodeId, flow: &Flow) -> Stage {
+    pub fn new(top: FlowNodeId, flow: &Flow) -> Stage {
         let node = flow.get_node(top);
         let npartitions = node.child(flow, 0).npartitions();
         Stage {
@@ -57,7 +57,7 @@ pub struct Task {
     pub partition_id: PartitionId,
 
     #[serde(skip)]
-    pub contexts: HashMap<NodeId, NodeRuntime>,
+    pub contexts: HashMap<FlowNodeId, NodeRuntime>,
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
