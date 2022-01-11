@@ -2,7 +2,7 @@
 
 WITH cte_org AS (
     SELECT 
-        e.staff_id, 
+        e.staff_id as FOO,
         e.first_name,
         e.manager_id
     FROM 

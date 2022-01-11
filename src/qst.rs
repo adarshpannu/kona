@@ -23,26 +23,26 @@ impl QGM {
         }
     }
 
-    pub fn extract(exprlink: &ExprLink, pred_list: &mut Vec<ExprLink>) {
-        let expr = &*exprlink.borrow();
+    pub fn extract(NodeId: &NodeId, pred_list: &mut Vec<NodeId>) {
+        let expr = &*NodeId.borrow();
         if let LogExpr(lhs, crate::ast::LogOp::And, rhs) = expr {
             QGM::extract(lhs, pred_list);
             if let Some(rhs) = rhs {
                 QGM::extract(rhs, pred_list);
             }
         } else {
-            pred_list.push(Rc::clone(exprlink))
+            pred_list.push(Rc::clone(NodeId))
         }
     }
 
-    fn check(exprlink: &ExprLink) {
-        let mut expr = &mut *exprlink.borrow_mut();
+    fn check(NodeId: &NodeId) {
+        let mut expr = &mut *NodeId.borrow_mut();
         expr.check();
     }
 }
 
 impl Expr {
-    pub fn children(&self) -> Vec<ExprLink> {
+    pub fn children(&self) -> Vec<NodeId> {
         let retval = vec![];
         let v = match &self {
             RelExpr(lhs, op, rhs) => vec![lhs.clone(), rhs.clone()],
@@ -78,7 +78,7 @@ impl Expr {
         retval
     }
 
-    pub fn check(&mut self) -> Vec<ExprLink> {
+    pub fn check(&mut self) -> Vec<NodeId> {
         let retval = vec![];
         let v = match &self {
             RelExpr(lhs, op, rhs) => vec![lhs.clone(), rhs.clone()],

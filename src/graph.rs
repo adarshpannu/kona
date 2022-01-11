@@ -30,8 +30,9 @@ impl<T> Graph<T> {
         self.nodes.len() - 1
     }
 
-    pub fn get_node(&self, ix: NodeId) ->&Node<T> {
-        &self.nodes[ix]
+    pub fn get_node(&self, ix: NodeId) -> (&T, Option<&Vec<NodeId>>) {
+        let node = &self.nodes[ix];
+        (&node.inner, node.children.as_ref())
     }
 
     pub fn get_node_inner(&mut self, ix: NodeId) -> &T {

@@ -3,12 +3,12 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main []";
+    label = "main [*]";
     "main_pt"[shape=point, color=white];
     "QUN_3"[label="cte_org/ ", color=red]
 }
   subgraph cluster_cte_org {
-    label = "cte_org [, , ]";
+    label = "cte_org [FOO, first_name, manager_id]";
     "cte_org_pt"[shape=point, color=white];
     "QUN_1"[label="cte_org/o ", color=red]
     "QUN_0"[label="staffs/e ", color=red]

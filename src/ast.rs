@@ -2,7 +2,7 @@ use crate::includes::*;
 use crate::sqlparser;
 use Expr::*;
 use crate::row::{Datum, Row};
-use crate::graph::Graph;
+use crate::graph::{Graph, NodeId};
 
 use std::cell::RefCell;
 use std::fs::File;
@@ -35,23 +35,23 @@ pub struct QGM {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NamedExpr {
-    pub name: Option<String>,
-    pub expr: ExprLink,
+    pub alias: Option<String>,
+    pub expr_id: NodeId,
 }
 
 impl NamedExpr {
-    pub fn new(name: Option<String>, expr: ExprLink) -> Self {
-        /*
-        let mut name = name;
-        if name.is_none() {
-            if let Expr::Column { tablename, colname } = &*expr.borrow() {
-                name = Some(colname.clone())
-            } else if let Expr::Star = &*expr.borrow() {
-                name = Some("*".to_string())
+    pub fn new(alias: Option<String>, expr_id: NodeId, graph: &Graph<Expr>) -> Self {
+        let (expr, _) = graph.get_node(expr_id);
+        let mut alias = alias;
+        if alias.is_none() {
+            if let Expr::Column { tablename, colname } = expr {
+                alias = Some(colname.clone())
+            } else if let Expr::Star = expr {
+                alias = Some("*".to_string())
             }
         }
-        */
-        NamedExpr { name, expr }
+
+        NamedExpr { alias, expr_id }
     }
 }
 
@@ -64,7 +64,7 @@ pub enum QueryBlockType {
     Subquery,
 }
 
-pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprLink>);
+pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Quantifier {
@@ -117,10 +117,10 @@ pub struct QueryBlock {
     pub qbtype: QueryBlockType,
     select_list: Vec<NamedExpr>,
     quns: Vec<Quantifier>,
-    pub pred_list: Option<ExprLink>,
-    group_by: Option<Vec<ExprLink>>,
-    having_clause: Option<ExprLink>,
-    order_by: Option<Vec<(ExprLink, Ordering)>>,
+    pub pred_list: Option<NodeId>,
+    group_by: Option<Vec<NodeId>>,
+    having_clause: Option<NodeId>,
+    order_by: Option<Vec<(NodeId, Ordering)>>,
     distinct: DistinctProperty,
     topN: Option<usize>
 }
@@ -128,8 +128,8 @@ pub struct QueryBlock {
 impl QueryBlock {
     pub fn new(
         id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Option<ExprLink>, group_by: Option<Vec<ExprLink>>, having_clause: Option<ExprLink>,
-        order_by: Option<Vec<(ExprLink, Ordering)>>,
+        pred_list: Option<NodeId>, group_by: Option<Vec<NodeId>>, having_clause: Option<NodeId>,
+        order_by: Option<Vec<(NodeId, Ordering)>>,
         distinct: DistinctProperty,
         topN: Option<usize>
     ) -> Self {
@@ -173,7 +173,7 @@ impl QueryBlock {
     pub(crate) fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
         // Write current query block first
         let s = "".to_string();
-        let select_names: Vec<&String> = self.select_list.iter().map(|e| e.name.as_ref().unwrap_or(&s)).collect();
+        let select_names: Vec<&String> = self.select_list.iter().map(|e| e.alias.as_ref().unwrap_or(&s)).collect();
         let select_names = format!("{:?}", select_names).replace("\"", "");
 
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
@@ -273,12 +273,9 @@ impl QGM {
         Ok(())
     }
 
-    fn write_expr_to_graphvis(qgm: &QGM, expr: ExprLink, file: &mut File) -> std::io::Result<()> {
-        let node = qgm.graph.get_node(expr);
-
+    fn write_expr_to_graphvis(qgm: &QGM, expr: NodeId, file: &mut File) -> std::io::Result<()> {
         let id = expr;
-        let expr = &node.inner;
-        let children = node.children.as_ref();
+        let (expr, children) = qgm.graph.get_node(expr);
 
         fprint!(file, "    exprnode{:?}[label=\"{}\"];\n", id, expr.name());
         if let Some(children) = children {
