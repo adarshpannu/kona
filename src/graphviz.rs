@@ -3,9 +3,7 @@ use std::process::Command;
 
 use crate::flow::Flow;
 
-pub(crate) fn write_flow_to_graphviz(
-    flow: &Flow, filename: &str, open_jpg: bool,
-) -> std::io::Result<()> {
+pub(crate) fn write_flow_to_graphviz(flow: &Flow, filename: &str, open_jpg: bool) -> std::io::Result<()> {
     let mut file = std::fs::File::create(filename)?;
     file.write_all("digraph example1 {\n".as_bytes())?;
     file.write_all("    node [shape=record];\n".as_bytes())?;
@@ -13,9 +11,11 @@ pub(crate) fn write_flow_to_graphviz(
     file.write_all("    splines=polyline;\n".as_bytes())?;
     file.write_all("    nodesep=0.5;\n".as_bytes())?;
 
-    for node in flow.nodes.iter() {
+    /* adarsh
+
+    for node in flow.graph.nodes().iter() {
         let nodestr =
-            format!("    Node{}[label=\"{}\"];\n", node.id(), node.desc());
+            format!("    Node{}[label=\"{}\"];\n", node.inner().id(), node.inner().desc());
         file.write_all(nodestr.as_bytes())?;
 
         for child in node.children().iter() {
@@ -23,6 +23,8 @@ pub(crate) fn write_flow_to_graphviz(
             file.write_all(edge.as_bytes())?;
         }
     }
+    */
+
     file.write_all("}\n".as_bytes())?;
     drop(file);
 
@@ -48,7 +50,5 @@ pub(crate) fn write_flow_to_graphviz(
 }
 
 pub fn htmlify(s: String) -> String {
-    s.replace("&", "&amp;")
-        .replace(">", "&gt;")
-        .replace("<", "&lt;")
+    s.replace("&", "&amp;").replace(">", "&gt;").replace("<", "&lt;")
 }

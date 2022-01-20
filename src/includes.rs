@@ -19,8 +19,6 @@ pub struct TextFilePartition(pub u64, pub u64);
 
 pub use typed_arena::Arena;
 
-pub type NodeArena = Arena<crate::flow::Node>;
-
 pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::ast::QueryBlock>>;
 
 macro_rules! mkrcrc {

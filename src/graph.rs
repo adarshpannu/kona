@@ -1,7 +1,8 @@
+use crate::includes::*;
 
 pub type NodeId = usize;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node<T> {
     pub inner: T,
     pub children: Option<Vec<NodeId>>
@@ -13,7 +14,7 @@ impl<T> Node<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<T> {
     nodes: Vec<Node<T>>
 }
@@ -28,6 +29,10 @@ impl<T> Graph<T> {
         node.children = children;
         self.nodes.push(node);
         self.nodes.len() - 1
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
     }
 
     pub fn get_node(&self, ix: NodeId) -> (&T, Option<&Vec<NodeId>>) {
