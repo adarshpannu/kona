@@ -273,14 +273,19 @@ impl QGM {
         Ok(())
     }
 
+    fn nodeid_to_str(nodeid: &NodeId) -> String {
+        format!("{:?}", nodeid).replace("(", "").replace(")", "")
+    }
+    
     fn write_expr_to_graphvis(qgm: &QGM, expr: NodeId, file: &mut File) -> std::io::Result<()> {
-        let id = expr;
+        let id = Self::nodeid_to_str(&expr);
         let (expr, children) = qgm.graph.get_node(expr);
-
-        fprint!(file, "    exprnode{:?}[label=\"{}\"];\n", id, expr.name());
+        fprint!(file, "    exprnode{}[label=\"{}\"];\n", id, expr.name());
         if let Some(children) = children {
             for &childid in children {
-                fprint!(file, "    exprnode{:?} -> exprnode{:?};\n", childid, id);
+                let childid_name = Self::nodeid_to_str(&childid);
+
+                fprint!(file, "    exprnode{} -> exprnode{};\n", childid_name, id);
                 Self::write_expr_to_graphvis(qgm, childid, file)?;
             }
         }

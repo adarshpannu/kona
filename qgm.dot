@@ -12,20 +12,20 @@ digraph example1 {
     "cte_org_pt"[shape=point, color=white];
     "QUN_1"[label="cte_org/o ", color=red]
     "QUN_0"[label="staffs/e ", color=red]
-    exprnode10[label="And"];
-    exprnode5 -> exprnode10;
-    exprnode5[label="="];
-    exprnode3 -> exprnode5;
-    exprnode3[label="o.staff_id"];
-    exprnode4 -> exprnode5;
-    exprnode4[label="e.manager_id"];
-    exprnode9 -> exprnode10;
-    exprnode9[label="Not"];
-    exprnode8 -> exprnode9;
-    exprnode8[label="IS"];
-    exprnode6 -> exprnode8;
-    exprnode6[label="col1"];
-    exprnode7 -> exprnode8;
-    exprnode7[label="NULL"];
+    exprnodeNodeId11v1[label="And"];
+    exprnodeNodeId6v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId6v1[label="="];
+    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId4v1[label="o.staff_id"];
+    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId5v1[label="e.manager_id"];
+    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId10v1[label="Not"];
+    exprnodeNodeId9v1 -> exprnodeNodeId10v1;
+    exprnodeNodeId9v1[label="IS"];
+    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId7v1[label="col1"];
+    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId8v1[label="NULL"];
 }
 }

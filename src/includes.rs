@@ -7,11 +7,12 @@ pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
 pub const TEMPDIR: &str = "/Users/adarshrp/Projects/flare/temp";
 pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/flare";
 
-pub type FlowNodeId = usize;
+pub type FlowNodeId = NodeId;
 pub type ColId = usize;
 pub type PartitionId = usize;
 
 pub use crate::Env;
+use crate::graph::NodeId;
 pub use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

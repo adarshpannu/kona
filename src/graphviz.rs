@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::process::Command;
 
-use crate::flow::Flow;
+//use crate::flow::Flow;
 
 pub(crate) fn write_flow_to_graphviz(flow: &Flow, filename: &str, open_jpg: bool) -> std::io::Result<()> {
     let mut file = std::fs::File::create(filename)?;

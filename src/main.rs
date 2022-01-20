@@ -11,42 +11,44 @@ lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 pub mod ast;
 pub mod csv;
 pub mod error;
-pub mod flow;
-pub mod graphviz;
+//pub mod flow;
+//pub mod graphviz;
 pub mod includes;
 pub mod logging;
 pub mod metadata;
 pub mod row;
-pub mod task;
+//pub mod task;
 //pub mod qst;
 pub mod graph;
 
 use ast::{Expr::*, *};
 use ast::{ParserState, AST};
 use clp::CLParser;
-use flow::*;
+//use flow::*;
 use graph::Graph;
 use metadata::Metadata;
 use row::*;
 use std::cell::RefCell;
 use std::fs;
 use std::rc::Rc;
-use task::ThreadPool;
+//use task::ThreadPool;
+use slotmap::SlotMap;
 
 pub struct Env {
-    thread_pool: ThreadPool,
+    //thread_pool: ThreadPool,
     metadata: Metadata,
 }
 
 impl Env {
     fn new(nthreads: usize) -> Self {
-        let thread_pool = task::ThreadPool::new(nthreads);
+        //let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
-        Env { thread_pool, metadata }
+        Env { metadata }
     }
 }
 
 /***************************************************************************************************/
+/*
 pub fn run_flow(env: &mut Env) {
     let flow = make_simple_flow(env);
 
@@ -110,13 +112,15 @@ pub fn make_simple_flow(env: &Env) -> Flow {
         ],
         3,
     );
-    FlowNode::emit(aggnode, &mut flow_graph);
+    let emit_id = FlowNode::emit(aggnode, &mut flow_graph);
 
     Flow {
         id: 99,
         graph: flow_graph,
+        emit_id
     }
 }
+*/
 
 fn stringify<E: std::fmt::Debug>(e: E) -> String {
     format!("xerror: {:?}", e)
@@ -187,4 +191,13 @@ fn main() -> Result<(), String> {
     info!("End of program");
 
     Ok(())
+}
+
+#[test]
+fn test_sm() {
+    let mut sm = SlotMap::new();
+    let foo = sm.insert("foo"); // Key generated on insert.
+    let bar = sm.insert("bar");
+    assert_eq!(sm[foo], "foo");
+    assert_eq!(sm[bar], "bar");
 }

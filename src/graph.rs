@@ -1,6 +1,7 @@
 use crate::includes::*;
+use slotmap::{SlotMap, new_key_type};
 
-pub type NodeId = usize;
+new_key_type! { pub struct NodeId; }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node<T> {
@@ -16,52 +17,49 @@ impl<T> Node<T> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<T> {
-    nodes: Vec<Node<T>>
+    sm: SlotMap<NodeId, Node<T>>
 }
 
 impl<T> Graph<T> {
     pub fn new() -> Self {
-        Graph { nodes: vec![] }
+        Graph { sm: SlotMap::with_key() }
     }
 
     pub fn add_node(&mut self, t: T, children: Option<Vec<NodeId>>) -> NodeId {
         let mut node = Node::new(t);
         node.children = children;
-        self.nodes.push(node);
-        self.nodes.len() - 1
+        self.sm.insert(node)
     }
 
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.sm.len()
     }
 
     pub fn get_node(&self, ix: NodeId) -> (&T, Option<&Vec<NodeId>>) {
-        let node = &self.nodes[ix];
+        let node = self.sm.get(ix).unwrap();
         (&node.inner, node.children.as_ref())
     }
 
     pub fn get_node_inner(&mut self, ix: NodeId) -> &T {
-        &self.nodes[ix].inner
-    }
-
-    pub fn get_node2(&mut self, ix: NodeId) -> (&T, NodeId, NodeId) {
-        let children = self.nodes[ix].children.as_ref();
-        (&self.nodes[ix].inner, 0, 0)
+        let node = self.sm.get(ix).unwrap();
+        &node.inner
     }
 
     pub fn get_node_mut(&mut self, ix: NodeId) -> &mut T {
-        &mut self.nodes[ix].inner
+        let mut node = self.sm.get_mut(ix).unwrap();
+        &mut node.inner
     }
 
     pub fn replace(&mut self, ix: NodeId, t: T) {
-        let mut node = Node::new(t);
-        self.nodes[ix] = node;
+        let mut node = self.sm.get_mut(ix).unwrap();
+        let mut new_node = Node::new(t);
+        *node = new_node;
     }
 
     pub fn replace_many(&mut self, parent_ix: NodeId, ix: NodeId, mut children: Vec<NodeId>) {
         // Node#ix is deleted
         // children already present in graph although not connected
-        let mut node = &mut self.nodes[parent_ix];
+        let mut node = self.sm.get_mut(parent_ix).unwrap();
         let mut new_children: Vec<NodeId> = vec![];
         let seen_old_child = false;
 
@@ -95,24 +93,28 @@ enum Expr {
 
 #[test]
 pub fn test_graph() {
+
+    // select (111 = 222), *
     let mut qgm: Graph<Expr> = Graph::new();
 
     let lhs = qgm.add_node(Expr::Integer(111), None);
     let rhs = qgm.add_node(Expr::Integer(222), None);
-    let e = qgm.add_node(Expr::Relop(RelOpType::Eq), Some(vec![lhs, rhs]));
+    let relop = qgm.add_node(Expr::Relop(RelOpType::Eq), Some(vec![lhs, rhs]));
 
-    let mut e = qgm.get_node_mut(2);
-
-    *e = Expr::Boolean(false);
-
+    //let mut e = qgm.get_node_mut(e);
+    //*e = Expr::Boolean(false);
     //qgm.replace_node(2, Expr::Boolean(false));
+
+    let star = qgm.add_node(Expr::Star, None);
+
+    let select = qgm.add_node(Expr::Select, Some(vec![relop, star]));
 
     let cols: Vec<NodeId> = vec!["c1", "c2"].into_iter().map(|col| {
         let expr = Expr::Column(col.to_string());
         qgm.add_node(expr, None)
     }).collect();
 
-    qgm.replace_many(2, 0, cols);
+    qgm.replace_many(select, star, cols);
     dbg!(&qgm);
 }
 

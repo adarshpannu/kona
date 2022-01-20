@@ -27,7 +27,6 @@ enum FlowNodeInner {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FlowNode {
-    id: NodeId,
     npartitions: usize,
     node_inner: FlowNodeInner,
 }
@@ -41,7 +40,6 @@ impl FlowNode {
         let id = graph.len();
         graph.add_node(
             FlowNode {
-                id,
                 npartitions,
                 node_inner,
             },
@@ -76,7 +74,7 @@ impl FlowNode {
         let aggnode = FlowNode::new(graph, vec![child_id], npartitions, aggnode);
         let aggnode = graph.get_node(aggnode).0;
 
-        let dirname_prefix = format!("{}/flow-99/stage-{}/consumer", TEMPDIR, aggnode.id);
+        let dirname_prefix = format!("{}/flow-99/stage-{:?}/consumer", TEMPDIR, aggnode); // FIXME - Remove :?
 
         let mut csvcoltypes: Vec<DataType> = keycols.iter().map(|(_, tp)| *tp).collect();
         for (aggtype, _, datatype) in aggcols.iter() {
@@ -110,8 +108,8 @@ impl FlowNode {
         aggnode
     }
 
-    pub fn id(&self) -> NodeId {
-        self.id
+    pub fn id(&self) -> usize {
+        0 // FIXME
     }
 
     /*
@@ -125,7 +123,7 @@ impl FlowNode {
 
     pub fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a FlowNode {
         let children = flow.graph.get_node(ix).1.unwrap();
-        flow.get_node(children[ix])
+        flow.get_node(children[0])
     }
 
     pub fn desc(&self) -> String {
@@ -448,6 +446,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub graph: Graph<FlowNode>,
+    pub emit_id: NodeId
 }
 
 impl Flow {
