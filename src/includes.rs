@@ -13,6 +13,8 @@ pub type PartitionId = usize;
 
 pub use crate::Env;
 use crate::graph::NodeId;
+use crate::row::DataType;
+
 pub use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]

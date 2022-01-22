@@ -96,6 +96,7 @@ pub trait TableDesc {
     fn describe(&self) -> String {
         String::from("")
     }
+    fn coltype(&self, colname: &String) -> Option<DataType>;
 }
 
 impl TableDesc for CSVDesc {
@@ -114,6 +115,11 @@ impl TableDesc for CSVDesc {
     fn describe(&self) -> String {
         format!("Type: CSV, {:?}", self)
     }
+
+    fn coltype(&self, colname: &String) -> Option<DataType> {
+        let ix = self.colnames.iter().position(|cn| cn == colname);
+        ix.map(|ix| self.coltypes[ix])
+    }
 }
 
 pub struct Metadata {
@@ -121,6 +127,21 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub fn coltype(&self, colname: &String) -> Result<(&String, DataType), String> {
+        // Find column in a single table
+        let mut tablename = None;
+        for (thisname, desc) in self.tables.iter() {
+            if let Some(coltype) = desc.coltype(colname) {
+                if tablename.is_none() {
+                    tablename = Some((thisname, coltype))
+                } else {
+                    return Err(format!("Ambiguous column {}", colname))
+                }
+            }
+        }
+        tablename.ok_or(format!("Column {} not found", colname))
+    }
+
     pub fn new() -> Metadata {
         Metadata {
             tables: HashMap::new(),

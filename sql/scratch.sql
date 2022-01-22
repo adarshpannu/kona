@@ -1,13 +1,10 @@
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+
+DESCRIBE TABLE emp;
 
 
-WITH cte_org AS (
-    SELECT 
-        e.staff_id as FOO,
-        e.first_name,
-        e.manager_id
-    FROM 
-        sales.staffs e
-        , cte_org o 
-            where o.staff_id = e.manager_id and col1 is not null
-)
-SELECT * FROM cte_org;
+select name, dept_id
+from emp, emp
+where emp.name = 'adarsh'
+and age > 30
+and dept_id > 1 + 2;

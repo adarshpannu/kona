@@ -1,23 +1,25 @@
 use crate::includes::*;
 use slotmap::{SlotMap, new_key_type};
+use crate::row::DataType;
 
 new_key_type! { pub struct NodeId; }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node<T> {
     pub inner: T,
-    pub children: Option<Vec<NodeId>>
+    pub children: Option<Vec<NodeId>>,
+    pub datatype: DataType
 }
 
 impl<T> Node<T> {
     pub fn new(t: T) -> Self {
-        Node { inner: t, children: None }
+        Node { inner: t, children: None, datatype: DataType::UNKNOWN }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<T> {
-    sm: SlotMap<NodeId, Node<T>>
+    pub sm: SlotMap<NodeId, Node<T>>
 }
 
 impl<T> Graph<T> {
@@ -35,19 +37,28 @@ impl<T> Graph<T> {
         self.sm.len()
     }
 
-    pub fn get_node(&self, ix: NodeId) -> (&T, Option<&Vec<NodeId>>) {
+    pub fn get_children(&self, ix: NodeId) -> Option<Vec<NodeId>> {
+        let expr = self.sm.get(ix).unwrap();
+        if let Some(children) = &expr.children {
+            Some(children.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_node(&self, ix: NodeId) -> &Node<T> {
+        let node = self.sm.get(ix).unwrap();
+        node
+    }
+
+    pub fn get_node_mut(&mut self, ix: NodeId) -> &mut Node<T> {
+        let mut node = self.sm.get_mut(ix).unwrap();
+        node
+    }
+
+    pub fn get_node_with_children(&self, ix: NodeId) -> (&T, Option<&Vec<NodeId>>) {
         let node = self.sm.get(ix).unwrap();
         (&node.inner, node.children.as_ref())
-    }
-
-    pub fn get_node_inner(&mut self, ix: NodeId) -> &T {
-        let node = self.sm.get(ix).unwrap();
-        &node.inner
-    }
-
-    pub fn get_node_mut(&mut self, ix: NodeId) -> &mut T {
-        let mut node = self.sm.get_mut(ix).unwrap();
-        &mut node.inner
     }
 
     pub fn replace(&mut self, ix: NodeId, t: T) {
@@ -75,12 +86,12 @@ impl<T> Graph<T> {
 }
 
 #[derive(Debug)]
-enum RelOpType {
+enum TestRelOpType {
     Lt, Le, Gt, Ge, Ne, Eq
 }
 
 #[derive(Debug)]
-enum Expr {
+enum TestExpr {
     Column(String),
     CID(usize),
     Integer(isize),
@@ -88,29 +99,29 @@ enum Expr {
     Star,
     Select,
     Cast,
-    Relop(RelOpType)
+    Relop(TestRelOpType)
 }
 
 #[test]
 pub fn test_graph() {
 
     // select (111 = 222), *
-    let mut qgm: Graph<Expr> = Graph::new();
+    let mut qgm: Graph<TestExpr> = Graph::new();
 
-    let lhs = qgm.add_node(Expr::Integer(111), None);
-    let rhs = qgm.add_node(Expr::Integer(222), None);
-    let relop = qgm.add_node(Expr::Relop(RelOpType::Eq), Some(vec![lhs, rhs]));
+    let lhs = qgm.add_node(TestExpr::Integer(111), None);
+    let rhs = qgm.add_node(TestExpr::Integer(222), None);
+    let relop = qgm.add_node(TestExpr::Relop(TestRelOpType::Eq), Some(vec![lhs, rhs]));
 
     //let mut e = qgm.get_node_mut(e);
     //*e = Expr::Boolean(false);
     //qgm.replace_node(2, Expr::Boolean(false));
 
-    let star = qgm.add_node(Expr::Star, None);
+    let star = qgm.add_node(TestExpr::Star, None);
 
-    let select = qgm.add_node(Expr::Select, Some(vec![relop, star]));
+    let select = qgm.add_node(TestExpr::Select, Some(vec![relop, star]));
 
     let cols: Vec<NodeId> = vec!["c1", "c2"].into_iter().map(|col| {
-        let expr = Expr::Column(col.to_string());
+        let expr = TestExpr::Column(col.to_string());
         qgm.add_node(expr, None)
     }).collect();
 
@@ -118,14 +129,14 @@ pub fn test_graph() {
     dbg!(&qgm);
 }
 
-fn qst(g: &mut Graph<Expr>, ix: NodeId) {
-    let expr = g.get_node_inner(ix);
+fn qst(g: &mut Graph<TestExpr>, ix: NodeId) {
+    let expr = &g.get_node(ix).inner;
     match expr {
-        Expr::Relop(_) => {
+        TestExpr::Relop(_) => {
 
         },
-        Expr::Column(_) => {
-            g.replace(ix, Expr::CID(99));
+        TestExpr::Column(_) => {
+            g.replace(ix, TestExpr::CID(99));
         }
         _ => {}
     }

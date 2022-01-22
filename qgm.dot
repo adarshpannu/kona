@@ -3,29 +3,34 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [*]";
+    label = "main [name, dept_id]";
     "main_pt"[shape=point, color=white];
-    "QUN_3"[label="cte_org/ ", color=red]
-}
-  subgraph cluster_cte_org {
-    label = "cte_org [FOO, first_name, manager_id]";
-    "cte_org_pt"[shape=point, color=white];
-    "QUN_1"[label="cte_org/o ", color=red]
-    "QUN_0"[label="staffs/e ", color=red]
-    exprnodeNodeId11v1[label="And"];
-    exprnodeNodeId6v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId6v1[label="="];
-    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
-    exprnodeNodeId4v1[label="o.staff_id"];
-    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
-    exprnodeNodeId5v1[label="e.manager_id"];
-    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId10v1[label="Not"];
-    exprnodeNodeId9v1 -> exprnodeNodeId10v1;
-    exprnodeNodeId9v1[label="IS"];
-    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId7v1[label="col1"];
+    "QUN_1"[label="emp/ ", color=red]
+    "QUN_0"[label="emp/ ", color=red]
+    exprnodeNodeId15v1[label="And"];
+    exprnodeNodeId9v1 -> exprnodeNodeId15v1;
+    exprnodeNodeId9v1[label="And"];
+    exprnodeNodeId5v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId5v1[label="="];
+    exprnodeNodeId3v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId3v1[label="emp.name"];
+    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId4v1[label="\"adarsh\""];
     exprnodeNodeId8v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId8v1[label="NULL"];
+    exprnodeNodeId8v1[label=">"];
+    exprnodeNodeId6v1 -> exprnodeNodeId8v1;
+    exprnodeNodeId6v1[label="age"];
+    exprnodeNodeId7v1 -> exprnodeNodeId8v1;
+    exprnodeNodeId7v1[label="30"];
+    exprnodeNodeId14v1 -> exprnodeNodeId15v1;
+    exprnodeNodeId14v1[label=">"];
+    exprnodeNodeId10v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId10v1[label="dept_id"];
+    exprnodeNodeId13v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId13v1[label="Add"];
+    exprnodeNodeId11v1 -> exprnodeNodeId13v1;
+    exprnodeNodeId11v1[label="1"];
+    exprnodeNodeId12v1 -> exprnodeNodeId13v1;
+    exprnodeNodeId12v1[label="2"];
 }
 }

@@ -1,123 +1,102 @@
 // QST: Query Semantics
 
 use crate::ast::QGM;
-use crate::ast::{QueryBlock, Expr, Expr::*};
+use crate::ast::{Expr, Expr::*, QueryBlock};
+use crate::graph::{Graph, NodeId};
+use crate::row::{DataType, Datum};
+
 use crate::includes::*;
 use log::Log;
 use std::rc::Rc;
 
 impl QGM {
-    pub fn normalize(&mut self) {
+    pub fn normalize(&mut self, env: &Env) {
         info!("Normalize QGM");
 
         // Extract preds under AND
         let qblock = &self.qblock;
         let mut pred_list = vec![];
         if qblock.pred_list.is_some() {
-            let expr = qblock.pred_list.as_ref().unwrap();
-            QGM::extract(expr, &mut pred_list)
+            let expr_id = qblock.pred_list.unwrap();
+
+            Expr::typecheck(env, &mut self.graph, qblock, expr_id);
+
+            QGM::extract(self, expr_id, &mut pred_list)
         }
 
-        for expr in pred_list {
+        for exprid in pred_list {
+            let expr = self.graph.get_node(exprid);
             info!("Extracted: {:?}", expr)
         }
     }
 
-    pub fn extract(NodeId: &NodeId, pred_list: &mut Vec<NodeId>) {
-        let expr = &*NodeId.borrow();
-        if let LogExpr(lhs, crate::ast::LogOp::And, rhs) = expr {
-            QGM::extract(lhs, pred_list);
-            if let Some(rhs) = rhs {
-                QGM::extract(rhs, pred_list);
-            }
+    pub fn extract(&mut self, pred_id: NodeId, pred_list: &mut Vec<NodeId>) {
+        let (expr, children) = self.graph.get_node_with_children(pred_id);
+        if let LogExpr(crate::ast::LogOp::And) = expr {
+            let children = children.unwrap();
+            let lhs = children[0];
+            let rhs = children[1];
+            self.extract(lhs, pred_list);
+            self.extract(rhs, pred_list);
         } else {
-            pred_list.push(Rc::clone(NodeId))
+            pred_list.push(pred_id)
         }
-    }
-
-    fn check(NodeId: &NodeId) {
-        let mut expr = &mut *NodeId.borrow_mut();
-        expr.check();
     }
 }
 
 impl Expr {
-    pub fn children(&self) -> Vec<NodeId> {
-        let retval = vec![];
-        let v = match &self {
-            RelExpr(lhs, op, rhs) => vec![lhs.clone(), rhs.clone()],
+    pub fn typecheck(env: &Env, graph: &mut Graph<Expr>, qblock: &QueryBlock, expr_id: NodeId) -> Result<DataType, String> {
+        let children = graph.get_children(expr_id);
+        let mut children_datatypes = vec![];
 
-            BetweenExpr(e, lhs, rhs) => vec![lhs.clone(), rhs.clone()],
+        if let Some(children) = children {
+            for child_id in children {
+                let datatype = Expr::typecheck(env, graph, qblock, child_id);
+                children_datatypes.push(datatype);
+            }
+        }
 
-            LogExpr(lhs, op, rhs) => {
-                if rhs.is_some() {
-                    vec![lhs.clone(), rhs.as_ref().unwrap().clone()]
+        let mut node = graph.get_node_mut(expr_id);
+        let expr = &node.inner;
+        info!("Check: {:?}", expr);
+
+        let datatype = match expr {
+            RelExpr(relop) => { 
+                // Check argument types
+                if children_datatypes[0] != children_datatypes[1] {
+                    return Err("Datatype mismatch".to_string())
                 } else {
-                    vec![lhs.clone()]
+                    DataType::BOOL
+                }
+             },
+            Column { tablename, colname } => {
+                if let Some(tablename) = tablename {
+                    if let Some(tabledesc) = env.metadata.get_tabledesc(tablename) {
+                        let datatype = tabledesc.coltype(colname);
+                        if datatype.is_none() {
+                            return Err(format!("Column {}.{} not found", tablename, colname))
+                        } else {
+                            datatype.unwrap()
+                        }
+                    } else {
+                        return Err(format!("Table {} not found", tablename))
+                    }
+                } else {
+                    // Find colname in exactly one table.
+                    let (tablename, datatype) = env.metadata.coltype(colname)?;
+                    println!("Found {} in table {}", colname, tablename);
+                    datatype
                 }
             }
-
-            BinaryExpr(lhs, op, rhs) => vec![lhs.clone(), rhs.clone()],
-
-            NegatedExpr(expr) => vec![expr.clone()],
-
-            ScalarFunction(name, args) => vec![],
-
-            AggFunction(aggtype, arg) => vec![arg.clone()],
-
-            Subquery(subq) => unimplemented!(),
-
-            InSubqExpr(lhs, rhs) => vec![lhs.clone(), rhs.clone()],
-
-            InListExpr(lhs, args) => unimplemented!(),
-
-            ExistsExpr(lhs) => unimplemented!(),
-
-            _ => vec![]
+            LogExpr(logop) => { DataType::BOOL },
+            Literal(Datum::STR(_)) => DataType::STR,
+            Literal(Datum::INT(_)) => DataType::INT,
+            Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
+            Literal(Datum::BOOL(_)) => DataType::BOOL,
+            Literal(Datum::STR(_)) => DataType::STR,
+            _ => DataType::UNKNOWN
         };
-        retval
-    }
-
-    pub fn check(&mut self) -> Vec<NodeId> {
-        let retval = vec![];
-        let v = match &self {
-            RelExpr(lhs, op, rhs) => vec![lhs.clone(), rhs.clone()],
-
-            BetweenExpr(e, lhs, rhs) => vec![lhs.clone(), rhs.clone()],
-
-            LogExpr(lhs, op, rhs) => {
-                if rhs.is_some() {
-                    vec![lhs.clone(), rhs.as_ref().unwrap().clone()]
-                } else {
-                    vec![lhs.clone()]
-                }
-            }
-
-            BinaryExpr(lhs, op, rhs) => vec![lhs.clone(), rhs.clone()],
-
-            NegatedExpr(expr) => vec![expr.clone()],
-
-            ScalarFunction(name, args) => vec![],
-
-            AggFunction(aggtype, arg) => vec![arg.clone()],
-
-            Subquery(subq) => unimplemented!(),
-
-            InSubqExpr(lhs, rhs) => vec![lhs.clone(), rhs.clone()],
-
-            InListExpr(lhs, args) => unimplemented!(),
-
-            ExistsExpr(lhs) => unimplemented!(),
-
-            _ => vec![]
-        };
-        retval
-    }
-
-}
-
-impl QueryBlock {
-    pub fn check(&mut self) {
-
+        node.datatype = datatype;
+        Ok(datatype)
     }
 }

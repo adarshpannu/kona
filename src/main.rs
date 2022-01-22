@@ -18,7 +18,7 @@ pub mod logging;
 pub mod metadata;
 pub mod row;
 //pub mod task;
-//pub mod qst;
+pub mod qst;
 pub mod graph;
 
 use ast::{Expr::*, *};
@@ -149,7 +149,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
             }
             AST::QGM(mut qgm) => {
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
-                //qgm.normalize();
+                qgm.normalize(&env);
             }
             _ => unimplemented!(),
         }
@@ -191,13 +191,4 @@ fn main() -> Result<(), String> {
     info!("End of program");
 
     Ok(())
-}
-
-#[test]
-fn test_sm() {
-    let mut sm = SlotMap::new();
-    let foo = sm.insert("foo"); // Key generated on insert.
-    let bar = sm.insert("bar");
-    assert_eq!(sm[foo], "foo");
-    assert_eq!(sm[bar], "bar");
 }

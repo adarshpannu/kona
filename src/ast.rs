@@ -41,7 +41,7 @@ pub struct NamedExpr {
 
 impl NamedExpr {
     pub fn new(alias: Option<String>, expr_id: NodeId, graph: &Graph<Expr>) -> Self {
-        let (expr, _) = graph.get_node(expr_id);
+        let expr = &graph.get_node(expr_id).inner;
         let mut alias = alias;
         if alias.is_none() {
             if let Expr::Column { tablename, colname } = expr {
@@ -279,7 +279,7 @@ impl QGM {
     
     fn write_expr_to_graphvis(qgm: &QGM, expr: NodeId, file: &mut File) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
-        let (expr, children) = qgm.graph.get_node(expr);
+        let (expr, children) = qgm.graph.get_node_with_children(expr);
         fprint!(file, "    exprnode{}[label=\"{}\"];\n", id, expr.name());
         if let Some(children) = children {
             for &childid in children {
