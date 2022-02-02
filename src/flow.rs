@@ -6,89 +6,128 @@ use std::io::Write;
 
 use crate::graphviz::htmlify;
 use crate::metadata::CSVDesc;
-use crate::{
-    ast::*,
-    csv::*,
-    graph::{Graph, NodeId},
-    includes::*,
-    row::*,
-    task::*,
-};
+use crate::{csv::*, ast::*, includes::*, row::*, task::*};
 
 #[derive(Debug, Serialize, Deserialize)]
-enum FlowNodeInner {
+enum NodeInner {
     EmitNode(EmitNode),
     CSVNode(CSVNode),
     CSVDirNode(CSVDirNode),
     ProjectNode(ProjectNode),
     FilterNode(FilterNode),
     AggNode(AggNode),
+    JoinNode(JoinNode),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FlowNode {
+    id: FlowNodeId,
+    children: Vec<FlowNodeId>,
     npartitions: usize,
-    node_inner: FlowNodeInner,
+    node_inner: NodeInner,
 }
-
-/***************************************************************************************************/
 
 impl FlowNode {
     fn new<'a>(
-        graph: &'a mut Graph<FlowNode>, children: Vec<NodeId>, npartitions: usize, node_inner: FlowNodeInner,
-    ) -> NodeId {
-        let id = graph.len();
-        graph.add_node(
-            FlowNode {
-                npartitions,
-                node_inner,
-            },
-            Some(children),
-        )
+        arena: &'a NodeArena, children: Vec<FlowNodeId>, npartitions: usize,
+        node_inner: NodeInner,
+    ) -> &'a FlowNode {
+        let id = arena.len();
+        arena.alloc(FlowNode {
+            id,
+            children,
+            npartitions,
+            node_inner,
+        })
     }
+}
 
-    pub fn emit<'a>(child_id: NodeId, graph: &'a mut Graph<FlowNode>) -> NodeId {
-        let npartitions = 3; /// FIXME self.npartitions;
-        FlowNode::new(graph, vec![child_id], npartitions, EmitNode::new())
-    }
-
-    
-    /* FIXME
-    pub fn project<'a>(child_id: NodeId, graph: &'a mut Graph<FlowNode>, colids: Vec<ColId>) -> NodeId {
+/***************************************************************************************************/
+impl FlowNode {
+    pub fn emit<'a>(&self, arena: &'a NodeArena) -> &'a FlowNode {
         let npartitions = self.npartitions;
-        FlowNode::new(graph, vec![child_id], npartitions, ProjectNode::new(colids))
+        let retval =
+            FlowNode::new(&arena, vec![self.id()], npartitions, EmitNode::new());
+        retval
     }
 
-    pub fn filter<'a>(child_id: NodeId, graph: &'a mut Graph<FlowNode>, expr: Expr) -> NodeId {
+    pub fn project<'a>(
+        &self, arena: &'a NodeArena, colids: Vec<ColId>,
+    ) -> &'a FlowNode {
         let npartitions = self.npartitions;
-        FlowNode::new(graph, vec![child_id], npartitions, FilterNode::new(expr))
+        let retval = FlowNode::new(
+            &arena,
+            vec![self.id()],
+            npartitions,
+            ProjectNode::new(colids),
+        );
+        retval
     }
-    */
+
+    pub fn filter<'a>(&self, arena: &'a NodeArena, expr: Expr) -> &'a FlowNode {
+        let npartitions = self.npartitions;
+        let retval = FlowNode::new(
+            &arena,
+            vec![self.id()],
+            npartitions,
+            FilterNode::new(expr),
+        );
+        retval
+    }
+
+    pub fn join<'a>(
+        &self, arena: &'a NodeArena, other_children: Vec<&FlowNode>,
+        preds: Vec<JoinPredicate>,
+    ) -> &'a FlowNode {
+        let mut children: Vec<_> =
+            other_children.iter().map(|e| e.id()).collect();
+        children.push(self.id);
+
+        let retval = FlowNode::new(
+            &arena,
+            children,
+            self.npartitions, // TBD: Partitions need to be decided
+            JoinNode::new(preds),
+        );
+        retval
+    }
 
     pub fn agg<'a>(
-        child_id: NodeId, graph: &'a mut Graph<FlowNode>, keycols: Vec<(ColId, DataType)>, aggcols: Vec<(AggType, ColId, DataType)>,
-        npartitions: usize,
-    ) -> NodeId {
+        &self, arena: &'a NodeArena, keycols: Vec<(ColId, DataType)>,
+        aggcols: Vec<(AggType, ColId, DataType)>, npartitions: usize,
+    ) -> &'a FlowNode {
         // Turn single Agg into (Agg-producer + CSVDir + Agg-Consumer). Turn COUNT -> SUM as well.
         let aggnode = AggNode::new(keycols.clone(), aggcols.clone(), true);
-        let aggnode = FlowNode::new(graph, vec![child_id], npartitions, aggnode);
-        let aggnode = graph.get_node(aggnode).0;
+        let aggnode = FlowNode::new(&arena, vec![self.id], npartitions, aggnode);
 
-        let dirname_prefix = format!("{}/flow-99/stage-{:?}/consumer", TEMPDIR, aggnode); // FIXME - Remove :?
+        let dirname_prefix =
+            format!("{}/flow-99/stage-{}/consumer", TEMPDIR, aggnode.id);
 
-        let mut csvcoltypes: Vec<DataType> = keycols.iter().map(|(_, tp)| *tp).collect();
+        let mut csvcoltypes: Vec<DataType> =
+            keycols.iter().map(|(_, tp)| *tp).collect();
         for (aggtype, _, datatype) in aggcols.iter() {
             match *aggtype {
                 AggType::COUNT => csvcoltypes.push(DataType::INT),
                 _ => csvcoltypes.push(*datatype),
             };
         }
-        let colnames = (0..csvcoltypes.len()).map(|ix| format!("agg_col_{}", ix)).collect();
-        let csvdirnode = CSVDirNode::new(graph, dirname_prefix, colnames, csvcoltypes, 3); // FIXME self.npartitions);
-        //let csvdirnode = graph.get_node_inner(csvdirnode);
+        let colnames = (0..csvcoltypes.len())
+            .map(|ix| format!("agg_col_{}", ix))
+            .collect();
+        let csvdirnode = CSVDirNode::new(
+            &arena,
+            dirname_prefix,
+            colnames,
+            csvcoltypes,
+            self.npartitions,
+        );
 
         // Re-number keycols
-        let keycols: Vec<(ColId, DataType)> = keycols.iter().map(|(id, coltype)| *coltype).enumerate().collect();
+        let keycols: Vec<(ColId, DataType)> = keycols
+            .iter()
+            .map(|(id, coltype)| *coltype)
+            .enumerate()
+            .collect();
         let aggcols: Vec<(AggType, ColId, DataType)> = aggcols
             .iter()
             .enumerate()
@@ -103,50 +142,68 @@ impl FlowNode {
             .collect();
 
         let aggnode = AggNode::new(keycols, aggcols, false);
-        let aggnode = FlowNode::new(graph, vec![csvdirnode], npartitions, aggnode);
+        let aggnode =
+            FlowNode::new(&arena, vec![csvdirnode.id], npartitions, aggnode);
 
         aggnode
     }
 
-    pub fn id(&self) -> usize {
-        0 // FIXME
+    pub fn id(&self) -> FlowNodeId {
+        self.id
     }
 
-    /*
-    pub fn children(&self) -> &Vec<NodeId> {
+    pub fn children(&self) -> &Vec<FlowNodeId> {
         &self.children
-    }
-        pub fn nchildren(&self) -> usize {
-        self.children.len()
-    }
-    */
-
-    pub fn child<'a>(&self, flow: &'a Flow, ix: NodeId) -> &'a FlowNode {
-        let children = flow.graph.get_node(ix).1.unwrap();
-        flow.get_node(children[0])
     }
 
     pub fn desc(&self) -> String {
         // stupid dispatch, ugh!
         match &self.node_inner {
-            FlowNodeInner::CSVNode(inner_node) => inner_node.desc(self),
-            FlowNodeInner::CSVDirNode(inner_node) => inner_node.desc(self),
-            FlowNodeInner::EmitNode(inner_node) => inner_node.desc(self),
-            FlowNodeInner::ProjectNode(inner_node) => inner_node.desc(self),
-            FlowNodeInner::FilterNode(inner_node) => inner_node.desc(self),
-            FlowNodeInner::AggNode(inner_node) => inner_node.desc(self),
+            NodeInner::CSVNode(inner_node) => inner_node.desc(self),
+            NodeInner::CSVDirNode(inner_node) => inner_node.desc(self),
+            NodeInner::EmitNode(inner_node) => inner_node.desc(self),
+            NodeInner::ProjectNode(inner_node) => inner_node.desc(self),
+            NodeInner::FilterNode(inner_node) => inner_node.desc(self),
+            NodeInner::JoinNode(inner_node) => inner_node.desc(self),
+            NodeInner::AggNode(inner_node) => inner_node.desc(self),
         }
     }
 
-    pub fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+    pub fn nchildren(&self) -> usize {
+        self.children.len()
+    }
+
+    pub fn child<'a>(&self, flow: &'a Flow, ix: FlowNodeId) -> &'a FlowNode {
+        let children = &self.children;
+        flow.get_node(children[ix])
+    }
+
+    pub fn next(
+        &self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool,
+    ) -> Option<Row> {
         // stupid dispatch, ugh!
         let row = match &self.node_inner {
-            FlowNodeInner::CSVNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            FlowNodeInner::CSVDirNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            FlowNodeInner::EmitNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            FlowNodeInner::ProjectNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            FlowNodeInner::FilterNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
-            FlowNodeInner::AggNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
+            NodeInner::CSVNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeInner::CSVDirNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeInner::EmitNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeInner::ProjectNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeInner::FilterNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeInner::JoinNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
+            NodeInner::AggNode(inner_node) => {
+                inner_node.next(self, flow, stage, task, is_head)
+            }
         };
         //debug!("Node {}, next() = {:?}", self.id, &row);
         row
@@ -154,8 +211,8 @@ impl FlowNode {
 
     pub fn is_endpoint(&self) -> bool {
         match &self.node_inner {
-            FlowNodeInner::EmitNode(_) => true,
-            FlowNodeInner::AggNode(aggnode) => aggnode.is_producer == true,
+            NodeInner::EmitNode(_) => true,
+            NodeInner::AggNode(aggnode) => aggnode.is_producer == true,
             _ => false,
         }
     }
@@ -183,26 +240,31 @@ pub(crate) struct CSVNode {
 }
 
 impl CSVNode {
-    pub fn new<'a>(env: &Env, graph: &'a mut Graph<FlowNode>, name: String, npartitions: usize) -> NodeId {
+    pub fn new<'a>(
+        env: &Env, arena: &'a NodeArena, name: String, npartitions: usize,
+    ) -> &'a FlowNode {
         let tbldesc = env.metadata.get_tabledesc(&name).unwrap();
-        let (colnames, coltypes) = (tbldesc.colnames().clone(), tbldesc.coltypes().clone());
+        let (colnames, coltypes) =
+            (tbldesc.colnames().clone(), tbldesc.coltypes().clone());
 
         let filename = tbldesc.filename();
-        let partitions = compute_partitions(filename, npartitions as u64).unwrap();
-        let csvnode = FlowNodeInner::CSVNode(CSVNode {
+        let partitions =
+            compute_partitions(filename, npartitions as u64).unwrap();
+        let csvnode = NodeInner::CSVNode(CSVNode {
             filename: filename.clone(),
             colnames,
             coltypes,
             partitions,
         });
-        let node = FlowNode::new(graph, vec![], npartitions, csvnode);
+        let node = FlowNode::new(arena, vec![], npartitions, csvnode);
         node
     }
 }
 
 impl CSVNode {
     fn desc(&self, supernode: &FlowNode) -> String {
-        let filename = self.filename.split("/").last().unwrap_or(&self.filename);
+        let filename =
+            self.filename.split("/").last().unwrap_or(&self.filename);
 
         format!(
             "CSVNode-#{} (p={})|{} {:?}",
@@ -214,16 +276,20 @@ impl CSVNode {
         .replace("\"", "\\\"")
     }
 
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
         let partition_id = task.partition_id;
-        let runtime = task.contexts.entry(supernode.id()).or_insert_with(|| {
-            let partition = &self.partitions[partition_id];
-            let mut iter = CSVPartitionIter::new(&self.filename, partition);
-            if partition_id == 0 {
-                iter.next(); // Consume the header row
-            }
-            NodeRuntime::CSV { iter }
-        });
+        let runtime =
+            task.contexts.entry(supernode.id()).or_insert_with(|| {
+                let partition = &self.partitions[partition_id];
+                let mut iter = CSVPartitionIter::new(&self.filename, partition);
+                if partition_id == 0 {
+                    iter.next(); // Consume the header row
+                }
+                NodeRuntime::CSV { iter }
+            });
 
         if let NodeRuntime::CSV { iter } = runtime {
             if let Some(line) = iter.next() {
@@ -261,19 +327,24 @@ struct ProjectNode {
 }
 
 impl ProjectNode {
-    fn new(colids: Vec<ColId>) -> FlowNodeInner {
-        FlowNodeInner::ProjectNode(ProjectNode { colids })
+    fn new(colids: Vec<ColId>) -> NodeInner {
+        NodeInner::ProjectNode(ProjectNode { colids })
     }
 
     fn desc(&self, supernode: &FlowNode) -> String {
         format!("ProjectNode-#{}|{:?}", supernode.id(), self.colids)
     }
 
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
         //let flow = task.stage().flow();
         //let flow = &*(&*task.stage).flow;
 
-        if let Some(row) = supernode.child(flow, 0).next(flow, stage, task, false) {
+        if let Some(row) =
+            supernode.child(flow, 0).next(flow, stage, task, false)
+        {
             return Some(row.project(&self.colids));
         } else {
             return None;
@@ -295,8 +366,13 @@ impl FilterNode {
         htmlify(s)
     }
 
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        while let Some(e) = supernode.child(flow, 0).next(flow, stage, task, false) {
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
+        while let Some(e) =
+            supernode.child(flow, 0).next(flow, stage, task, false)
+        {
             if let Datum::BOOL(b) = self.expr.eval(&e) {
                 if b {
                     return Some(e);
@@ -308,14 +384,42 @@ impl FilterNode {
 }
 
 impl FilterNode {
-    fn new(expr: Expr) -> FlowNodeInner {
+    fn new(expr: Expr) -> NodeInner {
         if let Expr::RelExpr(..) = expr {
-            FlowNodeInner::FilterNode(FilterNode { expr })
+            NodeInner::FilterNode(FilterNode { expr })
         } else {
             panic!("Invalid filter expression")
         }
     }
 }
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+struct JoinNode {
+    preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
+}
+
+type JoinPredicate = (ColId, RelOp, ColId);
+
+impl JoinNode {
+    fn new(preds: Vec<JoinPredicate>) -> NodeInner {
+        NodeInner::JoinNode(JoinNode { preds })
+    }
+
+    fn desc(&self, supernode: &FlowNode) -> String {
+        let s = format!("JoinNode-#{}|{:?}", supernode.id(), self.preds);
+        htmlify(s)
+    }
+
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
+        None
+    }
+}
+
+impl JoinNode {}
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
@@ -327,9 +431,10 @@ struct AggNode {
 
 impl AggNode {
     fn new(
-        keycols: Vec<(ColId, DataType)>, aggcols: Vec<(AggType, ColId, DataType)>, is_producer: bool,
-    ) -> FlowNodeInner {
-        FlowNodeInner::AggNode(AggNode {
+        keycols: Vec<(ColId, DataType)>,
+        aggcols: Vec<(AggType, ColId, DataType)>, is_producer: bool,
+    ) -> NodeInner {
+        NodeInner::AggNode(AggNode {
             keycols,
             aggcols,
             is_producer,
@@ -347,8 +452,12 @@ impl AggNode {
         s
     }
 
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        let htable: HashMap<Row, Row> = self.run_producer(supernode, flow, stage, task);
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
+        let htable: HashMap<Row, Row> =
+            self.run_producer(supernode, flow, stage, task);
         None
     }
 
@@ -384,13 +493,16 @@ impl AggNode {
         }
     }
 
-    fn run_producer(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task) -> HashMap<Row, Row> {
+    fn run_producer(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+    ) -> HashMap<Row, Row> {
         let mut htable: HashMap<Row, Row> = HashMap::new();
         let child = supernode.child(&*flow, 0);
 
         while let Some(currow) = child.next(flow, stage, task, false) {
             // build key
-            let keycolids = self.keycols.iter().map(|&e| e.0).collect::<Vec<usize>>();
+            let keycolids =
+                self.keycols.iter().map(|&e| e.0).collect::<Vec<usize>>();
             let key = currow.project(&keycolids);
             //debug!("-- key = {}", key);
 
@@ -403,8 +515,10 @@ impl AggNode {
                         match aggtype {
                             AggType::COUNT => Datum::INT(0),
                             AggType::SUM => Datum::INT(0),
-                            AggType::MAX | AggType::MIN => currow.get_column(ix).clone(),
-                            AggType::AVG | AggType::COUNT_DISTINCT => unimplemented!(),
+                            AggType::MAX | AggType::MIN => {
+                                currow.get_column(ix).clone()
+                            }
+                            AggType::AVG | AggType::COUNT_DISTINCT => unimplemented!()
                         }
                     })
                     .collect();
@@ -426,15 +540,18 @@ impl AggNode {
 struct EmitNode {}
 
 impl EmitNode {
-    fn new() -> FlowNodeInner {
-        FlowNodeInner::EmitNode(EmitNode {})
+    fn new() -> NodeInner {
+        NodeInner::EmitNode(EmitNode {})
     }
 
     fn desc(&self, supernode: &FlowNode) -> String {
         format!("EmitNode-#{}", supernode.id())
     }
 
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
         supernode.child(flow, 0).next(flow, stage, task, false)
     }
 }
@@ -445,30 +562,25 @@ impl EmitNode {}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
     pub id: usize,
-    pub graph: Graph<FlowNode>,
-    pub emit_id: NodeId
+    pub nodes: Vec<FlowNode>,
 }
 
 impl Flow {
-    pub fn get_node(&self, node_id: NodeId) -> &FlowNode {
-        self.graph.get_node(node_id).0
+    pub fn get_node(&self, node_id: FlowNodeId) -> &FlowNode {
+        &self.nodes[node_id]
     }
 
     pub fn make_stages(&self) -> Vec<Stage> {
-        /*
         let stages: Vec<_> = self
-            .graph
-            .nodes()
+            .nodes
             .iter()
-            .filter(|node| node.inner().is_endpoint())
-            .map(|node| Stage::new(node.inner().id(), self))
+            .filter(|node| node.is_endpoint())
+            .map(|node| Stage::new(node.id(), self))
             .collect();
         for stage in stages.iter() {
             debug!("Stage: head_node_id = {}", stage.head_node_id)
         }
         stages
-        */
-        todo!()
     }
 
     pub fn run(&self, env: &Env) {
@@ -490,10 +602,13 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     s.finish()
 }
 
-fn write_partition(flow: &Flow, stage: &Stage, task: &Task, key: &Row, value: Option<&Row>) {
+fn write_partition(
+    flow: &Flow, stage: &Stage, task: &Task, key: &Row, value: Option<&Row>,
+) {
     // Key: flow-id / node-id / dest-part / src-part.extension
     let npartitions_consumer = stage.npartitions_consumer;
-    let dest_partition = calculate_hash(key) % stage.npartitions_consumer as u64;
+    let dest_partition =
+        calculate_hash(key) % stage.npartitions_consumer as u64;
 
     let dirname = format!(
         "{}/flow-{}/stage-{}/consumer-{}",
@@ -536,22 +651,26 @@ pub(crate) struct CSVDirNode {
 
 impl CSVDirNode {
     pub fn new<'a>(
-        graph: &'a mut Graph<FlowNode>, dirname_prefix: String, colnames: Vec<String>, coltypes: Vec<DataType>,
-        npartitions: usize,
-    ) -> NodeId {
-        let csvnode = FlowNodeInner::CSVDirNode(CSVDirNode {
+        arena: &'a NodeArena, dirname_prefix: String, colnames: Vec<String>,
+        coltypes: Vec<DataType>, npartitions: usize,
+    ) -> &'a FlowNode {
+        let csvnode = NodeInner::CSVDirNode(CSVDirNode {
             dirname_prefix,
             colnames,
             coltypes,
         });
-        let node = FlowNode::new(graph, vec![], npartitions, csvnode);
+        let node = FlowNode::new(arena, vec![], npartitions, csvnode);
         node
     }
 }
 
 impl CSVDirNode {
     fn desc(&self, supernode: &FlowNode) -> String {
-        let filename = self.dirname_prefix.split("/").last().unwrap_or(&self.dirname_prefix);
+        let filename = self
+            .dirname_prefix
+            .split("/")
+            .last()
+            .unwrap_or(&self.dirname_prefix);
 
         format!(
             "CSVDirNode-#{} (p={})|{} {:?}",
@@ -563,13 +682,18 @@ impl CSVDirNode {
         .replace("\"", "\\\"")
     }
 
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
+    fn next(
+        &self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task,
+        is_head: bool,
+    ) -> Option<Row> {
         let partition_id = task.partition_id;
-        let runtime = task.contexts.entry(supernode.id()).or_insert_with(|| {
-            let full_dirname = format!("{}-{}", self.dirname_prefix, partition_id);
-            let mut iter = CSVDirIter::new(&full_dirname);
-            NodeRuntime::CSVDir { iter }
-        });
+        let runtime =
+            task.contexts.entry(supernode.id()).or_insert_with(|| {
+                let full_dirname =
+                    format!("{}-{}", self.dirname_prefix, partition_id);
+                let mut iter = CSVDirIter::new(&full_dirname);
+                NodeRuntime::CSVDir { iter }
+            });
 
         if let NodeRuntime::CSVDir { iter } = runtime {
             if let Some(line) = iter.next() {

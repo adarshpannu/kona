@@ -1,0 +1,14 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=LR;
+    splines=polyline;
+    nodesep=0.5;
+    Node0[label="CSVNode-#0 (p=4)|customer.tbl [\"1\", \"Customer#000000001\", \"IVhzIApeRb ot,c,E\", \"15\", \"25-989-741-2988\", \"711.56\", \"BUILDING\", \"to the even, regular platelets. regular, ironic epitaphs nag e\"]"];
+    Node1[label="AggNode-#1 (p=3)|by = [(3, INT)], aggs = [(COUNT, 0, INT), (SUM, 0, INT), (MIN, 1, STR), (MAX, 1, STR)]"];
+    Node0 -> Node1;
+    Node2[label="CSVDirNode-#2 (p=4)|consumer [\"agg_col_0\", \"agg_col_1\", \"agg_col_2\", \"agg_col_3\", \"agg_col_4\"]"];
+    Node3[label="AggNode-#3 (p=3)|by = [(0, INT)], aggs = [(SUM, 1, INT), (SUM, 2, INT), (MIN, 3, STR), (MAX, 4, STR)]"];
+    Node2 -> Node3;
+    Node4[label="EmitNode-#4"];
+    Node3 -> Node4;
+}

@@ -26,6 +26,6 @@ digraph example1 {
     exprnodeNodeId10v1 -> exprnodeNodeId12v1;
     exprnodeNodeId10v1[label="dept_id"];
     exprnodeNodeId11v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId11v1[label="\"aa\""];
+    exprnodeNodeId11v1[label="10"];
 }
 }

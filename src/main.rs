@@ -9,44 +9,43 @@ lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
 pub mod ast;
 pub mod csv;
-//pub mod flow;
-//pub mod graphviz;
+pub mod flow;
+pub mod graphviz;
 pub mod includes;
 pub mod logging;
 pub mod metadata;
 pub mod row;
-//pub mod task;
+pub mod task;
 pub mod qst;
 pub mod graph;
 
 use ast::{Expr::*, *};
 use ast::{ParserState, AST};
 use clp::CLParser;
-//use flow::*;
+use flow::*;
 use graph::Graph;
 use metadata::Metadata;
 use row::*;
 use std::cell::RefCell;
 use std::fs;
 use std::rc::Rc;
-//use task::ThreadPool;
+use task::ThreadPool;
 use slotmap::SlotMap;
 
 pub struct Env {
-    //thread_pool: ThreadPool,
+    thread_pool: ThreadPool,
     metadata: Metadata,
 }
 
 impl Env {
     fn new(nthreads: usize) -> Self {
-        //let thread_pool = task::ThreadPool::new(nthreads);
+        let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
-        Env { metadata }
+        Env { thread_pool, metadata }
     }
 }
 
 /***************************************************************************************************/
-/*
 pub fn run_flow(env: &mut Env) {
     let flow = make_simple_flow(env);
 
@@ -54,7 +53,7 @@ pub fn run_flow(env: &mut Env) {
 
     graphviz::write_flow_to_graphviz(&flow, &gvfilename, false).expect("Cannot write to .dot file.");
 
-    let node = &flow.graph.get_node(flow.graph.len() - 1);
+    let node = &flow.nodes[flow.nodes.len() - 1];
 
     let dirname = format!("{}/flow-{}", TEMPDIR, flow.id);
     std::fs::remove_dir_all(dirname);
@@ -68,7 +67,7 @@ pub fn run_flow(env: &mut Env) {
 }
 
 pub fn make_simple_flow(env: &Env) -> Flow {
-    let mut flow_graph: Graph<FlowNode> = Graph::new();
+    let arena: NodeArena = Arena::new();
 
     let mut qgm: Graph<Expr> = Graph::new();
 
@@ -82,11 +81,11 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     let csvnode = if use_dir == false {
         //let csvfilename = format!("{}/{}", DATADIR, "customer.tbl").to_string();
 
-        let csvnode = CSVNode::new(env, &mut flow_graph, "cust".to_string(), 4);
+        let csvnode = CSVNode::new(env, &arena, "cust".to_string(), 4);
         csvnode
     } else {
         let csvnode = CSVDirNode::new(
-            &mut flow_graph,
+            &arena,
             format!("{}/{}", DATADIR, "empdir/partition"),
             vec![],
             vec![DataType::STR, DataType::INT, DataType::INT],
@@ -95,30 +94,28 @@ pub fn make_simple_flow(env: &Env) -> Flow {
         csvnode
     };
 
-    //let csvnode = flow_graph.get_node_inner(csvnode);
-
     // name,age,dept_id
-    let aggnode = FlowNode::agg(
-        csvnode,
-        &mut flow_graph,
-        vec![(3, DataType::INT)], // dept_id
-        vec![
-            (AggType::COUNT, 0, DataType::INT), // count(dept_id)
-            (AggType::SUM, 0, DataType::INT),   // sum(age)
-            (AggType::MIN, 1, DataType::STR),   // min(name)
-            (AggType::MAX, 1, DataType::STR),   // max(name)
-        ],
-        3,
-    );
-    let emit_id = FlowNode::emit(aggnode, &mut flow_graph);
+    csvnode
+        //.filter(&arena, expr) // age > ?
+        //.project(&arena, vec![2, 1, 0]) // dept_id, age, name
+        .agg(
+            &arena,
+            vec![(3, DataType::INT)], // dept_id
+            vec![
+                (AggType::COUNT, 0, DataType::INT), // count(dept_id)
+                (AggType::SUM, 0, DataType::INT),   // sum(age)
+                (AggType::MIN, 1, DataType::STR),   // min(name)
+                (AggType::MAX, 1, DataType::STR),   // max(name)
+            ],
+            3,
+        )
+        .emit(&arena);
 
     Flow {
         id: 99,
-        graph: flow_graph,
-        emit_id
+        nodes: arena.into_vec(),
     }
 }
-*/
 
 fn stringify<E: std::fmt::Debug>(e: E) -> String {
     format!("xerror: {:?}", e)
@@ -181,7 +178,7 @@ fn main() -> Result<(), String> {
         return Err(errstr);
     }
 
-    //run_flow(&mut env);
+    run_flow(&mut env);
 
     info!("End of program");
 
