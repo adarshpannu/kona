@@ -1,6 +1,5 @@
 #![allow(warnings)]
 
-use crate::error::{FlareError, FlareErrorCode, FlareErrorCode::*};
 use crate::{csv::*, ast::Expr::*, ast::*, includes::*, row::*};
 
 use crate::includes::*;
@@ -127,20 +126,6 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn coltype(&self, colname: &String) -> Result<(&String, DataType), String> {
-        // Find column in a single table
-        let mut tablename = None;
-        for (thisname, desc) in self.tables.iter() {
-            if let Some(coltype) = desc.coltype(colname) {
-                if tablename.is_none() {
-                    tablename = Some((thisname, coltype))
-                } else {
-                    return Err(format!("Ambiguous column {}", colname))
-                }
-            }
-        }
-        tablename.ok_or(format!("Column {} not found", colname))
-    }
 
     pub fn new() -> Metadata {
         Metadata {
@@ -150,16 +135,9 @@ impl Metadata {
 
     pub fn catalog_table(
         &mut self, name: String, options: Vec<(String, String)>,
-    ) -> Result<(), FlareError> {
+    ) -> Result<(), String> {
         if self.tables.contains_key(&name) {
-            error!(
-                "{}",
-                format!("Table {} cannot be cataloged more than once.", name)
-            );
-            return Err(FlareError::new(
-                TableAlreadyCataloged,
-                format!("{}", name),
-            ));
+            return Err(format!("Table {} cannot be cataloged more than once.", name));
         }
         let hm: HashMap<String, String> = options.into_iter().collect();
         match hm.get("TYPE").map(|e| &e[..]) {
@@ -183,6 +161,7 @@ impl Metadata {
                 };
                 let csvdesc = Box::new(CSVDesc::new(path, separator, header));
                 self.tables.insert(name.to_string(), csvdesc);
+                info!("Cataloged table {}", &name);
             }
             _ => {
                 unimplemented!()
@@ -191,14 +170,10 @@ impl Metadata {
         Ok(())
     }
 
-    pub fn describe_table(&self, name: String) -> Result<(), FlareError> {
+    pub fn describe_table(&self, name: String) -> Result<(), String> {
         let tbldesc = self.tables.get(&name);
         if tbldesc.is_none() {
-            error!("{}", format!("Table {} does not exist.", name));
-            return Err(FlareError::new(
-                TableDoesNotExist,
-                format!("{}", name),
-            ));
+            return Err(format!("Table {} does not exist.", name));
         }
         let tbldesc = tbldesc.unwrap();
         info!("Table {}, {:?}", name, tbldesc.describe());

@@ -69,9 +69,9 @@ pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Quantifier {
     id: usize,
-    name: Option<String>,
-    alias: Option<String>,
-    qblock: Option<QueryBlockLink>,
+    pub name: Option<String>,
+    pub alias: Option<String>,
+    pub qblock: Option<QueryBlockLink>,
 }
 
 impl Quantifier {
@@ -116,7 +116,7 @@ pub struct QueryBlock {
     pub name: Option<String>,
     pub qbtype: QueryBlockType,
     select_list: Vec<NamedExpr>,
-    quns: Vec<Quantifier>,
+    pub quns: Vec<Quantifier>,
     pub pred_list: Option<NodeId>,
     group_by: Option<Vec<NodeId>>,
     having_clause: Option<NodeId>,

@@ -1,6 +1,5 @@
 #![allow(warnings)]
 
-use crate::error::{FlareError, FlareErrorCode, FlareErrorCode::*};
 use crate::includes::*;
 
 #[macro_use]
@@ -10,7 +9,6 @@ lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
 pub mod ast;
 pub mod csv;
-pub mod error;
 //pub mod flow;
 //pub mod graphviz;
 pub mod includes;
@@ -129,7 +127,7 @@ fn stringify<E: std::fmt::Debug>(e: E) -> String {
 /*
  * Run a job from a file
  */
-fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
+fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
     let contents = fs::read_to_string(filename).expect(&format!("Cannot open file: {}", &filename));
 
     let mut parser_state = ParserState::new();
@@ -139,7 +137,6 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
     for (ix, mut ast) in astlist.into_iter().enumerate() {
-        info!("Parsed stmt {}", ix);
         match ast {
             AST::CatalogTable { name, options } => {
                 env.metadata.catalog_table(name, options)?;
@@ -149,7 +146,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
             }
             AST::QGM(mut qgm) => {
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
-                qgm.normalize(&env);
+                qgm.normalize(&env)?;
             }
             _ => unimplemented!(),
         }
@@ -161,8 +158,6 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), FlareError> {
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init();
-
-    info!("FLARE {}", "hello");
 
     let args = "cmdname --rank 0".split(' ').map(|e| e.to_owned()).collect();
 
@@ -181,7 +176,7 @@ fn main() -> Result<(), String> {
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {
-        let errstr = format!("{:?}", &flare_err);
+        let errstr = format!("{}", &flare_err);
         error!("{}", errstr);
         return Err(errstr);
     }

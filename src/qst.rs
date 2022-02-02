@@ -10,7 +10,7 @@ use log::Log;
 use std::rc::Rc;
 
 impl QGM {
-    pub fn normalize(&mut self, env: &Env) {
+    pub fn normalize(&mut self, env: &Env) -> Result<(), String> {
         info!("Normalize QGM");
 
         // Extract preds under AND
@@ -19,7 +19,7 @@ impl QGM {
         if qblock.pred_list.is_some() {
             let expr_id = qblock.pred_list.unwrap();
 
-            Expr::typecheck(env, &mut self.graph, qblock, expr_id);
+            Expr::resolve(env, &mut self.graph, qblock, expr_id)?;
 
             QGM::extract(self, expr_id, &mut pred_list)
         }
@@ -28,6 +28,7 @@ impl QGM {
             let expr = self.graph.get_node(exprid);
             info!("Extracted: {:?}", expr)
         }
+        Ok(())
     }
 
     pub fn extract(&mut self, pred_id: NodeId, pred_list: &mut Vec<NodeId>) {
@@ -44,14 +45,46 @@ impl QGM {
     }
 }
 
+fn dquote(s: &String) -> String {
+    format!("\"{}\"", s)
+}
+
+impl QueryBlock {
+    pub fn resolve_coltype(&self, env: &Env, colname: &String) -> Result<(&String, DataType), String> {
+        // Find column in a single table.
+        let mut retval = None;
+        for qun in self.quns.iter() {
+            let tablename = qun.name.as_ref();
+            let curval = tablename
+                .and_then(|tn| env.metadata.get_tabledesc(tn))
+                .and_then(|desc| desc.coltype(colname))
+                .and_then(|ct| Some((tablename.unwrap(), ct)));
+
+            if curval.is_some() {
+                if retval.is_none() {
+                    retval = curval;
+                } else {
+                    return Err(format!(
+                        "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
+                        dquote(colname)
+                    ));
+                }
+            }
+        }
+        retval.ok_or(format!("Column {} not found in any table.", dquote(colname)))
+    }
+}
+
 impl Expr {
-    pub fn typecheck(env: &Env, graph: &mut Graph<Expr>, qblock: &QueryBlock, expr_id: NodeId) -> Result<DataType, String> {
+    pub fn resolve(
+        env: &Env, graph: &mut Graph<Expr>, qblock: &QueryBlock, expr_id: NodeId,
+    ) -> Result<DataType, String> {
         let children = graph.get_children(expr_id);
         let mut children_datatypes = vec![];
 
         if let Some(children) = children {
             for child_id in children {
-                let datatype = Expr::typecheck(env, graph, qblock, child_id);
+                let datatype = Expr::resolve(env, graph, qblock, child_id)?;
                 children_datatypes.push(datatype);
             }
         }
@@ -61,40 +94,42 @@ impl Expr {
         info!("Check: {:?}", expr);
 
         let datatype = match expr {
-            RelExpr(relop) => { 
+            RelExpr(relop) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
-                    return Err("Datatype mismatch".to_string())
+                    return Err("Datatype mismatch".to_string());
                 } else {
                     DataType::BOOL
                 }
-             },
+            }
             Column { tablename, colname } => {
                 if let Some(tablename) = tablename {
                     if let Some(tabledesc) = env.metadata.get_tabledesc(tablename) {
                         let datatype = tabledesc.coltype(colname);
                         if datatype.is_none() {
-                            return Err(format!("Column {}.{} not found", tablename, colname))
+                            return Err(format!("Column {}.{} not found", tablename, colname));
                         } else {
+                            node.inner = CID(10);
+
                             datatype.unwrap()
                         }
                     } else {
-                        return Err(format!("Table {} not found", tablename))
+                        return Err(format!("Table {} not found", tablename));
                     }
                 } else {
                     // Find colname in exactly one table.
-                    let (tablename, datatype) = env.metadata.coltype(colname)?;
-                    println!("Found {} in table {}", colname, tablename);
+                    let (tablename, datatype) = qblock.resolve_coltype(env, colname)?;
+                    info!("Found {} in table {}", colname, tablename);
                     datatype
                 }
             }
-            LogExpr(logop) => { DataType::BOOL },
+            LogExpr(logop) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,
             Literal(Datum::INT(_)) => DataType::INT,
             Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
             Literal(Datum::BOOL(_)) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,
-            _ => DataType::UNKNOWN
+            _ => DataType::UNKNOWN,
         };
         node.datatype = datatype;
         Ok(datatype)
