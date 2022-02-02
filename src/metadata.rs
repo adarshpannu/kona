@@ -92,6 +92,8 @@ pub trait TableDesc {
     fn filename(&self) -> &String;
     fn colnames(&self) -> &Vec<String>;
     fn coltypes(&self) -> &Vec<DataType>;
+    fn header(&self) -> bool;
+    fn separator(&self) -> char;
     fn describe(&self) -> String {
         String::from("")
     }
@@ -118,6 +120,14 @@ impl TableDesc for CSVDesc {
     fn coltype(&self, colname: &String) -> Option<DataType> {
         let ix = self.colnames.iter().position(|cn| cn == colname);
         ix.map(|ix| self.coltypes[ix])
+    }
+
+    fn header(&self) -> bool {
+        self.header
+    }
+
+    fn separator(&self) -> char {
+        self.separator
     }
 }
 

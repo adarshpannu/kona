@@ -71,17 +71,18 @@ pub fn make_simple_flow(env: &Env) -> Flow {
 
     let mut qgm: Graph<Expr> = Graph::new();
 
-    // Expression: $column-1 < 3
+    // Expression: $column-1 < 25
     let lhs = qgm.add_node(CID(0), None);
-    let rhs = qgm.add_node(Literal(Datum::INT(3)), None);
+    let rhs = qgm.add_node(Literal(Datum::INT(25)), None);
     let expr = qgm.add_node(RelExpr(RelOp::Le), Some(vec![lhs, rhs]));
+    //let expr = qgm.get_node(expr);
 
     let use_dir = false;
 
     let csvnode = if use_dir == false {
         //let csvfilename = format!("{}/{}", DATADIR, "customer.tbl").to_string();
 
-        let csvnode = CSVNode::new(env, &arena, "cust".to_string(), 4);
+        let csvnode = CSVNode::new(env, &arena, "emp".to_string(), 4);
         csvnode
     } else {
         let csvnode = CSVDirNode::new(
@@ -97,15 +98,15 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     // name,age,dept_id
     csvnode
         //.filter(&arena, expr) // age > ?
-        //.project(&arena, vec![2, 1, 0]) // dept_id, age, name
+        .project(&arena, vec![2, 1, 0]) // dept_id, age, name
         .agg(
             &arena,
-            vec![(3, DataType::INT)], // dept_id
+            vec![(0, DataType::INT)], // dept_id
             vec![
                 (AggType::COUNT, 0, DataType::INT), // count(dept_id)
-                (AggType::SUM, 0, DataType::INT),   // sum(age)
-                (AggType::MIN, 1, DataType::STR),   // min(name)
-                (AggType::MAX, 1, DataType::STR),   // max(name)
+                (AggType::SUM, 1, DataType::INT),   // sum(age)
+                (AggType::MIN, 2, DataType::STR),   // min(name)
+                (AggType::MAX, 2, DataType::STR),   // max(name)
             ],
             3,
         )
