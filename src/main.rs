@@ -18,6 +18,7 @@ pub mod row;
 pub mod task;
 pub mod qst;
 pub mod graph;
+pub mod compiler;
 
 use ast::{Expr::*, *};
 use ast::{ParserState, AST};
@@ -72,7 +73,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     let mut qgm: Graph<Expr> = Graph::new();
 
     // Expression: $column-1 < 25
-    let lhs = qgm.add_node(CID(0), None);
+    let lhs = qgm.add_node(CID { qun_ix: 0, col_ix: 0}, None);
     let rhs = qgm.add_node(Literal(Datum::INT(25)), None);
     let expr = qgm.add_node(RelExpr(RelOp::Le), Some(vec![lhs, rhs]));
     //let expr = qgm.get_node(expr);
@@ -143,8 +144,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 env.metadata.describe_table(name)?;
             }
             AST::QGM(mut qgm) => {
+                qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
-                qgm.normalize(&env)?;
             }
             _ => unimplemented!(),
         }
@@ -179,7 +180,7 @@ fn main() -> Result<(), String> {
         return Err(errstr);
     }
 
-    run_flow(&mut env);
+    //run_flow(&mut env);
 
     info!("End of program");
 

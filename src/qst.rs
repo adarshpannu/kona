@@ -10,8 +10,11 @@ use log::Log;
 use std::rc::Rc;
 
 impl QGM {
-    pub fn normalize(&mut self, env: &Env) -> Result<(), String> {
+    pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
         info!("Normalize QGM");
+
+        // Resolve top-level QB
+        self.qblock.resolve(env)?;
 
         // Extract preds under AND
         let qblock = &self.qblock;
@@ -50,6 +53,18 @@ fn dquote(s: &String) -> String {
 }
 
 impl QueryBlock {
+    pub fn resolve(&self, env: &Env) -> Result<(), String> {
+        // Resolve QUNs first (base tables and any nested subqueries)
+        for qun in self.quns.iter() {
+            let tablename = qun.name.as_ref().unwrap();  // this will fail for subqueries, and that's ok for now
+            let tbdesc = env.metadata.get_tabledesc(tablename);
+            if tbdesc.is_none() {
+                return Err(format!("Table {} not cataloged.", dquote(tablename)));
+            }
+        }
+        Ok(())
+    }
+
     pub fn resolve_coltype(&self, env: &Env, colname: &String) -> Result<(&String, DataType), String> {
         // Find column in a single table.
         let mut retval = None;
@@ -109,8 +124,10 @@ impl Expr {
                         if datatype.is_none() {
                             return Err(format!("Column {}.{} not found", tablename, colname));
                         } else {
-                            node.inner = CID(10);
-
+                            node.inner = CID {
+                                qun_ix: 111,
+                                col_ix: 222,
+                            };
                             datatype.unwrap()
                         }
                     } else {

@@ -189,10 +189,10 @@ OrderSort: Ordering = {
 
 Quantifier: Quantifier = {
     <schemaname:(Identifier ".")?> <name:Identifier> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.next_id(), Some(name), alias, None)
+        Quantifier::new(parser_state.next_id(), Some(name), None, alias)
     },
     <subq:Subquery> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.next_id(), None, alias, Some(subq))
+        Quantifier::new(parser_state.next_id(), None, Some(subq), alias)
     }
 }
 

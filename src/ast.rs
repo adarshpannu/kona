@@ -70,18 +70,25 @@ pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
 pub struct Quantifier {
     id: usize,
     pub name: Option<String>,
-    pub alias: Option<String>,
     pub qblock: Option<QueryBlockLink>,
+    pub alias: Option<String>,
 }
 
 impl Quantifier {
-    pub fn new(id: usize, name: Option<String>, alias: Option<String>, qblock: Option<QueryBlockLink>) -> Self {
+    pub fn new(id: usize, name: Option<String>, qblock: Option<QueryBlockLink>, alias: Option<String>) -> Self {
+        // Either we have a named base table, or we have a queryblock (but not both)
+        assert!((name.is_some() && qblock.is_none()) || (name.is_none() && qblock.is_some()));
+
         Quantifier {
             id,
             name,
-            alias,
             qblock,
+            alias,
         }
+    }
+
+    pub fn is_base_table(&self) -> bool {
+        self.qblock.is_none() 
     }
 
     pub fn display(&self) -> String {
@@ -377,7 +384,7 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
-    CID(usize),
+    CID { qun_ix: usize, col_ix: usize },
     Column { tablename: Option<String>, colname: String },
     Star,
     Literal(Datum),
@@ -397,7 +404,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID(cid) => format!("CID: {}", cid),
+            CID { qun_ix, col_ix} => format!("CID: {}.{}", qun_ix, col_ix),
             Column { tablename, colname } => {
                 if let Some(tablename) = tablename {
                     format!("{}.{}", tablename, colname)
@@ -464,44 +471,6 @@ impl fmt::Display for Expr {
     }
 }
 
-/***************************************************************************************************/
-impl Expr {
-    pub fn eval<'a>(&'a self, row: &'a Row) -> Datum {
-        match self {
-            /*
-            CID(cid) => row.get_column(*cid).clone(),
-            Literal(lit) => lit.clone(),
-            BinaryExpr(b1, op, b2) => {
-                let b1 = b1.borrow().eval(row);
-                let b2 = b2.borrow().eval(row);
-                let res = match (b1, op, b2) {
-                    (Datum::INT(i1), ArithOp::Add, Datum::INT(i2)) => i1 + i2,
-                    (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
-                    (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
-                    (Datum::INT(i1), ArithOp::Div, Datum::INT(i2)) => i1 / i2,
-                    _ => panic!("Internal error: Operands of ArithOp not resolved yet."),
-                };
-                Datum::INT(res)
-            }
-            RelExpr(b1, op, b2) => {
-                let b1 = b1.borrow().eval(row);
-                let b2 = b2.borrow().eval(row);
-                let res = match (b1, op, b2) {
-                    (Datum::INT(i1), RelOp::Eq, Datum::INT(i2)) => i1 == i2,
-                    (Datum::INT(i1), RelOp::Ne, Datum::INT(i2)) => i1 != i2,
-                    (Datum::INT(i1), RelOp::Le, Datum::INT(i2)) => i1 <= i2,
-                    (Datum::INT(i1), RelOp::Lt, Datum::INT(i2)) => i1 < i2,
-                    (Datum::INT(i1), RelOp::Ge, Datum::INT(i2)) => i1 >= i2,
-                    (Datum::INT(i1), RelOp::Gt, Datum::INT(i2)) => i1 > i2,
-                    _ => panic!("Internal error: Operands of RelOp not resolved yet."),
-                };
-                Datum::BOOL(res)
-            }
-            */
-            _ => unimplemented!(),
-        }
-    }
-}
 
 enum E {
     A,
