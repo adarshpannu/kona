@@ -9,6 +9,7 @@ pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/flare";
 
 pub type FlowNodeId = usize;
 pub type ColId = usize;
+pub type QunId = usize;
 pub type PartitionId = usize;
 
 pub use crate::Env;

@@ -5,8 +5,8 @@ CATALOG TABLE cust ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/tpch-dat
 DESCRIBE TABLE emp;
 
 select name, dept_id
-from emp2
-where emp.name = 'adarsh'
-and emp.age > 30
-and emp.dept_id > 10;
+from emp E, emp E2
+where E.name = 'adarsh'
+and E2.age > 30
+and E.dept_id > 10;
 

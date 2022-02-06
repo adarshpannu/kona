@@ -4,7 +4,7 @@ use crate::{csv::*, ast::Expr::*, ast::*, includes::*, row::*};
 
 use crate::includes::*;
 use std::collections::HashMap;
-
+use std::rc::Rc;
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
@@ -97,7 +97,7 @@ pub trait TableDesc {
     fn describe(&self) -> String {
         String::from("")
     }
-    fn coltype(&self, colname: &String) -> Option<DataType>;
+    fn get_coldesc(&self, colname: &String) -> Option<(ColId, DataType)>;
 }
 
 impl TableDesc for CSVDesc {
@@ -117,9 +117,9 @@ impl TableDesc for CSVDesc {
         format!("Type: CSV, {:?}", self)
     }
 
-    fn coltype(&self, colname: &String) -> Option<DataType> {
+    fn get_coldesc(&self, colname: &String) -> Option<(ColId, DataType)> {
         let ix = self.colnames.iter().position(|cn| cn == colname);
-        ix.map(|ix| self.coltypes[ix])
+        ix.map(|ix| (ix, self.coltypes[ix]))
     }
 
     fn header(&self) -> bool {
@@ -132,7 +132,7 @@ impl TableDesc for CSVDesc {
 }
 
 pub struct Metadata {
-    tables: HashMap<String, Box<dyn TableDesc>>,
+    tables: HashMap<String, Rc<dyn TableDesc>>,
 }
 
 impl Metadata {
@@ -169,7 +169,7 @@ impl Metadata {
                     }
                     _ => ',',
                 };
-                let csvdesc = Box::new(CSVDesc::new(path, separator, header));
+                let csvdesc = Rc::new(CSVDesc::new(path, separator, header));
                 self.tables.insert(name.to_string(), csvdesc);
                 info!("Cataloged table {}", &name);
             }
@@ -190,8 +190,9 @@ impl Metadata {
         Ok(())
     }
 
-    pub fn get_tabledesc(&self, name: &String) -> Option<&Box<dyn TableDesc>> {
-        self.tables.get(name)
+    pub fn get_tabledesc(&self, name: &String) -> Option<Rc<dyn TableDesc>> {
+        let val = self.tables.get(name);
+        val.map(|e| e.clone())
     }
 }
 

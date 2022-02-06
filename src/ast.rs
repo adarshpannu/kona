@@ -1,8 +1,9 @@
+use crate::graph::{Graph, NodeId};
 use crate::includes::*;
+use crate::metadata::TableDesc;
+use crate::row::{Datum, Row};
 use crate::sqlparser;
 use Expr::*;
-use crate::row::{Datum, Row};
-use crate::graph::{Graph, NodeId};
 
 use std::cell::RefCell;
 use std::fs::File;
@@ -30,7 +31,7 @@ pub enum AST {
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: Graph<Expr>
+    pub graph: Graph<Expr>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,7 +45,11 @@ impl NamedExpr {
         let expr = &graph.get_node(expr_id).inner;
         let mut alias = alias;
         if alias.is_none() {
-            if let Expr::Column { tablename, colname } = expr {
+            if let Expr::Column {
+                prefix: tablename,
+                colname,
+            } = expr
+            {
                 alias = Some(colname.clone())
             } else if let Expr::Star = expr {
                 alias = Some("*".to_string())
@@ -66,12 +71,25 @@ pub enum QueryBlockType {
 
 pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Quantifier {
-    id: usize,
+    pub id: usize,
     pub name: Option<String>,
     pub qblock: Option<QueryBlockLink>,
     pub alias: Option<String>,
+
+    #[serde(skip)]
+    pub tabledesc: Option<Rc<dyn TableDesc>>,
+}
+
+impl fmt::Debug for Quantifier {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("Quantifier")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("alias", &self.alias)
+            .finish()
+    }
 }
 
 impl Quantifier {
@@ -84,11 +102,17 @@ impl Quantifier {
             name,
             qblock,
             alias,
+            tabledesc: None,
         }
     }
 
     pub fn is_base_table(&self) -> bool {
-        self.qblock.is_none() 
+        self.qblock.is_none()
+    }
+
+    pub fn matches_name_or_alias(&self, prefix: &String) -> bool {
+        self.name.as_ref().map(|e| e == prefix).unwrap_or(false)
+            || self.alias.as_ref().map(|e| e == prefix).unwrap_or(false)
     }
 
     pub fn display(&self) -> String {
@@ -114,7 +138,7 @@ pub enum Ordering {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum DistinctProperty {
     All,
-    Distinct
+    Distinct,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -129,16 +153,14 @@ pub struct QueryBlock {
     having_clause: Option<NodeId>,
     order_by: Option<Vec<(NodeId, Ordering)>>,
     distinct: DistinctProperty,
-    topN: Option<usize>
+    topN: Option<usize>,
 }
 
 impl QueryBlock {
     pub fn new(
         id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
         pred_list: Option<NodeId>, group_by: Option<Vec<NodeId>>, having_clause: Option<NodeId>,
-        order_by: Option<Vec<(NodeId, Ordering)>>,
-        distinct: DistinctProperty,
-        topN: Option<usize>
+        order_by: Option<Vec<(NodeId, Ordering)>>, distinct: DistinctProperty, topN: Option<usize>,
     ) -> Self {
         QueryBlock {
             id,
@@ -151,7 +173,7 @@ impl QueryBlock {
             having_clause,
             order_by,
             distinct,
-            topN
+            topN,
         }
     }
 
@@ -180,7 +202,11 @@ impl QueryBlock {
     pub(crate) fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
         // Write current query block first
         let s = "".to_string();
-        let select_names: Vec<&String> = self.select_list.iter().map(|e| e.alias.as_ref().unwrap_or(&s)).collect();
+        let select_names: Vec<&String> = self
+            .select_list
+            .iter()
+            .map(|e| e.alias.as_ref().unwrap_or(&s))
+            .collect();
         let select_names = format!("{:?}", select_names).replace("\"", "");
 
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
@@ -217,13 +243,14 @@ impl QueryBlock {
 
 pub struct ParserState {
     next_id: usize,
-    pub graph: Graph<Expr>
+    pub graph: Graph<Expr>,
 }
 
 impl ParserState {
     pub fn new() -> Self {
         ParserState {
-            next_id: 0, graph: Graph::new()
+            next_id: 0,
+            graph: Graph::new(),
         }
     }
 
@@ -283,7 +310,7 @@ impl QGM {
     fn nodeid_to_str(nodeid: &NodeId) -> String {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
-    
+
     fn write_expr_to_graphvis(qgm: &QGM, expr: NodeId, file: &mut File) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
         let (expr, children) = qgm.graph.get_node_with_children(expr);
@@ -385,7 +412,7 @@ pub enum AggType {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID { qun_ix: usize, col_ix: usize },
-    Column { tablename: Option<String>, colname: String },
+    Column { prefix: Option<String>, colname: String },
     Star,
     Literal(Datum),
     NegatedExpr,
@@ -398,14 +425,17 @@ pub enum Expr {
     LogExpr(LogOp),
     Subquery(QueryBlockLink),
     AggFunction(AggType),
-    ScalarFunction(String)
+    ScalarFunction(String),
 }
 
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID { qun_ix, col_ix} => format!("CID: {}.{}", qun_ix, col_ix),
-            Column { tablename, colname } => {
+            CID { qun_ix, col_ix } => format!("CID: {}.{}", qun_ix, col_ix),
+            Column {
+                prefix: tablename,
+                colname,
+            } => {
                 if let Some(tablename) = tablename {
                     format!("{}.{}", tablename, colname)
                 } else {
@@ -423,8 +453,8 @@ impl Expr {
             ExistsExpr => format!("EXISTS"),
             LogExpr(op) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
-            AggFunction (aggtype ) => format!("{:?}", aggtype),
-            ScalarFunction(name ) => format!("{}()", name),
+            AggFunction(aggtype) => format!("{:?}", aggtype),
+            ScalarFunction(name) => format!("{}()", name),
         }
     }
 }
@@ -470,7 +500,6 @@ impl fmt::Display for Expr {
         Ok(())
     }
 }
-
 
 enum E {
     A,
