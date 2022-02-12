@@ -11,8 +11,9 @@ enum Instruction {
 struct Compiler;
 
 impl Compiler {
-    pub fn compile(graph: &Graph<Expr>, top: NodeId) {
-        let expr = &graph.get_node(top).inner;
+    pub fn compile(qgm: &QGM, qblock: &QueryBlock) {
+        let graph = &qgm.graph;
+        //let expr = &graph.get_node(qblock.pred_list).inner;
         /*
         match expr {
 

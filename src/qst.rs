@@ -36,12 +36,18 @@ impl QueryBlock {
             qun.tabledesc = tbdesc;
         }
 
+        // Resolve select list
+        for ne in self.select_list.iter() {
+            let expr_id = ne.expr_id;
+            self.resolve_expr(env, graph, expr_id)?;
+        }
+
         // Resolve predicates
         let mut pred_list = vec![];
         if self.pred_list.is_some() {
             let expr_id = self.pred_list.unwrap();
 
-            Expr::resolve(env, graph, self, expr_id)?;
+            self.resolve_expr(env, graph, expr_id)?;
 
             self.extract(graph, expr_id, &mut pred_list)
         }
@@ -78,9 +84,11 @@ impl QueryBlock {
                     curval = Some((qun.id, coldesc.0, coldesc.1))
                 }
             }
-            if curval.is_some() {
+            if let Some(triple) = curval {
                 if retval.is_none() {
                     retval = curval;
+                    let mut columns = qun.columns.borrow_mut();
+                    columns.push(triple.1);
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
@@ -89,6 +97,7 @@ impl QueryBlock {
                 }
             }
         }
+
         retval.ok_or_else(|| {
             let colstr = if let Some(prefix) = prefix {
                 format!("{}.{}", prefix, colname)
@@ -99,54 +108,15 @@ impl QueryBlock {
         })
     }
 
-    pub fn resolve_column_old(&self, env: &Env, colname: &String) -> Result<(QunId, ColId, DataType), String> {
-        // Find column in a single table.
-        let mut retval = None;
-        for qun in self.quns.iter() {
-            let tablename = qun.name.as_ref();
-            let curval = tablename
-                .and_then(|tn| env.metadata.get_tabledesc(tn))
-                .and_then(|desc| desc.get_coldesc(colname))
-                .and_then(|ct| Some((qun.id, ct.0, ct.1)));
-
-            if curval.is_some() {
-                if retval.is_none() {
-                    retval = curval;
-                } else {
-                    return Err(format!(
-                        "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
-                        dquote(colname)
-                    ));
-                }
-            }
-        }
-        retval.ok_or(format!("Column {} not found in any table.", dquote(colname)))
-    }
-
-    pub fn extract(&mut self, graph: &mut Graph<Expr>, pred_id: NodeId, pred_list: &mut Vec<NodeId>) {
-        let (expr, children) = graph.get_node_with_children(pred_id);
-        if let LogExpr(crate::ast::LogOp::And) = expr {
-            let children = children.unwrap();
-            let lhs = children[0];
-            let rhs = children[1];
-            self.extract(graph, lhs, pred_list);
-            self.extract(graph, rhs, pred_list);
-        } else {
-            pred_list.push(pred_id)
-        }
-    }
-}
-
-impl Expr {
-    pub fn resolve(
-        env: &Env, graph: &mut Graph<Expr>, qblock: &QueryBlock, expr_id: NodeId,
+    pub fn resolve_expr(&self,
+        env: &Env, graph: &mut Graph<Expr>, expr_id: NodeId,
     ) -> Result<DataType, String> {
         let children = graph.get_children(expr_id);
         let mut children_datatypes = vec![];
 
         if let Some(children) = children {
             for child_id in children {
-                let datatype = Expr::resolve(env, graph, qblock, child_id)?;
+                let datatype = self.resolve_expr(env, graph, child_id)?;
                 children_datatypes.push(datatype);
             }
         }
@@ -165,30 +135,11 @@ impl Expr {
                 }
             }
             Column { prefix, colname } => {
-                /*
-                if let Some(prefix) = prefix {
-                    if let Some(tabledesc) = env.metadata.get_tabledesc(prefix) {
-                        let datatype = tabledesc.get_coldesc(colname);
-                        if datatype.is_none() {
-                            return Err(format!("Column {}.{} not found", prefix, colname));
-                        } else {
-                            node.inner = CID {
-                                qun_ix: 111,
-                                col_ix: 222,
-                            };
-                            datatype.unwrap().1
-                        }
-                    } else {
-                        return Err(format!("Table {} not found", prefix));
-                    }
-                } else {
-                    // Find colname in exactly one table.
-                    let (qunid, colid, datatype) = qblock.resolve_column(env, colname)?;
-                    info!("Found {} in table {}", colname, qunid);
-                    datatype
-                }
-                */
-                let coldesc = qblock.resolve_column(env, prefix.as_ref(), colname)?;
+                let coldesc = self.resolve_column(env, prefix.as_ref(), colname)?;
+                node.inner = CID {
+                    qun_id: coldesc.0,
+                    col_id: coldesc.1,
+                };
                 coldesc.2
             }
             LogExpr(logop) => DataType::BOOL,
@@ -201,5 +152,18 @@ impl Expr {
         };
         node.datatype = datatype;
         Ok(datatype)
+    }
+
+    pub fn extract(&mut self, graph: &mut Graph<Expr>, pred_id: NodeId, pred_list: &mut Vec<NodeId>) {
+        let (expr, children) = graph.get_node_with_children(pred_id);
+        if let LogExpr(crate::ast::LogOp::And) = expr {
+            let children = children.unwrap();
+            let lhs = children[0];
+            let rhs = children[1];
+            self.extract(graph, lhs, pred_list);
+            self.extract(graph, rhs, pred_list);
+        } else {
+            pred_list.push(pred_id)
+        }
     }
 }

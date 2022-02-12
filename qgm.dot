@@ -3,30 +3,8 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [name, dept_id]";
+    label = "main [dept_id, ]";
     "main_pt"[shape=point, color=white];
-    "QUN_1"[label="emp/E2 ", color=red]
-    "QUN_0"[label="emp/E ", color=red]
-    exprnodeNodeId13v1[label="And"];
-    exprnodeNodeId9v1 -> exprnodeNodeId13v1;
-    exprnodeNodeId9v1[label="And"];
-    exprnodeNodeId5v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId5v1[label="="];
-    exprnodeNodeId3v1 -> exprnodeNodeId5v1;
-    exprnodeNodeId3v1[label="E.name"];
-    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
-    exprnodeNodeId4v1[label="\"adarsh\""];
-    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId8v1[label=">"];
-    exprnodeNodeId6v1 -> exprnodeNodeId8v1;
-    exprnodeNodeId6v1[label="E2.age"];
-    exprnodeNodeId7v1 -> exprnodeNodeId8v1;
-    exprnodeNodeId7v1[label="30"];
-    exprnodeNodeId12v1 -> exprnodeNodeId13v1;
-    exprnodeNodeId12v1[label=">"];
-    exprnodeNodeId10v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId10v1[label="E.dept_id"];
-    exprnodeNodeId11v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId11v1[label="10"];
+    "QUN_0"[label="emp/ ", color=red]
 }
 }

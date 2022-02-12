@@ -31,7 +31,7 @@ pub enum AST {
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: Graph<Expr>,
+    pub graph: Graph<Expr>,  // arena allocator
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -80,6 +80,9 @@ pub struct Quantifier {
 
     #[serde(skip)]
     pub tabledesc: Option<Rc<dyn TableDesc>>,
+
+    #[serde(skip)]
+    pub columns: RefCell<Vec<ColId>>
 }
 
 impl fmt::Debug for Quantifier {
@@ -103,6 +106,7 @@ impl Quantifier {
             qblock,
             alias,
             tabledesc: None,
+            columns: RefCell::new(vec![])
         }
     }
 
@@ -146,7 +150,7 @@ pub struct QueryBlock {
     id: usize,
     pub name: Option<String>,
     pub qbtype: QueryBlockType,
-    select_list: Vec<NamedExpr>,
+    pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
     pub pred_list: Option<NodeId>,
     group_by: Option<Vec<NodeId>>,
@@ -411,7 +415,7 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
-    CID { qun_ix: usize, col_ix: usize },
+    CID { qun_id: QunId, col_id: ColId },
     Column { prefix: Option<String>, colname: String },
     Star,
     Literal(Datum),
@@ -431,7 +435,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID { qun_ix, col_ix } => format!("CID: {}.{}", qun_ix, col_ix),
+            CID { qun_id: qun_ix, col_id: col_ix } => format!("CID: {}.{}", qun_ix, col_ix),
             Column {
                 prefix: tablename,
                 colname,
