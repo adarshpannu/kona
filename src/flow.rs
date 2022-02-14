@@ -7,6 +7,7 @@ use std::io::Write;
 use crate::graphviz::htmlify;
 use crate::metadata::CSVDesc;
 use crate::{ast::*, csv::*, includes::*, row::*, task::*};
+use crate::graph::{Graph, NodeId};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum NodeInner {
@@ -483,6 +484,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<FlowNode>,
+    pub graph: Graph<Expr>,  // arena allocator
 }
 
 impl Flow {

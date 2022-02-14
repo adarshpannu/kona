@@ -8,5 +8,6 @@ select E.name, E2.dept_id
 from emp E, emp E2
 where E.name = 'adarsh'
 and E2.age > 30
-and E.dept_id > 10;
+and E.dept_id > 10
+and E2.dept_id < 15;
 

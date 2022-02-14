@@ -73,7 +73,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     let mut qgm: Graph<Expr> = Graph::new();
 
     // Expression: $column-1 < 25
-    let lhs = qgm.add_node(CID { qun_id: 0, col_id: 0}, None);
+    let lhs = qgm.add_node(QTupleOffset(0), None);
     let rhs = qgm.add_node(Literal(Datum::INT(25)), None);
     let expr = qgm.add_node(RelExpr(RelOp::Le), Some(vec![lhs, rhs]));
     //let expr = qgm.get_node(expr);
@@ -114,6 +114,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     Flow {
         id: 99,
         nodes: arena.into_vec(),
+        graph: qgm
     }
 }
 
@@ -168,7 +169,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/scratch.sql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

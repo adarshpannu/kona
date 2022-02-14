@@ -7,7 +7,17 @@ use crate::row::{DataType, Datum};
 
 use crate::includes::*;
 use log::Log;
+use slotmap::secondary::Entry;
+use std::collections::HashMap;
 use std::rc::Rc;
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct QunColumn {
+    qun_id: QunId,
+    col_id: ColId,
+    datatype: DataType,
+    qtuple_ix: usize  // Index of this column in the query-block tuple (qtuple)
+}
 
 impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
@@ -24,8 +34,34 @@ fn dquote(s: &String) -> String {
     format!("\"{}\"", s)
 }
 
+pub struct QueryBlockColidDispenser {
+    hashmap: HashMap<QunColumn, usize>,
+    next_id: usize,
+}
+
+impl QueryBlockColidDispenser {
+    fn new() -> QueryBlockColidDispenser {
+        QueryBlockColidDispenser {
+            hashmap: HashMap::new(),
+            next_id: 0,
+        }
+    }
+
+    fn next_id(&mut self, quncol: QunColumn) -> usize {
+        let next_id = self.next_id;
+        let e = self.hashmap.entry(quncol).or_insert(next_id);
+        if *e == next_id {
+            self.next_id = next_id + 1;
+        }
+        println!("Assigned {:?} -> {}", &quncol, *e);
+        *e
+    }
+}
+
 impl QueryBlock {
     pub fn resolve(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
+        let mut colid_dispenser = QueryBlockColidDispenser::new();
+
         // Resolve QUNs first (base tables and any nested subqueries)
         for qun in self.quns.iter_mut() {
             let tablename = qun.name.as_ref().unwrap(); // this will fail for subqueries, and that's ok for now
@@ -39,7 +75,7 @@ impl QueryBlock {
         // Resolve select list
         for ne in self.select_list.iter() {
             let expr_id = ne.expr_id;
-            self.resolve_expr(env, graph, expr_id)?;
+            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id)?;
         }
 
         // Resolve predicates
@@ -47,7 +83,7 @@ impl QueryBlock {
         if self.pred_list.is_some() {
             let expr_id = self.pred_list.unwrap();
 
-            self.resolve_expr(env, graph, expr_id)?;
+            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id)?;
 
             self.extract(graph, expr_id, &mut pred_list)
         }
@@ -57,12 +93,16 @@ impl QueryBlock {
             info!("Extracted: {:?}", expr)
         }
 
+        for qun in self.quns.iter() {
+            info!("Qun: {}, column_map:{:?}", qun.id, qun.column_map)
+        }
+
         Ok(())
     }
 
     pub fn resolve_column(
-        &self, env: &Env, prefix: Option<&String>, colname: &String,
-    ) -> Result<(QunId, ColId, DataType), String> {
+        &self, env: &Env, colid_dispenser: &mut QueryBlockColidDispenser, prefix: Option<&String>, colname: &String,
+    ) -> Result<QunColumn, String> {
         let mut retval = None;
 
         for qun in self.quns.iter() {
@@ -74,21 +114,38 @@ impl QueryBlock {
                 if qun.matches_name_or_alias(prefix) {
                     let coldesc = desc.get_coldesc(colname);
                     if let Some(coldesc) = coldesc {
-                        curval = Some((qun.id, coldesc.0, coldesc.1))
+                        curval = Some(QunColumn {
+                            qun_id: qun.id,
+                            col_id: coldesc.0,
+                            datatype: coldesc.1,
+                            qtuple_ix: 0
+                        });
                     }
                 }
             } else {
                 // Unprefixed column: look at all QUNs
                 let coldesc = desc.get_coldesc(colname);
                 if let Some(coldesc) = coldesc {
-                    curval = Some((qun.id, coldesc.0, coldesc.1))
+                    curval = Some(QunColumn {
+                        qun_id: qun.id,
+                        col_id: coldesc.0,
+                        datatype: coldesc.1,
+                        qtuple_ix: 0
+                    });
                 }
             }
-            if let Some(triple) = curval {
+            if let Some(QunColumn {
+                qun_id,
+                col_id,
+                datatype,
+                qtuple_ix: offset
+            }) = curval
+            {
                 if retval.is_none() {
                     retval = curval;
-                    let mut columns = qun.columns.borrow_mut();
-                    columns.push(triple.1);
+                    let mut column_map = qun.column_map.borrow_mut();
+                    let offset = colid_dispenser.next_id(retval.unwrap());
+                    column_map.insert((col_id, offset));
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
@@ -108,15 +165,15 @@ impl QueryBlock {
         })
     }
 
-    pub fn resolve_expr(&self,
-        env: &Env, graph: &mut Graph<Expr>, expr_id: NodeId,
+    pub fn resolve_expr(
+        &self, env: &Env, graph: &mut Graph<Expr>, colid_dispenser: &mut QueryBlockColidDispenser, expr_id: NodeId,
     ) -> Result<DataType, String> {
         let children = graph.get_children(expr_id);
         let mut children_datatypes = vec![];
 
         if let Some(children) = children {
             for child_id in children {
-                let datatype = self.resolve_expr(env, graph, child_id)?;
+                let datatype = self.resolve_expr(env, graph, colid_dispenser, child_id)?;
                 children_datatypes.push(datatype);
             }
         }
@@ -135,12 +192,9 @@ impl QueryBlock {
                 }
             }
             Column { prefix, colname } => {
-                let coldesc = self.resolve_column(env, prefix.as_ref(), colname)?;
-                node.inner = CID {
-                    qun_id: coldesc.0,
-                    col_id: coldesc.1,
-                };
-                coldesc.2
+                let quncol = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
+                node.inner = QTupleOffset(quncol.qtuple_ix);
+                quncol.datatype
             }
             LogExpr(logop) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,

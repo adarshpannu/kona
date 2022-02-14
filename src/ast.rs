@@ -4,6 +4,7 @@ use crate::metadata::TableDesc;
 use crate::row::{Datum, Row};
 use crate::sqlparser;
 use Expr::*;
+use std::collections::HashSet;
 
 use std::cell::RefCell;
 use std::fs::File;
@@ -82,7 +83,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub columns: RefCell<Vec<ColId>>
+    pub column_map: RefCell<HashSet<(ColId, usize)>>  // Quantifier cold_id -> qtuple map
 }
 
 impl fmt::Debug for Quantifier {
@@ -106,7 +107,7 @@ impl Quantifier {
             qblock,
             alias,
             tabledesc: None,
-            columns: RefCell::new(vec![])
+            column_map: RefCell::new(HashSet::new())
         }
     }
 
@@ -415,7 +416,7 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
-    CID { qun_id: QunId, col_id: ColId },
+    QTupleOffset(usize),
     Column { prefix: Option<String>, colname: String },
     Star,
     Literal(Datum),
@@ -435,7 +436,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID { qun_id: qun_ix, col_id: col_ix } => format!("CID: {}.{}", qun_ix, col_ix),
+            QTupleOffset(offset) => format!("QTupleOffset: {}", offset),
             Column {
                 prefix: tablename,
                 colname,
@@ -512,7 +513,7 @@ enum E {
 
 #[test]
 fn foo() {
-    dbg!("sizeof Expr: {}", std::mem::size_of::<Expr>());
-    dbg!("sizeof QueryBlock: {}", std::mem::size_of::<QueryBlock>());
-    dbg!("sizeof E: {}", std::mem::size_of::<E>());
+    println!("sizeof Expr: {}", std::mem::size_of::<Expr>());
+    println!("sizeof QueryBlock: {}", std::mem::size_of::<QueryBlock>());
+    println!("sizeof E: {}", std::mem::size_of::<E>());
 }

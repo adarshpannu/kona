@@ -23,7 +23,7 @@ impl Datum {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Serialize, Deserialize, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Serialize, Deserialize, Clone, Copy, Hash)]
 pub enum DataType {
     UNKNOWN,
     NULL,
