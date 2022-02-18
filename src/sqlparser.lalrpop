@@ -300,7 +300,7 @@ Factor: NodeId = {
 }
 
 Term: NodeId = {
-    <cr:ColumnReference> => parser_state.graph.add_node(Column { tablename: cr.0, colname: cr.1 }, None),
+    <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1 }, None),
     QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Box::new(<>))), None),
     Number,
     ScalarFunction,
@@ -357,7 +357,7 @@ Integer = r"[-+]?[0-9]+";
 Double = r"[-+]?\d*\.\d*";
 
 Identifier: String = {
-    r"[a-zA-Z][a-zA-Z0-9_-]*" => <>.to_string()
+    r"[a-zA-Z][a-zA-Z0-9_-]*" => <>.to_string().to_uppercase()
 }
 
 ColumnReference: (Option<String>, String) = <tablename:(Identifier ".")?> <colname:Identifier> => (tablename.map(|e| e.0), colname);

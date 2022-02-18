@@ -56,13 +56,13 @@ impl CSVDesc {
         let mut first_row = true;
 
         while let Some(line) = iter.next() {
-            let cols: Vec<String> = line.unwrap().split(separator).map(|e| e.to_owned()).collect();
+            let cols: Vec<String> = line.unwrap().split(separator).map(|e| e.to_owned().to_uppercase()).collect();
             if colnames.len() == 0 {
                 if header {
                     colnames = cols
                 } else {
                     // Default column names
-                    colnames = (0..cols.len()).map(|ix| format!("col_{}", ix)).collect();
+                    colnames = (0..cols.len()).map(|ix| format!("COL_{}", ix)).collect();
                 }
             } else {
                 for (ix, col) in cols.iter().enumerate() {
@@ -135,6 +135,7 @@ impl Metadata {
     }
 
     pub fn catalog_table(&mut self, name: String, options: Vec<(String, String)>) -> Result<(), String> {
+        let mut name = name.to_uppercase();
         if self.tables.contains_key(&name) {
             return Err(format!("Table {} cannot be cataloged more than once.", name));
         }
@@ -169,6 +170,7 @@ impl Metadata {
     }
 
     pub fn describe_table(&self, name: String) -> Result<(), String> {
+        let name = name.to_uppercase();
         let tbldesc = self.tables.get(&name);
         if tbldesc.is_none() {
             return Err(format!("Table {} does not exist.", name));
@@ -199,7 +201,7 @@ impl Metadata {
     }
 
     pub fn get_tabledesc(&self, name: &String) -> Option<Rc<dyn TableDesc>> {
-        let val = self.tables.get(name);
+        let val = self.tables.get(&name.to_uppercase());
         val.map(|e| e.clone())
     }
 }

@@ -3,38 +3,13 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [name, dept_id]";
+    label = "main [*]";
     "main_pt"[shape=point, color=white];
-    "QUN_1"[label="emp/E2 ", color=red]
-    "QUN_0"[label="emp/E ", color=red]
-    exprnodeNodeId17v1[label="And"];
-    exprnodeNodeId13v1 -> exprnodeNodeId17v1;
-    exprnodeNodeId13v1[label="And"];
-    exprnodeNodeId9v1 -> exprnodeNodeId13v1;
-    exprnodeNodeId9v1[label="And"];
-    exprnodeNodeId5v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId5v1[label="="];
-    exprnodeNodeId3v1 -> exprnodeNodeId5v1;
-    exprnodeNodeId3v1[label="QTupleOffset: 0"];
-    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
-    exprnodeNodeId4v1[label="\"adarsh\""];
-    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId8v1[label=">"];
-    exprnodeNodeId6v1 -> exprnodeNodeId8v1;
-    exprnodeNodeId6v1[label="QTupleOffset: 0"];
-    exprnodeNodeId7v1 -> exprnodeNodeId8v1;
-    exprnodeNodeId7v1[label="30"];
-    exprnodeNodeId12v1 -> exprnodeNodeId13v1;
-    exprnodeNodeId12v1[label=">"];
-    exprnodeNodeId10v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId10v1[label="QTupleOffset: 0"];
-    exprnodeNodeId11v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId11v1[label="10"];
-    exprnodeNodeId16v1 -> exprnodeNodeId17v1;
-    exprnodeNodeId16v1[label="<"];
-    exprnodeNodeId14v1 -> exprnodeNodeId16v1;
-    exprnodeNodeId14v1[label="QTupleOffset: 0"];
-    exprnodeNodeId15v1 -> exprnodeNodeId16v1;
-    exprnodeNodeId15v1[label="15"];
+    "QUN_0"[label="EMP/ ", color=red]
+    exprnodeNodeId4v1[label="="];
+    exprnodeNodeId2v1 -> exprnodeNodeId4v1;
+    exprnodeNodeId2v1[label="QTupleOffset: 0"];
+    exprnodeNodeId3v1 -> exprnodeNodeId4v1;
+    exprnodeNodeId3v1[label="1"];
 }
 }
