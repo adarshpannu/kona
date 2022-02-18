@@ -6,11 +6,6 @@ digraph example1 {
     Node0[label="CSVNode-#0 (p=4)|emp.csv [\"name\", \"age\", \"dept_id\"]"];
     Node1[label="ProjectNode-#1|[2, 1, 0]"];
     Node0 -> Node1;
-    Node2[label="AggNode-#2 (p=3)|by = [(0, INT)], aggs = [(COUNT, 0, INT), (SUM, 1, INT), (MIN, 2, STR), (MAX, 2, STR)]"];
+    Node2[label="EmitNode-#2"];
     Node1 -> Node2;
-    Node3[label="CSVDirNode-#3 (p=4)|consumer [\"agg_col_0\", \"agg_col_1\", \"agg_col_2\", \"agg_col_3\", \"agg_col_4\"]"];
-    Node4[label="AggNode-#4 (p=3)|by = [(0, INT)], aggs = [(SUM, 1, INT), (SUM, 2, INT), (MIN, 3, STR), (MAX, 4, STR)]"];
-    Node3 -> Node4;
-    Node5[label="EmitNode-#5"];
-    Node4 -> Node5;
 }

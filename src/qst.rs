@@ -21,7 +21,7 @@ pub struct QunColumn {
 
 impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
-        info!("Normalize QGM");
+        debug!("Normalize QGM");
 
         // Resolve top-level QB
         self.qblock.resolve(env, &mut self.graph)?;
@@ -90,7 +90,7 @@ impl QueryBlock {
 
         for exprid in pred_list {
             let expr = graph.get_node(exprid);
-            info!("Extracted: {:?}", expr)
+            //info!("Extracted: {:?}", expr)
         }
 
         for qun in self.quns.iter() {
@@ -180,7 +180,7 @@ impl QueryBlock {
 
         let mut node = graph.get_node_mut(expr_id);
         let expr = &node.inner;
-        info!("Check: {:?}", expr);
+        //info!("Check: {:?}", expr);
 
         let datatype = match expr {
             RelExpr(relop) => {

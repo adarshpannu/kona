@@ -98,6 +98,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     csvnode
         //.filter(&arena, expr) // age > ?
         .project(&arena, vec![2, 1, 0]) // dept_id, age, name
+        /*
         .agg(
             &arena,
             vec![(0, DataType::INT)], // dept_id
@@ -109,6 +110,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
             ],
             3,
         )
+        */
         .emit(&arena);
 
     Flow {
@@ -179,7 +181,7 @@ fn main() -> Result<(), String> {
         return Err(errstr);
     }
 
-    //run_flow(&mut env);
+    run_flow(&mut env);
 
     info!("End of program");
 

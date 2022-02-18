@@ -1,13 +1,13 @@
 #![allow(warnings)]
 
-use crate::{csv::*, ast::Expr::*, ast::*, includes::*, row::*};
+use crate::{ast::Expr::*, ast::*, csv::*, includes::*, row::*};
 
 use crate::includes::*;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
+use std::rc::Rc;
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
@@ -49,20 +49,14 @@ impl CSVDesc {
         }
     }
 
-    pub fn infer_metadata(
-        filename: &str, separator: char, header: bool
-    ) -> (Vec<String>, Vec<DataType>) {
+    pub fn infer_metadata(filename: &str, separator: char, header: bool) -> (Vec<String>, Vec<DataType>) {
         let mut iter = read_lines(&filename).unwrap();
         let mut colnames: Vec<String> = vec![];
         let mut coltypes: Vec<DataType> = vec![];
         let mut first_row = true;
 
         while let Some(line) = iter.next() {
-            let cols: Vec<String> = line
-                .unwrap()
-                .split(separator)
-                .map(|e| e.to_owned())
-                .collect();
+            let cols: Vec<String> = line.unwrap().split(separator).map(|e| e.to_owned()).collect();
             if colnames.len() == 0 {
                 if header {
                     colnames = cols
@@ -136,16 +130,11 @@ pub struct Metadata {
 }
 
 impl Metadata {
-
     pub fn new() -> Metadata {
-        Metadata {
-            tables: HashMap::new(),
-        }
+        Metadata { tables: HashMap::new() }
     }
 
-    pub fn catalog_table(
-        &mut self, name: String, options: Vec<(String, String)>,
-    ) -> Result<(), String> {
+    pub fn catalog_table(&mut self, name: String, options: Vec<(String, String)>) -> Result<(), String> {
         if self.tables.contains_key(&name) {
             return Err(format!("Table {} cannot be cataloged more than once.", name));
         }
@@ -153,10 +142,9 @@ impl Metadata {
         match hm.get("TYPE").map(|e| &e[..]) {
             Some("CSV") => {
                 // PATH, HEADER, SEPARATOR
-                let path =
-                    hm.get("PATH").expect("PATH not specified").to_string();
+                let path = hm.get("PATH").expect("PATH not specified").to_string();
                 let header = match hm.get("HEADER").map(|e| &e[..]) {
-                    Some("Y")|Some("YES") => true,
+                    Some("Y") | Some("YES") => true,
                     _ => false,
                 };
                 let separator = match hm.get("SEPARATOR").map(|e| &e[..]) {
@@ -186,7 +174,27 @@ impl Metadata {
             return Err(format!("Table {} does not exist.", name));
         }
         let tbldesc = tbldesc.unwrap();
-        info!("Table {}, {:?}", name, tbldesc.describe());
+        info!("Table {}", name);
+        info!("  FILENAME = \"{}\"", tbldesc.filename());
+        info!("  HEADER = {}", tbldesc.header());
+        info!("  SEPARATOR = '{}'", tbldesc.separator());
+        info!("  {} COLUMNS", tbldesc.colnames().len());
+        for (colname, coltype) in tbldesc.colnames().iter().zip(tbldesc.coltypes()) {
+            info!("      {} {:?}", colname, coltype);
+        }
+
+        /*
+                fn filename(&self) -> &String;
+        fn colnames(&self) -> &Vec<String>;
+        fn coltypes(&self) -> &Vec<DataType>;
+        fn header(&self) -> bool;
+        fn separator(&self) -> char;
+        fn describe(&self) -> String {
+            String::from("")
+        }
+        fn get_coldesc(&self, colname: &String) -> Option<(ColId, DataType)>;
+
+            */
         Ok(())
     }
 

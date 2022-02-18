@@ -473,7 +473,11 @@ impl EmitNode {
     }
 
     fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        supernode.child(flow, 0).next(flow, stage, task, false)
+        let row = supernode.child(flow, 0).next(flow, stage, task, false);
+        if let Some(row) = row.as_ref() {
+            println!("EMIT: {:?}", row);
+        }
+        row
     }
 }
 
