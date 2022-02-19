@@ -16,7 +16,7 @@ pub struct QunColumn {
     qun_id: QunId,
     col_id: ColId,
     datatype: DataType,
-    qtuple_ix: usize  // Index of this column in the query-block tuple (qtuple)
+    qtuple_ix: usize, // Index of this column in the query-block tuple (qtuple)
 }
 
 impl QGM {
@@ -118,7 +118,7 @@ impl QueryBlock {
                             qun_id: qun.id,
                             col_id: coldesc.0,
                             datatype: coldesc.1,
-                            qtuple_ix: 0
+                            qtuple_ix: 0,
                         });
                     }
                 }
@@ -130,7 +130,7 @@ impl QueryBlock {
                         qun_id: qun.id,
                         col_id: coldesc.0,
                         datatype: coldesc.1,
-                        qtuple_ix: 0
+                        qtuple_ix: 0,
                     });
                 }
             }
@@ -138,14 +138,20 @@ impl QueryBlock {
                 qun_id,
                 col_id,
                 datatype,
-                qtuple_ix: offset
+                qtuple_ix: offset,
             }) = curval
             {
                 if retval.is_none() {
-                    retval = curval;
+                    let offset = colid_dispenser.next_id(curval.unwrap());
                     let mut column_map = qun.column_map.borrow_mut();
-                    let offset = colid_dispenser.next_id(retval.unwrap());
                     column_map.insert(col_id, offset);
+
+                    retval = Some(QunColumn {
+                        qun_id,
+                        col_id,
+                        datatype,
+                        qtuple_ix: offset,
+                    })
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
@@ -191,9 +197,19 @@ impl QueryBlock {
                     DataType::BOOL
                 }
             }
+            BinaryExpr(binop) => {
+                // Check argument types
+                if children_datatypes[0] != DataType::INT || children_datatypes[0] != DataType::INT {
+                    return Err("Binary operands must be numeric types".to_string());
+                // FIXME for other numeric types. Also support string addition?
+                } else {
+                    children_datatypes[0]
+                }
+            }
             Column { prefix, colname } => {
                 let quncol = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
-                node.inner = QTupleOffset(quncol.qtuple_ix);
+                debug!("ASSIGN <== {}", quncol.qtuple_ix);
+                node.inner = CID(quncol.qtuple_ix);
                 quncol.datatype
             }
             LogExpr(logop) => DataType::BOOL,
@@ -202,7 +218,7 @@ impl QueryBlock {
             Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
             Literal(Datum::BOOL(_)) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,
-            _ => DataType::UNKNOWN,
+            _ => todo!(),
         };
         node.datatype = datatype;
         Ok(datatype)

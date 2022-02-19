@@ -420,7 +420,7 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
-    QTupleOffset(usize),
+    CID(usize),
     Column { prefix: Option<String>, colname: String },
     Star,
     Literal(Datum),
@@ -440,7 +440,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            QTupleOffset(offset) => format!("#{}", offset),
+            CID(offset) => format!("#{}", *offset),
             Column {
                 prefix: tablename,
                 colname,

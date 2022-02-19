@@ -4,6 +4,6 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 DESCRIBE TABLE emp;
 
 SELECT dept_id, name from EMP
-where dept_id > 1
+where dept_id = (2 / 2 + 8 / 2) and name != 'kate'
 ;
 

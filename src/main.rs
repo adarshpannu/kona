@@ -75,7 +75,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     let mut qgm: Graph<Expr> = Graph::new();
 
     // Expression: $column-1 < 25
-    let lhs = qgm.add_node(QTupleOffset(0), None);
+    let lhs = qgm.add_node(CID(0), None);
     let rhs = qgm.add_node(Literal(Datum::INT(25)), None);
     let expr = qgm.add_node(RelExpr(RelOp::Le), Some(vec![lhs, rhs]));
     //let expr = qgm.get_node(expr);
@@ -118,7 +118,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     Flow {
         id: 99,
         nodes: arena.into_vec(),
-        //graph: qgm
+        graph: qgm
     }
 }
 
@@ -149,7 +149,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
             AST::QGM(mut qgm) => {
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
-                let flow = Compiler::compile(env, &qgm).unwrap();
+                let flow = Compiler::compile(env, &mut qgm).unwrap();
                 run_flow(env, &flow);
             }
             _ => unimplemented!(),

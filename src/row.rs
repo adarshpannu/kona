@@ -70,6 +70,10 @@ impl Row {
         Row { cols }
     }
 
+    pub fn empty(len: usize) -> Row {
+        Row::from(vec![Datum::NULL; len])
+    }
+    
     pub fn project(&self, colids: &Vec<ColId>) -> Row {
         let cols = colids.iter().map(|&ix| self.cols[ix].clone()).collect::<Vec<Column>>();
         Row::from(cols)

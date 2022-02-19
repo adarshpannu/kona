@@ -6,10 +6,30 @@ digraph example1 {
     label = "main [DEPT_ID, NAME]";
     "main_pt"[shape=point, color=white];
     "QUN_0"[label="EMP/ ", color=red]
-    exprnodeNodeId5v1[label=">"];
-    exprnodeNodeId3v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId15v1[label="And"];
+    exprnodeNodeId11v1 -> exprnodeNodeId15v1;
+    exprnodeNodeId11v1[label="="];
+    exprnodeNodeId3v1 -> exprnodeNodeId11v1;
     exprnodeNodeId3v1[label="#0"];
-    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
-    exprnodeNodeId4v1[label="1"];
+    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId10v1[label="Add"];
+    exprnodeNodeId6v1 -> exprnodeNodeId10v1;
+    exprnodeNodeId6v1[label="Div"];
+    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId4v1[label="2"];
+    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId5v1[label="2"];
+    exprnodeNodeId9v1 -> exprnodeNodeId10v1;
+    exprnodeNodeId9v1[label="Div"];
+    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId7v1[label="8"];
+    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId8v1[label="2"];
+    exprnodeNodeId14v1 -> exprnodeNodeId15v1;
+    exprnodeNodeId14v1[label="!="];
+    exprnodeNodeId12v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId12v1[label="#1"];
+    exprnodeNodeId13v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId13v1[label="\"kate\""];
 }
 }

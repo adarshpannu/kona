@@ -6,7 +6,7 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use crate::flow::*;
-use crate::row::Datum;
+use crate::row::*;
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,7 +70,7 @@ impl Task {
         Task {
             partition_id,
             contexts: HashMap::new(),
-            ttuple: vec![] 
+            ttuple: vec![]
         }
     }
 

@@ -57,9 +57,9 @@ impl FlowNode {
         retval
     }
 
-    pub fn filter<'a>(&self, arena: &'a NodeArena, expr: Expr) -> &'a FlowNode {
+    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_id: NodeId) -> &'a FlowNode {
         let npartitions = self.npartitions;
-        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr));
+        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr_id));
         retval
     }
 
@@ -269,7 +269,6 @@ impl CSVNode {
                         datum
                     })
                     .collect::<Vec<Datum>>();
-                dbg!(&task.ttuple);
 
                 return Some(Row::from(cols));
             } else {
@@ -312,20 +311,20 @@ impl ProjectNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 struct FilterNode {
-    expr: Expr,
+    expr: NodeId,
 }
 
 impl FilterNode {
     fn desc(&self, supernode: &FlowNode) -> String {
-        let s = format!("FilterNode-#{}|{}", supernode.id(), self.expr);
+        let s = format!("FilterNode-#{}|{:?}", supernode.id(), self.expr);
         htmlify(s)
     }
 
     fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        while let Some(e) = supernode.child(flow, 0).next(flow, stage, task, false) {
-            if let Datum::BOOL(b) = self.expr.eval(&e) {
+        while let Some(row) = supernode.child(flow, 0).next(flow, stage, task, false) {
+            if let Datum::BOOL(b) = Expr::eval(&flow.graph, self.expr, &task.ttuple) {
                 if b {
-                    return Some(e);
+                    return Some(row);
                 }
             }
         }
@@ -334,12 +333,8 @@ impl FilterNode {
 }
 
 impl FilterNode {
-    fn new(expr: Expr) -> NodeInner {
-        if let Expr::RelExpr(..) = expr {
-            NodeInner::FilterNode(FilterNode { expr })
-        } else {
-            panic!("Invalid filter expression")
-        }
+    fn new(expr: NodeId) -> NodeInner {
+        NodeInner::FilterNode(FilterNode { expr })
     }
 }
 
@@ -503,7 +498,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<FlowNode>,
-    //pub graph: Graph<Expr>,  // arena allocator
+    pub graph: Graph<Expr>,  // arena allocator
 }
 
 impl Flow {
