@@ -6,6 +6,7 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use crate::flow::*;
+use crate::row::Datum;
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,6 +59,9 @@ pub struct Task {
 
     #[serde(skip)]
     pub contexts: HashMap<FlowNodeId, NodeRuntime>,
+
+    #[serde(skip)]
+    pub ttuple: Vec<Datum>
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
@@ -66,14 +70,18 @@ impl Task {
         Task {
             partition_id,
             contexts: HashMap::new(),
+            ttuple: vec![] 
         }
     }
 
     pub fn run(&mut self, flow: &Flow, stage: &Stage) {
+        /*
         debug!(
             "Running task: stage = {}, partition = {}/{}",
             stage.head_node_id, self.partition_id, stage.npartitions_producer
         );
+        */
+        self.ttuple = vec![Datum::NULL; 8]; // FIXME
         let node = flow.get_node(stage.head_node_id);
         node.next(flow, stage, self, true);
     }

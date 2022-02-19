@@ -3,13 +3,13 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [*]";
+    label = "main [DEPT_ID, NAME]";
     "main_pt"[shape=point, color=white];
     "QUN_0"[label="EMP/ ", color=red]
-    exprnodeNodeId4v1[label="="];
-    exprnodeNodeId2v1 -> exprnodeNodeId4v1;
-    exprnodeNodeId2v1[label="QTupleOffset: 0"];
-    exprnodeNodeId3v1 -> exprnodeNodeId4v1;
-    exprnodeNodeId3v1[label="1"];
+    exprnodeNodeId5v1[label=">"];
+    exprnodeNodeId3v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId3v1[label="#0"];
+    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId4v1[label="1"];
 }
 }

@@ -1,34 +1,40 @@
-use crate::includes::*;
 use crate::ast::*;
-use crate::row::*;
+use crate::flow::*;
 use crate::graph::*;
+use crate::includes::*;
+use crate::row::*;
 
-enum Instruction {
-    GetColumn(usize),
-    RelExpr(RelOp),
-}
-
-struct Compiler;
+pub struct Compiler;
 
 impl Compiler {
-    pub fn compile(qgm: &QGM, qblock: &QueryBlock) {
+    pub fn compile(env: &Env, qgm: &QGM) -> Result<Flow, String> {
+        let arena: NodeArena = Arena::new();
         let graph = &qgm.graph;
-        //let expr = &graph.get_node(qblock.pred_list).inner;
-        /*
-        match expr {
+        let topqblock = &qgm.qblock;
 
+        assert!(topqblock.quns.len() == 1);
+        for qun in topqblock.quns.iter() {
+            assert!(qun.name.is_some() && qun.qblock.is_none());
+
+            let colmap = qun.column_map.borrow().clone();
+
+            if let Some(name) = &qun.name {
+                let csvnode = CSVNode::new(env, &arena, name.clone(), 4, colmap);
+                let emit = csvnode.emit(&arena);
+            }
         }
-        */
+
+        let flow = Flow {
+            id: 99,
+            nodes: arena.into_vec(),
+            //graph: graph
+        };
+        Ok(flow)
     }
-}
-
-struct CCode {
-
 }
 
 /***************************************************************************************************/
 impl Expr {
-    
     pub fn eval<'a>(&'a self, row: &'a Row) -> Datum {
         match self {
             /*

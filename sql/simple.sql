@@ -3,5 +3,7 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-SELECT * from EMP
-where dept_id = 1;
+SELECT dept_id, name from EMP
+where dept_id > 1
+;
+

@@ -145,7 +145,7 @@ impl QueryBlock {
                     retval = curval;
                     let mut column_map = qun.column_map.borrow_mut();
                     let offset = colid_dispenser.next_id(retval.unwrap());
-                    column_map.insert((col_id, offset));
+                    column_map.insert(col_id, offset);
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",

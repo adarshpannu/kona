@@ -3,11 +3,12 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::io::Write;
+use std::rc::Rc;
 
+use crate::graph::{Graph, NodeId};
 use crate::graphviz::htmlify;
 use crate::metadata::CSVDesc;
 use crate::{ast::*, csv::*, includes::*, row::*, task::*};
-use crate::graph::{Graph, NodeId};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum NodeInner {
@@ -159,7 +160,7 @@ impl FlowNode {
             NodeInner::JoinNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
             NodeInner::AggNode(inner_node) => inner_node.next(self, flow, stage, task, is_head),
         };
-        debug!("FlowNode {}, next() = {:?}", self.id, &row);
+        //debug!("FlowNode {}, next() = {}", self.id, &row.as_ref().unwrap());
         row
     }
 
@@ -193,10 +194,11 @@ pub(crate) struct CSVNode {
     header: bool,
     separator: char,
     partitions: Vec<TextFilePartition>,
+    colmap: ColMap,
 }
 
 impl CSVNode {
-    pub fn new<'a>(env: &Env, arena: &'a NodeArena, name: String, npartitions: usize) -> &'a FlowNode {
+    pub fn new<'a>(env: &Env, arena: &'a NodeArena, name: String, npartitions: usize, colmap: ColMap) -> &'a FlowNode {
         let tbldesc = env.metadata.get_tabledesc(&name).unwrap();
         let (colnames, coltypes) = (tbldesc.colnames().clone(), tbldesc.coltypes().clone());
 
@@ -208,7 +210,8 @@ impl CSVNode {
             coltypes,
             partitions,
             header: tbldesc.header(),
-            separator: tbldesc.separator()
+            separator: tbldesc.separator(),
+            colmap,
         });
         let node = FlowNode::new(arena, vec![], npartitions, csvnode);
         node
@@ -247,19 +250,27 @@ impl CSVNode {
                     .trim_end()
                     .split(self.separator)
                     .enumerate()
-                    .map(|(ix, col)| match self.coltypes[ix] {
-                        DataType::INT => {
-                            let ival = col.parse::<isize>();
-                            if ival.is_err() {
-                                panic!("{} is not an INT", &col);
-                            } else {
-                                Datum::INT(ival.unwrap())
+                    .filter(|(ix, col)| self.colmap.get(ix).is_some())
+                    .map(|(ix, col)| {
+                        let ttuple_ix = *self.colmap.get(&ix).unwrap();
+                        let datum = match self.coltypes[ix] {
+                            DataType::INT => {
+                                let ival = col.parse::<isize>();
+                                if ival.is_err() {
+                                    panic!("{} is not an INT", &col);
+                                } else {
+                                    Datum::INT(ival.unwrap())
+                                }
                             }
-                        }
-                        DataType::STR => Datum::STR(Box::new(col.to_owned())),
-                        _ => unimplemented!(),
+                            DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                            _ => todo!(),
+                        };
+                        task.ttuple[ttuple_ix] = datum.clone();
+                        datum
                     })
                     .collect::<Vec<Datum>>();
+                dbg!(&task.ttuple);
+
                 return Some(Row::from(cols));
             } else {
                 return None;
@@ -473,11 +484,15 @@ impl EmitNode {
     }
 
     fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        let row = supernode.child(flow, 0).next(flow, stage, task, false);
-        if let Some(row) = row.as_ref() {
-            println!("EMIT: {:?}", row);
+        loop {
+            let row = supernode.child(flow, 0).next(flow, stage, task, false);
+            if let Some(row) = row.as_ref() {
+                debug!("emit: {}", row);
+            } else {
+                break;
+            }
         }
-        row
+        None
     }
 }
 
@@ -488,7 +503,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<FlowNode>,
-    pub graph: Graph<Expr>,  // arena allocator
+    //pub graph: Graph<Expr>,  // arena allocator
 }
 
 impl Flow {
@@ -504,7 +519,7 @@ impl Flow {
             .map(|node| Stage::new(node.id(), self))
             .collect();
         for stage in stages.iter() {
-            debug!("Stage: head_node_id = {}", stage.head_node_id)
+            //debug!("Stage: head_node_id = {}", stage.head_node_id)
         }
         stages
     }
@@ -625,7 +640,7 @@ impl CSVDirNode {
                                 Datum::INT(ival.unwrap())
                             }
                         }
-                        DataType::STR => Datum::STR(Box::new(col.to_owned())),
+                        DataType::STR => Datum::STR(Rc::new(col.to_owned())),
                         _ => unimplemented!(),
                     })
                     .collect::<Vec<Datum>>();

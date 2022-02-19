@@ -301,7 +301,7 @@ Factor: NodeId = {
 
 Term: NodeId = {
     <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1 }, None),
-    QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Box::new(<>))), None),
+    QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
     Number,
     ScalarFunction,
     AggFunction,
@@ -333,7 +333,7 @@ AggArg: NodeId = {
 ScalarFunction: NodeId = {
     <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.graph.add_node(ScalarFunction(name), Some(args)),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
-        let datatype = parser_state.graph.add_node(Literal(Datum::STR(Box::new(datatype.to_string()))), None);
+        let datatype = parser_state.graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
         let args = vec![arg, datatype];
         parser_state.graph.add_node(ScalarFunction(String::from("CAST")), Some(args))
     }

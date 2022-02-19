@@ -3,11 +3,12 @@
 use core::panic;
 use std::fmt;
 use crate::includes::*;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
 pub enum Datum {
     NULL,
-    STR(Box<String>),
+    STR(Rc<String>),
     INT(isize),
     DOUBLE(isize, isize), // integral and fractional parts
     BOOL(bool),
@@ -83,7 +84,7 @@ impl fmt::Display for Row {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.cols.iter().enumerate().for_each(|(ix, col)| {
             if ix > 0 {
-                let _ = write!(f, "|");
+                let _ = write!(f, ",");
             }
             let _ = write!(f, "{}", col);
         });

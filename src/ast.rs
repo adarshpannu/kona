@@ -4,7 +4,7 @@ use crate::metadata::TableDesc;
 use crate::row::{Datum, Row};
 use crate::sqlparser;
 use Expr::*;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use std::cell::RefCell;
 use std::fs::File;
@@ -83,7 +83,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub column_map: RefCell<HashSet<(ColId, usize)>>  // Quantifier cold_id -> qtuple map
+    pub column_map: RefCell<HashMap<ColId, usize>>  // Quantifier cold_id -> qtuple map
 }
 
 impl fmt::Debug for Quantifier {
@@ -107,7 +107,7 @@ impl Quantifier {
             qblock,
             alias,
             tabledesc: None,
-            column_map: RefCell::new(HashSet::new())
+            column_map: RefCell::new(HashMap::new())
         }
     }
 
@@ -131,6 +131,10 @@ impl Quantifier {
 
     pub fn name(&self) -> String {
         format!("QUN_{}", self.id)
+    }
+
+    pub fn get_column_map(&self) -> HashMap<ColId, usize>{
+        self.column_map.borrow().clone()    
     }
 }
 
@@ -436,7 +440,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            QTupleOffset(offset) => format!("QTupleOffset: {}", offset),
+            QTupleOffset(offset) => format!("#{}", offset),
             Column {
                 prefix: tablename,
                 colname,

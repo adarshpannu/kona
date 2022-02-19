@@ -12,6 +12,8 @@ pub type ColId = usize;
 pub type QunId = usize;
 pub type PartitionId = usize;
 
+pub type ColMap = std::collections::HashMap<ColId, usize>;
+
 pub use crate::Env;
 use crate::graph::NodeId;
 use crate::row::DataType;

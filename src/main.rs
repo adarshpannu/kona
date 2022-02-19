@@ -26,7 +26,10 @@ use clp::CLParser;
 use flow::*;
 use graph::Graph;
 use metadata::Metadata;
+use compiler::Compiler;
 use row::*;
+
+use std::collections::HashMap;
 use std::cell::RefCell;
 use std::fs;
 use std::rc::Rc;
@@ -47,8 +50,7 @@ impl Env {
 }
 
 /***************************************************************************************************/
-pub fn run_flow(env: &mut Env) {
-    let flow = make_simple_flow(env);
+pub fn run_flow(env: &mut Env, flow: &Flow) {
 
     let gvfilename = format!("{}/{}", GRAPHVIZDIR, "flow.dot");
 
@@ -81,7 +83,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     let use_dir = false;
 
     let csvnode = if use_dir == false {
-        let csvnode = CSVNode::new(env, &arena, "emp".to_string(), 4);
+        let csvnode = CSVNode::new(env, &arena, "emp".to_string(), 4, HashMap::new());
         csvnode
     } else {
         let csvnode = CSVDirNode::new(
@@ -116,7 +118,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     Flow {
         id: 99,
         nodes: arena.into_vec(),
-        graph: qgm
+        //graph: qgm
     }
 }
 
@@ -147,6 +149,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
             AST::QGM(mut qgm) => {
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
+                let flow = Compiler::compile(env, &qgm).unwrap();
+                run_flow(env, &flow);
             }
             _ => unimplemented!(),
         }
@@ -181,7 +185,8 @@ fn main() -> Result<(), String> {
         return Err(errstr);
     }
 
-    run_flow(&mut env);
+    //let flow = make_simple_flow(env);
+    //run_flow(&mut env, &flow);
 
     info!("End of program");
 
@@ -200,5 +205,10 @@ fn test_vec() {
 
     std::mem::replace(&mut v[1], DataType::BOOL);
     std::mem::replace(&mut v[2], DataType::BOOL);
+
+    let n = 10;
+    let v = vec![Datum::NULL; n];
+    dbg!(&v);
+
 
 }
