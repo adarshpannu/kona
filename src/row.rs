@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use crate::includes::*;
 use core::panic;
 use std::fmt;
-use crate::includes::*;
 use std::rc::Rc;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
@@ -45,7 +45,6 @@ impl fmt::Display for Column {
         }
     }
 }
-
 
 type Column = Datum;
 
@@ -94,5 +93,11 @@ impl fmt::Display for Row {
             let _ = write!(f, "{}", col);
         });
         write!(f, "")
+    }
+}
+
+impl Default for Row {
+    fn default() -> Self {
+        Row::from(vec![])
     }
 }

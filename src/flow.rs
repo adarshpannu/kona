@@ -265,7 +265,7 @@ impl CSVNode {
                             DataType::STR => Datum::STR(Rc::new(col.to_owned())),
                             _ => todo!(),
                         };
-                        task.ttuple[ttuple_ix] = datum.clone();
+                        task.task_row.set_column(ttuple_ix, &datum);
                         datum
                     })
                     .collect::<Vec<Datum>>();
@@ -322,7 +322,7 @@ impl FilterNode {
 
     fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
         while let Some(row) = supernode.child(flow, 0).next(flow, stage, task, false) {
-            if let Datum::BOOL(b) = Expr::eval(&flow.graph, self.expr, &task.ttuple) {
+            if let Datum::BOOL(b) = Expr::eval(&flow.graph, self.expr, &task.task_row) {
                 if b {
                     return Some(row);
                 }

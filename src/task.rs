@@ -61,7 +61,7 @@ pub struct Task {
     pub contexts: HashMap<FlowNodeId, NodeRuntime>,
 
     #[serde(skip)]
-    pub ttuple: Vec<Datum>
+    pub task_row: Row
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
@@ -70,7 +70,7 @@ impl Task {
         Task {
             partition_id,
             contexts: HashMap::new(),
-            ttuple: vec![]
+            task_row: Row::from(vec![])
         }
     }
 
@@ -81,7 +81,7 @@ impl Task {
             stage.head_node_id, self.partition_id, stage.npartitions_producer
         );
         */
-        self.ttuple = vec![Datum::NULL; 8]; // FIXME
+        self.task_row = Row::from(vec![Datum::NULL; 8]); // FIXME
         let node = flow.get_node(stage.head_node_id);
         node.next(flow, stage, self, true);
     }
