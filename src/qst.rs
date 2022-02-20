@@ -15,8 +15,7 @@ use std::rc::Rc;
 pub struct QunColumn {
     qun_id: QunId,
     col_id: ColId,
-    datatype: DataType,
-    qtuple_ix: usize, // Index of this column in the query-block tuple (qtuple)
+    datatype: DataType
 }
 
 impl QGM {
@@ -102,56 +101,34 @@ impl QueryBlock {
 
     pub fn resolve_column(
         &self, env: &Env, colid_dispenser: &mut QueryBlockColidDispenser, prefix: Option<&String>, colname: &String,
-    ) -> Result<QunColumn, String> {
+    ) -> Result<(QunColumn, usize), String> {
         let mut retval = None;
+        let mut offset = 0;
 
         for qun in self.quns.iter() {
             let desc = qun.tabledesc.as_ref().unwrap().clone();
-            let mut curval = None;
-
-            if let Some(prefix) = prefix {
+            let coldesc = if let Some(prefix) = prefix {
                 // Prefixed column: look at specific qun
                 if qun.matches_name_or_alias(prefix) {
-                    let coldesc = desc.get_coldesc(colname);
-                    if let Some(coldesc) = coldesc {
-                        curval = Some(QunColumn {
-                            qun_id: qun.id,
-                            col_id: coldesc.0,
-                            datatype: coldesc.1,
-                            qtuple_ix: 0,
-                        });
-                    }
+                    desc.get_coldesc(colname)
+                } else {
+                    None
                 }
             } else {
                 // Unprefixed column: look at all QUNs
-                let coldesc = desc.get_coldesc(colname);
-                if let Some(coldesc) = coldesc {
-                    curval = Some(QunColumn {
+                desc.get_coldesc(colname)
+            };
+
+            if let Some(coldesc) = coldesc {
+                if retval.is_none() {
+                    retval = Some(QunColumn {
                         qun_id: qun.id,
                         col_id: coldesc.0,
                         datatype: coldesc.1,
-                        qtuple_ix: 0,
                     });
-                }
-            }
-            if let Some(QunColumn {
-                qun_id,
-                col_id,
-                datatype,
-                qtuple_ix: offset,
-            }) = curval
-            {
-                if retval.is_none() {
-                    let offset = colid_dispenser.next_id(curval.unwrap());
+                    offset = colid_dispenser.next_id(retval.unwrap());
                     let mut column_map = qun.column_map.borrow_mut();
-                    column_map.insert(col_id, offset);
-
-                    retval = Some(QunColumn {
-                        qun_id,
-                        col_id,
-                        datatype,
-                        qtuple_ix: offset,
-                    })
+                    column_map.insert(coldesc.0, offset);
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
@@ -159,16 +136,23 @@ impl QueryBlock {
                     ));
                 }
             }
+
+            // Stop looking if we've searched for this column in a specified table
+            if prefix.is_some() && qun.matches_name_or_alias(prefix.unwrap()) {
+                break;
+            }
         }
 
-        retval.ok_or_else(|| {
+        if let Some(retval) = retval {
+            Ok((retval, offset))
+        } else {
             let colstr = if let Some(prefix) = prefix {
                 format!("{}.{}", prefix, colname)
             } else {
                 format!("{}", colname)
             };
-            format!("Column {} not found in any table.", colstr)
-        })
+            Err(format!("Column {} not found in any table.", colstr))
+        }
     }
 
     pub fn resolve_expr(
@@ -207,9 +191,9 @@ impl QueryBlock {
                 }
             }
             Column { prefix, colname } => {
-                let quncol = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
-                debug!("ASSIGN <== {}", quncol.qtuple_ix);
-                node.inner = CID(quncol.qtuple_ix);
+                let (quncol, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
+                debug!("ASSIGN <== {}", qtuple_ix);
+                node.inner = CID(qtuple_ix);
                 quncol.datatype
             }
             LogExpr(logop) => DataType::BOOL,
