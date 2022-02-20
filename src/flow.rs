@@ -45,9 +45,9 @@ impl FlowNode {
 
 /***************************************************************************************************/
 impl FlowNode {
-    pub fn emit<'a>(&self, arena: &'a NodeArena) -> &'a FlowNode {
+    pub fn emit<'a>(&self, arena: &'a NodeArena, select_list: Vec<NodeId>) -> &'a FlowNode {
         let npartitions = self.npartitions;
-        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, EmitNode::new());
+        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, EmitNode::new(select_list));
         retval
     }
 
@@ -467,11 +467,13 @@ impl AggNode {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-struct EmitNode {}
+struct EmitNode {
+    select_list: Vec<NodeId>,
+}
 
 impl EmitNode {
-    fn new() -> NodeInner {
-        NodeInner::EmitNode(EmitNode {})
+    fn new(select_list: Vec<NodeId>) -> NodeInner {
+        NodeInner::EmitNode(EmitNode { select_list })
     }
 
     fn desc(&self, supernode: &FlowNode) -> String {
@@ -482,6 +484,11 @@ impl EmitNode {
         loop {
             let row = supernode.child(flow, 0).next(flow, stage, task, false);
             if let Some(row) = row.as_ref() {
+                // Compute select-list
+                let projcols: Vec<Datum> = self.select_list.iter().map(|&expr_id| {
+                    Expr::eval(&flow.graph, expr_id, &task.task_row)
+                }).collect();
+                let row = Row::from(projcols);
                 debug!("emit: {}", row);
             } else {
                 break;
@@ -498,7 +505,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<FlowNode>,
-    pub graph: Graph<Expr>,  // arena allocator
+    pub graph: Graph<Expr>, // arena allocator
 }
 
 impl Flow {

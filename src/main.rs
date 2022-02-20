@@ -69,6 +69,7 @@ pub fn run_flow(env: &mut Env, flow: &Flow) {
     env.thread_pool.join();
 }
 
+/*
 pub fn make_simple_flow(env: &Env) -> Flow {
     let arena: NodeArena = Arena::new();
 
@@ -100,7 +101,6 @@ pub fn make_simple_flow(env: &Env) -> Flow {
     csvnode
         //.filter(&arena, expr) // age > ?
         .project(&arena, vec![2, 1, 0]) // dept_id, age, name
-        /*
         .agg(
             &arena,
             vec![(0, DataType::INT)], // dept_id
@@ -112,8 +112,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
             ],
             3,
         )
-        */
-        .emit(&arena);
+        .emit(&arena, vec![]);
 
     Flow {
         id: 99,
@@ -121,6 +120,7 @@ pub fn make_simple_flow(env: &Env) -> Flow {
         graph: qgm
     }
 }
+*/
 
 fn stringify<E: std::fmt::Debug>(e: E) -> String {
     format!("xerror: {:?}", e)

@@ -15,6 +15,9 @@ impl Compiler {
         let topqblock = &qgm.qblock;
 
         assert!(topqblock.quns.len() == 1);
+
+        // Compile selectlist
+
         for qun in topqblock.quns.iter() {
             assert!(qun.name.is_some() && qun.qblock.is_none());
 
@@ -26,7 +29,8 @@ impl Compiler {
                 if let Some(pred_list) = topqblock.pred_list {
                     topnode = topnode.filter(&arena, pred_list);
                 }
-                let topnode = topnode.emit(&arena);
+                let select_list: Vec<NodeId> = topqblock.select_list.iter().map(|ne| ne.expr_id).collect();
+                let topnode = topnode.emit(&arena, select_list);
             }
         }
 
