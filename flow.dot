@@ -4,7 +4,7 @@ digraph example1 {
     splines=polyline;
     nodesep=0.5;
     Node0[label="CSVNode-#0 (p=4)|emp.csv [\"NAME\", \"AGE\", \"DEPT_ID\"]"];
-    Node1[label="FilterNode-#1|NodeId(17v1)"];
+    Node1[label="FilterNode-#1|NodeId(6v1)"];
     Node0 -> Node1;
     Node2[label="EmitNode-#2"];
     Node1 -> Node2;

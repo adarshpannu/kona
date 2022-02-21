@@ -83,7 +83,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub column_map: RefCell<HashMap<ColId, usize>>  // Quantifier cold_id -> qtuple map
+    pub column_read_map: RefCell<HashMap<ColId, usize>>
 }
 
 impl fmt::Debug for Quantifier {
@@ -107,7 +107,7 @@ impl Quantifier {
             qblock,
             alias,
             tabledesc: None,
-            column_map: RefCell::new(HashMap::new())
+            column_read_map: RefCell::new(HashMap::new())
         }
     }
 
@@ -134,7 +134,7 @@ impl Quantifier {
     }
 
     pub fn get_column_map(&self) -> HashMap<ColId, usize>{
-        self.column_map.borrow().clone()    
+        self.column_read_map.borrow().clone()    
     }
 }
 
@@ -220,17 +220,17 @@ impl QueryBlock {
 
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
         fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
-        fprint!(file, "    \"{}_pt\"[shape=point, color=white];\n", self.name());
+        fprint!(file, "    \"{}_pt\"[shape=point, color=black];\n", self.name());
 
-        /*
+        // Write select_list
         for nexpr in self.select_list.iter() {
-            let expr = &nexpr.expr;
-            let childaddr = &*expr.borrow() as *const Expr;
-            fprint!(file, "    exprnode{:?} -> \"{}_pt\";\n", childaddr, self.name());
-            QGM::write_expr_to_graphvis(expr, file)?;
-        }
-        */
+            let expr_id = nexpr.expr_id;
+            QGM::write_expr_to_graphvis(qgm, expr_id, file);
+            let childid_name = QGM::nodeid_to_str(&expr_id);
+            fprint!(file, "    exprnode{} -> \"{}_pt\";\n", childid_name, self.name());
 
+        }
+    
         for qun in self.quns.iter().rev() {
             fprint!(file, "    \"{}\"[label=\"{}\", color=red]\n", qun.name(), qun.display());
             if let Some(qblock) = &qun.qblock {

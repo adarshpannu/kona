@@ -14,25 +14,37 @@ impl Compiler {
         let graph = std::mem::replace(&mut qgm.graph, Graph::new());
         let topqblock = &qgm.qblock;
 
+        // Currently only single-table queries supported.
         assert!(topqblock.quns.len() == 1);
 
-        // Compile selectlist
+        let qun = &topqblock.quns[0];
+        assert!(qun.name.is_some() && qun.qblock.is_none());
 
-        for qun in topqblock.quns.iter() {
-            assert!(qun.name.is_some() && qun.qblock.is_none());
+        // Turn QUN -> CSV, pred_list -> Filter
+        let mut topnode;
 
-            let colmap = qun.column_map.borrow().clone();
-
-            if let Some(name) = &qun.name {
-                let mut topnode;
-                topnode = CSVNode::new(env, &arena, name.clone(), 4, colmap);
-                if let Some(pred_list) = topqblock.pred_list {
-                    topnode = topnode.filter(&arena, pred_list);
-                }
-                let select_list: Vec<NodeId> = topqblock.select_list.iter().map(|ne| ne.expr_id).collect();
-                let topnode = topnode.emit(&arena, select_list);
-            }
+        let name = qun.name.as_ref().unwrap();
+        let colmap = qun.column_read_map.borrow().clone();
+        topnode = CSVNode::new(env, &arena, name.clone(), 4, colmap);
+        if let Some(pred_list) = topqblock.pred_list {
+            topnode = topnode.filter(&arena, pred_list);
         }
+
+        // Compile selectlist, temporarily stripping agg functions
+        let select_list: Vec<NodeId> = topqblock
+            .select_list
+            .iter()
+            .map(|ne| {
+                let expr_id = ne.expr_id;
+                let (expr, children) = graph.get_node_with_children(expr_id);
+                if let AggFunction(aggtype) = expr {
+                    children.unwrap()[0]
+                } else {
+                    expr_id
+                }
+            })
+            .collect();
+        let topnode = topnode.emit(&arena, select_list);
 
         let flow = Flow {
             id: 99,

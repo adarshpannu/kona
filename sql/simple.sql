@@ -3,7 +3,7 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-SELECT dept_id * 100, name from EMP
+SELECT dept_id * 100, name, name from EMP
 where dept_id = (2 / 2 + 8 / 2) and name != 'kate'
 ;
 

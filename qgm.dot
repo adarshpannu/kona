@@ -4,32 +4,18 @@ digraph example1 {
     ordering="in";
   subgraph cluster_main {
     label = "main [, NAME]";
-    "main_pt"[shape=point, color=white];
+    "main_pt"[shape=point, color=black];
+    exprnodeNodeId2v1[label="SUM"];
+    exprnodeNodeId1v1 -> exprnodeNodeId2v1;
+    exprnodeNodeId1v1[label="AGE"];
+    exprnodeNodeId2v1 -> "main_pt";
+    exprnodeNodeId3v1[label="NAME"];
+    exprnodeNodeId3v1 -> "main_pt";
     "QUN_0"[label="EMP/ ", color=red]
-    exprnodeNodeId17v1[label="And"];
-    exprnodeNodeId13v1 -> exprnodeNodeId17v1;
-    exprnodeNodeId13v1[label="="];
-    exprnodeNodeId5v1 -> exprnodeNodeId13v1;
-    exprnodeNodeId5v1[label="#0"];
-    exprnodeNodeId12v1 -> exprnodeNodeId13v1;
-    exprnodeNodeId12v1[label="Add"];
-    exprnodeNodeId8v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId8v1[label="Div"];
-    exprnodeNodeId6v1 -> exprnodeNodeId8v1;
-    exprnodeNodeId6v1[label="2"];
-    exprnodeNodeId7v1 -> exprnodeNodeId8v1;
-    exprnodeNodeId7v1[label="2"];
-    exprnodeNodeId11v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId11v1[label="Div"];
-    exprnodeNodeId9v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId9v1[label="8"];
-    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId10v1[label="2"];
-    exprnodeNodeId16v1 -> exprnodeNodeId17v1;
-    exprnodeNodeId16v1[label="!="];
-    exprnodeNodeId14v1 -> exprnodeNodeId16v1;
-    exprnodeNodeId14v1[label="#1"];
-    exprnodeNodeId15v1 -> exprnodeNodeId16v1;
-    exprnodeNodeId15v1[label="\"kate\""];
+    exprnodeNodeId6v1[label=">"];
+    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId4v1[label="AGE"];
+    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId5v1[label="50"];
 }
 }

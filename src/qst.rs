@@ -1,7 +1,6 @@
 // QST: Query Semantics
 
-use crate::ast::QGM;
-use crate::ast::{Expr, Expr::*, QueryBlock};
+use crate::ast::{Expr::*, *};
 use crate::graph::{Graph, NodeId};
 use crate::row::{DataType, Datum};
 
@@ -15,7 +14,7 @@ use std::rc::Rc;
 pub struct QunColumn {
     qun_id: QunId,
     col_id: ColId,
-    datatype: DataType
+    datatype: DataType,
 }
 
 impl QGM {
@@ -74,7 +73,7 @@ impl QueryBlock {
         // Resolve select list
         for ne in self.select_list.iter() {
             let expr_id = ne.expr_id;
-            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id)?;
+            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, true)?;
         }
 
         // Resolve predicates
@@ -82,7 +81,7 @@ impl QueryBlock {
         if self.pred_list.is_some() {
             let expr_id = self.pred_list.unwrap();
 
-            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id)?;
+            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
 
             self.extract(graph, expr_id, &mut pred_list)
         }
@@ -93,7 +92,7 @@ impl QueryBlock {
         }
 
         for qun in self.quns.iter() {
-            info!("Qun: {}, column_map:{:?}", qun.id, qun.column_map)
+            info!("Qun: {}, column_map:{:?}", qun.id, qun.column_read_map)
         }
 
         Ok(())
@@ -127,7 +126,7 @@ impl QueryBlock {
                         datatype: coldesc.1,
                     });
                     offset = colid_dispenser.next_id(retval.unwrap());
-                    let mut column_map = qun.column_map.borrow_mut();
+                    let mut column_map = qun.column_read_map.borrow_mut();
                     column_map.insert(coldesc.0, offset);
                 } else {
                     return Err(format!(
@@ -157,13 +156,20 @@ impl QueryBlock {
 
     pub fn resolve_expr(
         &self, env: &Env, graph: &mut Graph<Expr>, colid_dispenser: &mut QueryBlockColidDispenser, expr_id: NodeId,
+        agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
         let children = graph.get_children(expr_id);
         let mut children_datatypes = vec![];
 
         if let Some(children) = children {
             for child_id in children {
-                let datatype = self.resolve_expr(env, graph, colid_dispenser, child_id)?;
+                let datatype = self.resolve_expr(
+                    env,
+                    graph,
+                    colid_dispenser,
+                    child_id,
+                    false, /* nested aggs not allowed */
+                )?;
                 children_datatypes.push(datatype);
             }
         }
@@ -202,6 +208,21 @@ impl QueryBlock {
             Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
             Literal(Datum::BOOL(_)) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,
+            AggFunction(aggtype) => {
+                if !agg_fns_allowed {
+                    return Err(format!("Aggregate function {:?} not allowed.", aggtype));
+                }
+                match aggtype {
+                    AggType::COUNT | AggType::COUNT_DISTINCT => DataType::INT,
+                    AggType::MIN | AggType::MAX => children_datatypes[0],
+                    AggType::SUM | AggType::AVG => {
+                        if children_datatypes[0] != DataType::INT && children_datatypes[0] != DataType::DOUBLE {
+                            return Err(format!("SUM() {:?} only allowed for numeric datatypes.", aggtype));
+                        }
+                        children_datatypes[0]
+                    }
+                }
+            }
             _ => todo!(),
         };
         node.datatype = datatype;

@@ -147,8 +147,9 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 env.metadata.describe_table(name)?;
             }
             AST::QGM(mut qgm) => {
-                qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
+                qgm.resolve(&env)?;
+
                 let flow = Compiler::compile(env, &mut qgm).unwrap();
                 run_flow(env, &flow);
             }
@@ -175,7 +176,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/simple.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.sql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

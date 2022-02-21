@@ -2,6 +2,7 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-select dept_id, avg(age)
+select sum(age), name
 from emp
+where age > 50
 group by dept_id;
