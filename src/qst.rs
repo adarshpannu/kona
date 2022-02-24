@@ -86,6 +86,10 @@ impl QueryBlock {
             self.extract(graph, expr_id, &mut pred_list)
         }
 
+        // Resolve group-by/having clauses, if they exist
+        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
+        self.resolve_groupby(env)?;
+
         for exprid in pred_list {
             let expr = graph.get_node(exprid);
             //info!("Extracted: {:?}", expr)
@@ -95,6 +99,13 @@ impl QueryBlock {
             info!("Qun: {}, column_map:{:?}", qun.id, qun.column_read_map)
         }
 
+        Ok(())
+    }
+
+    pub fn resolve_groupby(&self, env: &Env) -> Result<(), String> {
+        if let Some(group_by) = self.group_by.as_ref() {
+            
+        }
         Ok(())
     }
 
@@ -158,6 +169,14 @@ impl QueryBlock {
         &self, env: &Env, graph: &mut Graph<Expr>, colid_dispenser: &mut QueryBlockColidDispenser, expr_id: NodeId,
         agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
+
+        let children_agg_fns_allowed = if let AggFunction(_) = graph.get_node(expr_id).inner {
+            // Nested aggregate functions not allowed
+            false
+        } else {
+            agg_fns_allowed
+        };
+
         let children = graph.get_children(expr_id);
         let mut children_datatypes = vec![];
 
@@ -168,7 +187,7 @@ impl QueryBlock {
                     graph,
                     colid_dispenser,
                     child_id,
-                    false, /* nested aggs not allowed */
+                    children_agg_fns_allowed,
                 )?;
                 children_datatypes.push(datatype);
             }

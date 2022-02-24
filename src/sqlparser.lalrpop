@@ -46,6 +46,7 @@ match {
     r"(?i)TOP" => "TOP",
     r"(?i)IS" => "IS",
     r"(?i)NULL" => "NULL",
+    r"(?i)SET" => "SET",
     "(",
     ")",
     "=",
@@ -100,6 +101,7 @@ pub Job = SemicolonSeparatedList<Statement>;
 pub Statement: AST = {
     <CatalogTable>,
     <DescribeTable>,
+    <SetOption>,
     <FullSelect>
 }
 
@@ -117,6 +119,11 @@ CatalogTableOption: (String, String) = {
 // -------------------- DESCRIBE TABLE --------------------
 pub DescribeTable: AST = {
     "DESCRIBE" "TABLE" <name:Identifier>  => AST::DescribeTable { name: name }
+}
+
+// -------------------- SET OPTION --------------------
+pub SetOption: AST = {
+    "SET" <name:Identifier> "=" <value:QuotedString> => AST::SetOption { name, value }
 }
 
 // -------------------- QUERY --------------------

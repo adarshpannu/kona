@@ -26,6 +26,7 @@ pub enum AST {
         name: String,
     },
     QGM(QGM),
+    SetOption { name: String, value: String }
 }
 
 #[derive(Debug)]
@@ -68,6 +69,7 @@ pub enum QueryBlockType {
     CTE,
     InlineView,
     Subquery,
+    GroupBy
 }
 
 pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
@@ -158,11 +160,11 @@ pub struct QueryBlock {
     pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
     pub pred_list: Option<NodeId>,
-    group_by: Option<Vec<NodeId>>,
-    having_clause: Option<NodeId>,
-    order_by: Option<Vec<(NodeId, Ordering)>>,
-    distinct: DistinctProperty,
-    topN: Option<usize>,
+    pub group_by: Option<Vec<NodeId>>,
+    pub having_clause: Option<NodeId>,
+    pub order_by: Option<Vec<(NodeId, Ordering)>>,
+    pub distinct: DistinctProperty,
+    pub topN: Option<usize>,
 }
 
 impl QueryBlock {

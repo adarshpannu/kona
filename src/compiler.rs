@@ -108,7 +108,10 @@ impl Expr {
                 };
                 Datum::BOOL(res)
             }
-            _ => unimplemented!(),
+            _ => {
+                debug!("Expr::eval: {:?} not implemented.", &expr);
+                unimplemented!()
+            }
         }
     }
 }

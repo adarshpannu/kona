@@ -28,6 +28,7 @@ use graph::Graph;
 use metadata::Metadata;
 use compiler::Compiler;
 use row::*;
+pub mod scratch;
 
 use std::collections::HashMap;
 use std::cell::RefCell;
@@ -39,13 +40,30 @@ use slotmap::SlotMap;
 pub struct Env {
     thread_pool: ThreadPool,
     metadata: Metadata,
+    options: HashMap<String, String>
 }
 
 impl Env {
     fn new(nthreads: usize) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
-        Env { thread_pool, metadata }
+        Env { thread_pool, metadata, options: HashMap::new() }
+    }
+
+    fn set_option(&mut self, name: String, value: String) {
+        debug!("SET {} = {}", &name, &value);
+        self.options.insert(name.to_uppercase(), value.to_uppercase());
+    }
+
+    fn get_boolean_option(&self, name: &str) -> bool {
+        if let Some(opt) = self.options.get(name) {
+            return match opt.as_str() {
+                "TRUE" | "YES" => true,
+                _ => false
+            }
+        } else {
+            return false
+        }
     }
 }
 
@@ -146,12 +164,17 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
             AST::DescribeTable { name } => {
                 env.metadata.describe_table(name)?;
             }
+            AST::SetOption { name, value } => {
+                env.set_option(name, value);
+            }
             AST::QGM(mut qgm) => {
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
                 qgm.resolve(&env)?;
 
                 let flow = Compiler::compile(env, &mut qgm).unwrap();
-                run_flow(env, &flow);
+                if ! env.get_boolean_option("PARSE_ONLY") {
+                    run_flow(env, &flow);
+                }
             }
             _ => unimplemented!(),
         }
@@ -192,24 +215,4 @@ fn main() -> Result<(), String> {
     info!("End of program");
 
     Ok(())
-}
-
-use crate::DataType;
-
-#[test]
-fn test_vec() {
-    let mut v = vec![];
-
-    for i in 0..10 {
-        v.push(DataType::UNKNOWN)
-    }
-
-    std::mem::replace(&mut v[1], DataType::BOOL);
-    std::mem::replace(&mut v[2], DataType::BOOL);
-
-    let n = 10;
-    let v = vec![Datum::NULL; n];
-    dbg!(&v);
-
-
 }

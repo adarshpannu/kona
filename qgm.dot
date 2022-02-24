@@ -5,17 +5,27 @@ digraph example1 {
   subgraph cluster_main {
     label = "main [, NAME]";
     "main_pt"[shape=point, color=black];
+    exprnodeNodeId7v1[label="Div"];
+    exprnodeNodeId4v1 -> exprnodeNodeId7v1;
+    exprnodeNodeId4v1[label="Mul"];
+    exprnodeNodeId2v1 -> exprnodeNodeId4v1;
     exprnodeNodeId2v1[label="SUM"];
     exprnodeNodeId1v1 -> exprnodeNodeId2v1;
     exprnodeNodeId1v1[label="AGE"];
-    exprnodeNodeId2v1 -> "main_pt";
-    exprnodeNodeId3v1[label="NAME"];
-    exprnodeNodeId3v1 -> "main_pt";
-    "QUN_0"[label="EMP/ ", color=red]
-    exprnodeNodeId6v1[label=">"];
-    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
-    exprnodeNodeId4v1[label="AGE"];
+    exprnodeNodeId3v1 -> exprnodeNodeId4v1;
+    exprnodeNodeId3v1[label="111.222"];
+    exprnodeNodeId6v1 -> exprnodeNodeId7v1;
+    exprnodeNodeId6v1[label="COUNT"];
     exprnodeNodeId5v1 -> exprnodeNodeId6v1;
-    exprnodeNodeId5v1[label="50"];
+    exprnodeNodeId5v1[label="AGE"];
+    exprnodeNodeId7v1 -> "main_pt";
+    exprnodeNodeId8v1[label="NAME"];
+    exprnodeNodeId8v1 -> "main_pt";
+    "QUN_0"[label="EMP/ ", color=red]
+    exprnodeNodeId11v1[label=">"];
+    exprnodeNodeId9v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId9v1[label="AGE"];
+    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId10v1[label="50"];
 }
 }

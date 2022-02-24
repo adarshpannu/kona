@@ -2,7 +2,13 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-select sum(age), name
+SET parse_only = "true";
+
+select sum(age)*1.1 / count(age), name
 from emp
 where age > 50
-group by dept_id;
+group by dept_id
+having sum(age) > 10
+;
+
+
