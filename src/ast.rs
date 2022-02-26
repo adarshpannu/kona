@@ -222,7 +222,7 @@ impl QueryBlock {
 
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
         fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
-        fprint!(file, "    \"{}_pt\"[shape=point, color=black];\n", self.name());
+        fprint!(file, "    \"{}_pt\"[label=\"select_list\",shape=box,style=filled];\n", self.name());
 
         // Write select_list
         for nexpr in self.select_list.iter() {
@@ -234,7 +234,7 @@ impl QueryBlock {
         }
     
         for qun in self.quns.iter().rev() {
-            fprint!(file, "    \"{}\"[label=\"{}\", color=red]\n", qun.name(), qun.display());
+            fprint!(file, "    \"{}\"[label=\"{}\", fillcolor=black, fontcolor=white, style=filled]\n", qun.name(), qun.display());
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
                 fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
@@ -242,8 +242,13 @@ impl QueryBlock {
             }
         }
 
-        if self.pred_list.is_some() {
-            QGM::write_expr_to_graphvis(qgm, self.pred_list.unwrap(), file);
+        if let Some(expr) = self.pred_list {    
+            QGM::write_expr_to_graphvis(qgm, expr, file);
+
+            let id = QGM::nodeid_to_str(&expr);
+            let (expr, children) = qgm.graph.get_node_with_children(expr);
+            fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
+            fprint!(file, "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n", self.name());
         }
 
         fprint!(file, "}}\n");
@@ -455,7 +460,7 @@ impl Expr {
             }
             Star => format!("*"),
             Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
-            BinaryExpr(op) => format!("{:?}", op),
+            BinaryExpr(op) => format!("{}", op),
             NegatedExpr => "-".to_string(),
             RelExpr(op) => format!("{}", op),
             BetweenExpr => format!("BETWEEEN"),
