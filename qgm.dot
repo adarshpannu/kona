@@ -3,64 +3,70 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_main {
-    label = "main [, , ]";
-    "main_pt"[label="select_list",shape=box,style=filled];
-    exprnodeNodeId12v1[label="/"];
-    exprnodeNodeId7v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId7v1[label="*"];
-    exprnodeNodeId5v1 -> exprnodeNodeId7v1;
-    exprnodeNodeId5v1[label="SUM"];
-    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
-    exprnodeNodeId4v1[label="+"];
-    exprnodeNodeId2v1 -> exprnodeNodeId4v1;
-    exprnodeNodeId2v1[label="AGE"];
+    "main_queryblock"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listmain {
+    exprnodeNodeId11v1[label="/"];
+    exprnodeNodeId6v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId6v1[label="*"];
+    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId4v1[label="SUM"];
     exprnodeNodeId3v1 -> exprnodeNodeId4v1;
-    exprnodeNodeId3v1[label="10"];
-    exprnodeNodeId6v1 -> exprnodeNodeId7v1;
-    exprnodeNodeId6v1[label="111.222"];
-    exprnodeNodeId11v1 -> exprnodeNodeId12v1;
-    exprnodeNodeId11v1[label="COUNT"];
+    exprnodeNodeId3v1[label="+"];
+    exprnodeNodeId1v1 -> exprnodeNodeId3v1;
+    exprnodeNodeId1v1[label="AGE"];
+    exprnodeNodeId2v1 -> exprnodeNodeId3v1;
+    exprnodeNodeId2v1[label="10"];
+    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId5v1[label="111.222"];
     exprnodeNodeId10v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId10v1[label="+"];
-    exprnodeNodeId8v1 -> exprnodeNodeId10v1;
-    exprnodeNodeId8v1[label="AGE"];
+    exprnodeNodeId10v1[label="COUNT"];
     exprnodeNodeId9v1 -> exprnodeNodeId10v1;
-    exprnodeNodeId9v1[label="50"];
-    exprnodeNodeId12v1 -> "main_pt";
-    exprnodeNodeId15v1[label="+"];
-    exprnodeNodeId13v1 -> exprnodeNodeId15v1;
-    exprnodeNodeId13v1[label="DEPT_ID"];
-    exprnodeNodeId14v1 -> exprnodeNodeId15v1;
-    exprnodeNodeId14v1[label="55"];
-    exprnodeNodeId15v1 -> "main_pt";
-    exprnodeNodeId17v1[label="AVG"];
-    exprnodeNodeId16v1 -> exprnodeNodeId17v1;
-    exprnodeNodeId16v1[label="AGE"];
-    exprnodeNodeId17v1 -> "main_pt";
-    "QUN_6"[label="/ subq", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_6" -> "QB_5_pt";
-  subgraph cluster_QB_5 {
-    label = "QB_5 [*]";
-    "QB_5_pt"[label="select_list",shape=box,style=filled];
-    exprnodeNodeId18v1[label="*"];
-    exprnodeNodeId18v1 -> "QB_5_pt";
-    "QUN_4"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
+    exprnodeNodeId9v1[label="+"];
+    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId7v1[label="AGE"];
+    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId8v1[label="50"];
+    exprnodeNodeId11v1 -> "main_queryblock";
+    exprnodeNodeId14v1[label="+"];
+    exprnodeNodeId12v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId12v1[label="DEPT_ID"];
+    exprnodeNodeId13v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId13v1[label="55"];
+    exprnodeNodeId14v1 -> "main_queryblock";
+    exprnodeNodeId16v1[label="AVG"];
+    exprnodeNodeId15v1 -> exprnodeNodeId16v1;
+    exprnodeNodeId15v1[label="AGE"];
+    exprnodeNodeId16v1 -> "main_queryblock";
 }
-    "QUN_3"[label="CTE1/ ", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_2"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
-    exprnodeNodeId21v1[label=">"];
-    exprnodeNodeId19v1 -> exprnodeNodeId21v1;
-    exprnodeNodeId19v1[label="AGE"];
-    exprnodeNodeId20v1 -> exprnodeNodeId21v1;
-    exprnodeNodeId20v1[label="50"];
-    exprnodeNodeId21v1 -> main_pred_list;
+    "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_pred_listmain {
+    exprnodeNodeId19v1[label=">"];
+    exprnodeNodeId17v1 -> exprnodeNodeId19v1;
+    exprnodeNodeId17v1[label="AGE"];
+    exprnodeNodeId18v1 -> exprnodeNodeId19v1;
+    exprnodeNodeId18v1[label="50"];
+    exprnodeNodeId19v1 -> main_pred_list;
     "main_pred_list"[label="pred_list",shape=box,style=filled];
 }
-  subgraph cluster_CTE1 {
-    label = "CTE1 [*]";
-    "CTE1_pt"[label="select_list",shape=box,style=filled];
-    exprnodeNodeId1v1[label="*"];
-    exprnodeNodeId1v1 -> "CTE1_pt";
-    "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_group_bymain {
+    "main_group_by"[label="group_by",shape=box,style=filled];
+    exprnodeNodeId22v1[label="+"];
+    exprnodeNodeId20v1 -> exprnodeNodeId22v1;
+    exprnodeNodeId20v1[label="DEPT_ID"];
+    exprnodeNodeId21v1 -> exprnodeNodeId22v1;
+    exprnodeNodeId21v1[label="55"];
+    exprnodeNodeId22v1 -> "main_group_by";
+}
+  subgraph cluster_having_clausemain {
+    exprnodeNodeId26v1[label=">"];
+    exprnodeNodeId24v1 -> exprnodeNodeId26v1;
+    exprnodeNodeId24v1[label="SUM"];
+    exprnodeNodeId23v1 -> exprnodeNodeId24v1;
+    exprnodeNodeId23v1[label="AGE"];
+    exprnodeNodeId25v1 -> exprnodeNodeId26v1;
+    exprnodeNodeId25v1[label="100"];
+    exprnodeNodeId26v1 -> main_having_clause;
+    "main_having_clause"[label="having_clause",shape=box,style=filled];
+}
 }
 }

@@ -3,8 +3,8 @@ use crate::includes::*;
 use crate::metadata::TableDesc;
 use crate::row::{Datum, Row};
 use crate::sqlparser;
-use Expr::*;
 use std::collections::HashMap;
+use Expr::*;
 
 use std::cell::RefCell;
 use std::fs::File;
@@ -26,14 +26,17 @@ pub enum AST {
         name: String,
     },
     QGM(QGM),
-    SetOption { name: String, value: String }
+    SetOption {
+        name: String,
+        value: String,
+    },
 }
 
 #[derive(Debug)]
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: Graph<Expr>,  // arena allocator
+    pub graph: Graph<Expr>, // arena allocator
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,7 +72,7 @@ pub enum QueryBlockType {
     CTE,
     InlineView,
     Subquery,
-    GroupBy
+    GroupBy,
 }
 
 pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
@@ -85,7 +88,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub column_read_map: RefCell<HashMap<ColId, usize>>
+    pub column_read_map: RefCell<HashMap<ColId, usize>>,
 }
 
 impl fmt::Debug for Quantifier {
@@ -109,7 +112,7 @@ impl Quantifier {
             qblock,
             alias,
             tabledesc: None,
-            column_read_map: RefCell::new(HashMap::new())
+            column_read_map: RefCell::new(HashMap::new()),
         }
     }
 
@@ -135,8 +138,8 @@ impl Quantifier {
         format!("QUN_{}", self.id)
     }
 
-    pub fn get_column_map(&self) -> HashMap<ColId, usize>{
-        self.column_read_map.borrow().clone()    
+    pub fn get_column_map(&self) -> HashMap<ColId, usize> {
+        self.column_read_map.borrow().clone()
     }
 }
 
@@ -221,34 +224,88 @@ impl QueryBlock {
         let select_names = format!("{:?}", select_names).replace("\"", "");
 
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
-        fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
-        fprint!(file, "    \"{}_pt\"[label=\"select_list\",shape=box,style=filled];\n", self.name());
+        //fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
+        fprint!(
+            file,
+            "    \"{}_queryblock\"[label=\"select_list\",shape=box,style=filled];\n",
+            self.name()
+        );
 
         // Write select_list
+        fprint!(file, "  subgraph cluster_select_list{} {{\n", self.name());
         for nexpr in self.select_list.iter() {
             let expr_id = nexpr.expr_id;
             QGM::write_expr_to_graphvis(qgm, expr_id, file);
             let childid_name = QGM::nodeid_to_str(&expr_id);
-            fprint!(file, "    exprnode{} -> \"{}_pt\";\n", childid_name, self.name());
-
+            fprint!(file, "    exprnode{} -> \"{}_queryblock\";\n", childid_name, self.name());
         }
-    
+        fprint!(file, "}}\n");
+
+        // Write quns
         for qun in self.quns.iter().rev() {
-            fprint!(file, "    \"{}\"[label=\"{}\", fillcolor=black, fontcolor=white, style=filled]\n", qun.name(), qun.display());
+            fprint!(
+                file,
+                "    \"{}\"[label=\"{}\", fillcolor=black, fontcolor=white, style=filled]\n",
+                qun.name(),
+                qun.display()
+            );
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
-                fprint!(file, "    \"{}\" -> \"{}_pt\";\n", qun.name(), qblock.name());
+                fprint!(file, "    \"{}\" -> \"{}_queryblock\";\n", qun.name(), qblock.name());
                 qblock.write_qblock_to_graphviz(qgm, file)?
             }
         }
 
-        if let Some(expr) = self.pred_list {    
+        // Write pred_list
+        if let Some(expr) = self.pred_list {
+            fprint!(file, "  subgraph cluster_pred_list{} {{\n", self.name());
+
             QGM::write_expr_to_graphvis(qgm, expr, file);
 
             let id = QGM::nodeid_to_str(&expr);
             let (expr, children) = qgm.graph.get_node_with_children(expr);
             fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
-            fprint!(file, "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n", self.name());
+            fprint!(
+                file,
+                "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n",
+                self.name()
+            );
+            fprint!(file, "}}\n");
+        }
+
+        // Write group_by
+        if let Some(group_by) = self.group_by.as_ref() {
+            fprint!(file, "  subgraph cluster_group_by{} {{\n", self.name());
+
+            fprint!(
+                file,
+                "    \"{}_group_by\"[label=\"group_by\",shape=box,style=filled];\n",
+                self.name()
+            );
+
+            for &expr_id in group_by.iter() {
+                QGM::write_expr_to_graphvis(qgm, expr_id, file);
+                let childid_name = QGM::nodeid_to_str(&expr_id);
+                fprint!(file, "    exprnode{} -> \"{}_group_by\";\n", childid_name, self.name());
+            }
+            fprint!(file, "}}\n");
+        }
+
+        // Write having_clause
+        if let Some(expr) = self.having_clause {
+            fprint!(file, "  subgraph cluster_having_clause{} {{\n", self.name());
+
+            QGM::write_expr_to_graphvis(qgm, expr, file);
+
+            let id = QGM::nodeid_to_str(&expr);
+            let (expr, children) = qgm.graph.get_node_with_children(expr);
+            fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
+            fprint!(
+                file,
+                "    \"{}_having_clause\"[label=\"having_clause\",shape=box,style=filled];\n",
+                self.name()
+            );
+            fprint!(file, "}}\n");
         }
 
         fprint!(file, "}}\n");
@@ -263,9 +320,7 @@ pub struct ParserState {
 
 impl ParserState {
     pub fn new() -> Self {
-        ParserState {
-            graph: Graph::new(),
-        }
+        ParserState { graph: Graph::new() }
     }
 }
 
