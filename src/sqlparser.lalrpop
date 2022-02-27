@@ -147,7 +147,7 @@ pub QueryBlock: QueryBlock = {
     <having:HavingClause?> 
     <order_by:OrderByClause?>  => {
         //let pred_list = if pred_list.is_some() { Some(pred_list.unwrap()) } else { None };
-        QueryBlock::new(parser_state.next_id(), None, QueryBlockType::Subquery, 
+        QueryBlock::new(parser_state.graph.next_id(), None, QueryBlockType::Subquery, 
             select_list, quns, pred_list, group_by, having, order_by, distinct.unwrap_or(DistinctProperty::All), None)
     }
 };
@@ -196,10 +196,10 @@ OrderSort: Ordering = {
 
 Quantifier: Quantifier = {
     <schemaname:(Identifier ".")?> <name:Identifier> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.next_id(), Some(name), None, alias)
+        Quantifier::new(parser_state.graph.next_id(), Some(name), None, alias)
     },
     <subq:Subquery> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.next_id(), None, Some(subq), alias)
+        Quantifier::new(parser_state.graph.next_id(), None, Some(subq), alias)
     }
 }
 

@@ -171,8 +171,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgmfilename, false);
                 qgm.resolve(&env)?;
 
-                let flow = Compiler::compile(env, &mut qgm).unwrap();
                 if ! env.get_boolean_option("PARSE_ONLY") {
+                    let flow = Compiler::compile(env, &mut qgm).unwrap();
                     run_flow(env, &flow);
                 }
             }

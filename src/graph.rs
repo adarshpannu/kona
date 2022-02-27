@@ -19,12 +19,20 @@ impl<T> Node<T> {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<T> {
-    pub sm: SlotMap<NodeId, Node<T>>
+    pub sm: SlotMap<NodeId, Node<T>>,
+    next_id: usize,
+
 }
 
 impl<T> Graph<T> {
     pub fn new() -> Self {
-        Graph { sm: SlotMap::with_key() }
+        Graph { sm: SlotMap::with_key(), next_id: 0 }
+    }
+
+    pub fn next_id(&mut self) -> usize {
+        let retval = self.next_id;
+        self.next_id += 1;
+        retval
     }
 
     pub fn add_node(&mut self, t: T, children: Option<Vec<NodeId>>) -> NodeId {

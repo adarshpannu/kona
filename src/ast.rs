@@ -258,22 +258,14 @@ impl QueryBlock {
 }
 
 pub struct ParserState {
-    next_id: usize,
     pub graph: Graph<Expr>,
 }
 
 impl ParserState {
     pub fn new() -> Self {
         ParserState {
-            next_id: 0,
             graph: Graph::new(),
         }
-    }
-
-    pub fn next_id(&mut self) -> usize {
-        let retval = self.next_id;
-        self.next_id += 1;
-        retval
     }
 }
 
