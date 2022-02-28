@@ -65,7 +65,7 @@ impl NamedExpr {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum QueryBlockType {
     Unassigned,
     Main,
@@ -149,7 +149,7 @@ pub enum Ordering {
     Desc,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum DistinctProperty {
     All,
     Distinct,
@@ -192,6 +192,8 @@ impl QueryBlock {
     }
 
     pub fn name(&self) -> String {
+        format!("QB_{}", self.id)
+        /*
         if self.name.is_some() {
             format!("{}", self.name.as_ref().unwrap())
         } else if self.qbtype == QueryBlockType::Main {
@@ -199,6 +201,7 @@ impl QueryBlock {
         } else {
             format!("QB_{}", self.id)
         }
+        */
     }
 
     pub fn set_name(&mut self, name: Option<String>) {
@@ -237,7 +240,12 @@ impl QueryBlock {
             let expr_id = nexpr.expr_id;
             QGM::write_expr_to_graphvis(qgm, expr_id, file);
             let childid_name = QGM::nodeid_to_str(&expr_id);
-            fprint!(file, "    exprnode{} -> \"{}_queryblock\";\n", childid_name, self.name());
+            fprint!(
+                file,
+                "    exprnode{} -> \"{}_queryblock\";\n",
+                childid_name,
+                self.name()
+            );
         }
         fprint!(file, "}}\n");
 
@@ -251,8 +259,8 @@ impl QueryBlock {
             );
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
-                fprint!(file, "    \"{}\" -> \"{}_queryblock\";\n", qun.name(), qblock.name());
-                qblock.write_qblock_to_graphviz(qgm, file)?
+                //fprint!(file, "    \"{}\" -> \"{}_queryblock\";\n", qun.name(), qblock.name());
+                //qblock.write_qblock_to_graphviz(qgm, file)?
             }
         }
 
@@ -309,6 +317,15 @@ impl QueryBlock {
         }
 
         fprint!(file, "}}\n");
+
+        // Write referenced query blocks
+        for qun in self.quns.iter().rev() {
+            if let Some(qblock) = &qun.qblock {
+                let qblock = &*qblock.borrow();
+                fprint!(file, "    \"{}\" -> \"{}_queryblock\";\n", qun.name(), qblock.name());
+                qblock.write_qblock_to_graphviz(qgm, file)?
+            }
+        }
 
         Ok(())
     }
@@ -461,10 +478,9 @@ impl fmt::Display for RelOp {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AggType {
     COUNT,
-    COUNT_DISTINCT,
     MIN,
     MAX,
     SUM,
@@ -487,7 +503,7 @@ pub enum Expr {
     ExistsExpr,
     LogExpr(LogOp),
     Subquery(QueryBlockLink),
-    AggFunction(AggType),
+    AggFunction(AggType, bool),
     ScalarFunction(String),
 }
 
@@ -516,7 +532,7 @@ impl Expr {
             ExistsExpr => format!("EXISTS"),
             LogExpr(op) => format!("{:?}", op),
             Subquery(qblock) => format!("(subquery)"),
-            AggFunction(aggtype) => format!("{:?}", aggtype),
+            AggFunction(aggtype, is_distinct) => format!("{:?}", aggtype),
             ScalarFunction(name) => format!("{}()", name),
         }
     }

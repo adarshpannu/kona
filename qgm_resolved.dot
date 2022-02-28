@@ -1,0 +1,33 @@
+digraph example1 {
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+  subgraph cluster_QB_1 {
+    "QB_1_queryblock"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_1 {
+}
+    "QUN_3"[label="/ subq", fillcolor=black, fontcolor=white, style=filled]
+}
+    "QUN_3" -> "QB_2_queryblock";
+  subgraph cluster_QB_2 {
+    "QB_2_queryblock"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_2 {
+    exprnodeNodeId22v1[label="+"];
+    exprnodeNodeId20v1 -> exprnodeNodeId22v1;
+    exprnodeNodeId20v1[label="DEPT_ID"];
+    exprnodeNodeId21v1 -> exprnodeNodeId22v1;
+    exprnodeNodeId21v1[label="55"];
+    exprnodeNodeId22v1 -> "QB_2_queryblock";
+}
+    "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_pred_listQB_2 {
+    exprnodeNodeId19v1[label=">"];
+    exprnodeNodeId17v1 -> exprnodeNodeId19v1;
+    exprnodeNodeId17v1[label="AGE"];
+    exprnodeNodeId18v1 -> exprnodeNodeId19v1;
+    exprnodeNodeId18v1[label="50"];
+    exprnodeNodeId19v1 -> QB_2_pred_list;
+    "QB_2_pred_list"[label="pred_list",shape=box,style=filled];
+}
+}
+}

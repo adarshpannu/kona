@@ -2,9 +2,9 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
-  subgraph cluster_main {
-    "main_queryblock"[label="select_list",shape=box,style=filled];
-  subgraph cluster_select_listmain {
+  subgraph cluster_QB_1 {
+    "QB_1_queryblock"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_1 {
     exprnodeNodeId11v1[label="/"];
     exprnodeNodeId6v1 -> exprnodeNodeId11v1;
     exprnodeNodeId6v1[label="*"];
@@ -26,38 +26,38 @@ digraph example1 {
     exprnodeNodeId7v1[label="AGE"];
     exprnodeNodeId8v1 -> exprnodeNodeId9v1;
     exprnodeNodeId8v1[label="50"];
-    exprnodeNodeId11v1 -> "main_queryblock";
+    exprnodeNodeId11v1 -> "QB_1_queryblock";
     exprnodeNodeId14v1[label="+"];
     exprnodeNodeId12v1 -> exprnodeNodeId14v1;
     exprnodeNodeId12v1[label="DEPT_ID"];
     exprnodeNodeId13v1 -> exprnodeNodeId14v1;
     exprnodeNodeId13v1[label="55"];
-    exprnodeNodeId14v1 -> "main_queryblock";
+    exprnodeNodeId14v1 -> "QB_1_queryblock";
     exprnodeNodeId16v1[label="AVG"];
     exprnodeNodeId15v1 -> exprnodeNodeId16v1;
     exprnodeNodeId15v1[label="AGE"];
-    exprnodeNodeId16v1 -> "main_queryblock";
+    exprnodeNodeId16v1 -> "QB_1_queryblock";
 }
     "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
-  subgraph cluster_pred_listmain {
+  subgraph cluster_pred_listQB_1 {
     exprnodeNodeId19v1[label=">"];
     exprnodeNodeId17v1 -> exprnodeNodeId19v1;
     exprnodeNodeId17v1[label="AGE"];
     exprnodeNodeId18v1 -> exprnodeNodeId19v1;
     exprnodeNodeId18v1[label="50"];
-    exprnodeNodeId19v1 -> main_pred_list;
-    "main_pred_list"[label="pred_list",shape=box,style=filled];
+    exprnodeNodeId19v1 -> QB_1_pred_list;
+    "QB_1_pred_list"[label="pred_list",shape=box,style=filled];
 }
-  subgraph cluster_group_bymain {
-    "main_group_by"[label="group_by",shape=box,style=filled];
+  subgraph cluster_group_byQB_1 {
+    "QB_1_group_by"[label="group_by",shape=box,style=filled];
     exprnodeNodeId22v1[label="+"];
     exprnodeNodeId20v1 -> exprnodeNodeId22v1;
     exprnodeNodeId20v1[label="DEPT_ID"];
     exprnodeNodeId21v1 -> exprnodeNodeId22v1;
     exprnodeNodeId21v1[label="55"];
-    exprnodeNodeId22v1 -> "main_group_by";
+    exprnodeNodeId22v1 -> "QB_1_group_by";
 }
-  subgraph cluster_having_clausemain {
+  subgraph cluster_having_clauseQB_1 {
     exprnodeNodeId26v1[label=">"];
     exprnodeNodeId24v1 -> exprnodeNodeId26v1;
     exprnodeNodeId24v1[label="SUM"];
@@ -65,8 +65,8 @@ digraph example1 {
     exprnodeNodeId23v1[label="AGE"];
     exprnodeNodeId25v1 -> exprnodeNodeId26v1;
     exprnodeNodeId25v1[label="100"];
-    exprnodeNodeId26v1 -> main_having_clause;
-    "main_having_clause"[label="having_clause",shape=box,style=filled];
+    exprnodeNodeId26v1 -> QB_1_having_clause;
+    "QB_1_having_clause"[label="having_clause",shape=box,style=filled];
 }
 }
 }

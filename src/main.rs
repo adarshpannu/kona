@@ -152,7 +152,8 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
 
     let mut parser_state = ParserState::new();
 
-    let qgmfilename = format!("{}/{}", GRAPHVIZDIR, "qgm.dot");
+    let qgm_raw_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_raw.dot");
+    let qgm_resolved_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_resolved.dot");
 
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
@@ -168,8 +169,9 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 env.set_option(name, value);
             }
             AST::QGM(mut qgm) => {
-                qgm.write_qgm_to_graphviz(&qgmfilename, false);
+                qgm.write_qgm_to_graphviz(&qgm_raw_filename, false);
                 qgm.resolve(&env)?;
+                qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
 
                 if ! env.get_boolean_option("PARSE_ONLY") {
                     let flow = Compiler::compile(env, &mut qgm).unwrap();

@@ -4,7 +4,7 @@ DESCRIBE TABLE emp;
 
 SET parse_only = "true";
 
-select sum(age + 10)*1.1 / count(age + 50), dept_id + 55, avg(age)
+select sum(age + 10)*1.1 / count(age + 50), dept_id + 55, avg(distinct age)
 from emp
 where age > 50
 group by dept_id + 55

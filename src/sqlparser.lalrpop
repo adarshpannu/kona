@@ -318,10 +318,9 @@ Term: NodeId = {
 }
 
 AggFunction: NodeId = {
-    <aggtype:AggName> "(" <arg:AggArg> ")" => parser_state.graph.add_node(AggFunction(aggtype), Some(vec![arg])),
-    "COUNT" "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
-        let aggtype = if distinct.is_some() { AggType::COUNT_DISTINCT } else { AggType::COUNT };
-        parser_state.graph.add_node(AggFunction(aggtype), Some(vec![arg]))
+    <aggtype:AggName> "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
+        parser_state.graph.add_node(AggFunction(aggtype, distinct.is_some()), Some(vec![arg]))
+
     }
 }
 
@@ -329,7 +328,8 @@ AggName: AggType = {
     "MIN" => AggType::MIN,
     "MAX" => AggType::MAX, 
     "SUM" => AggType::SUM, 
-    "AVG" => AggType::AVG
+    "AVG" => AggType::AVG,
+    "COUNT" => AggType::COUNT,
 }
 
 AggArg: NodeId = {

@@ -7,6 +7,7 @@ use crate::row::{DataType, Datum};
 use crate::includes::*;
 use log::Log;
 use slotmap::secondary::Entry;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -51,7 +52,7 @@ impl QueryBlockColidDispenser {
         if *e == next_id {
             self.next_id = next_id + 1;
         }
-        println!("Assigned {:?} -> {}", &quncol, *e);
+        //debug!("Assigned {:?} -> {}", &quncol, *e);
         *e
     }
 }
@@ -59,6 +60,15 @@ impl QueryBlockColidDispenser {
 impl QueryBlock {
     pub fn resolve(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
         let mut colid_dispenser = QueryBlockColidDispenser::new();
+
+        // Resolve group-by/having clauses, if they exist
+        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
+        self.split_groupby(env, graph)?;
+
+        return(Ok(()));
+
+        //let qgm_resolved_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_resolved.dot");
+        //qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
 
         // Resolve QUNs first (base tables and any nested subqueries)
         for qun in self.quns.iter_mut() {
@@ -86,28 +96,58 @@ impl QueryBlock {
             self.extract(graph, expr_id, &mut pred_list)
         }
 
-        // Resolve group-by/having clauses, if they exist
-        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
-        self.resolve_groupby(env)?;
-
         for exprid in pred_list {
             let expr = graph.get_node(exprid);
             //info!("Extracted: {:?}", expr)
         }
 
         for qun in self.quns.iter() {
-            info!("Qun: {}, column_map:{:?}", qun.id, qun.column_read_map)
+            //info!("Qun: {}, column_map:{:?}", qun.id, qun.column_read_map)
         }
 
         Ok(())
     }
 
-    pub fn resolve_groupby(&self, env: &Env) -> Result<(), String> {
-        if let Some(group_by) = self.group_by.as_ref() {
-            
+    pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
+        if self.group_by.is_some() {
+            debug!("*** split_groupby");
+            let select_list = std::mem::replace(&mut self.select_list, vec![]);
+            let group_by = std::mem::replace(&mut self.group_by, None).unwrap();
+            let having_clause = std::mem::replace(&mut self.having_clause, None);
+
+            // Transform group_by into inner-select-list
+            let mut inner_select_list = group_by
+                .into_iter()
+                .map(|expr_id| NamedExpr::new(None, expr_id, &graph))
+                .collect::<Vec<NamedExpr>>();
+
+            Self::transform_groupby_selectlist(env, graph, &mut inner_select_list);
+
+            let outer_qb = self;
+            let inner_qb = QueryBlock::new(
+                graph.next_id(),
+                std::mem::replace(&mut outer_qb.name, None),
+                outer_qb.qbtype,
+                inner_select_list,
+                replace(&mut outer_qb.quns, vec![]),
+                replace(&mut outer_qb.pred_list, None),
+                None,
+                None,
+                None,
+                outer_qb.distinct,
+                None,
+            );
+            let inner_qb = Some(Rc::new(RefCell::new(inner_qb)));
+            let outer_qun = Quantifier::new(graph.next_id(), None, inner_qb, None);
+            outer_qb.name = None;
+            outer_qb.qbtype = QueryBlockType::GroupBy;
+            outer_qb.quns = vec![outer_qun];
+
         }
         Ok(())
     }
+
+    pub fn transform_groupby_selectlist(env: &Env, graph: &mut Graph<Expr>, select_list: &mut Vec<NamedExpr>) {}
 
     pub fn resolve_column(
         &self, env: &Env, colid_dispenser: &mut QueryBlockColidDispenser, prefix: Option<&String>, colname: &String,
@@ -169,8 +209,7 @@ impl QueryBlock {
         &self, env: &Env, graph: &mut Graph<Expr>, colid_dispenser: &mut QueryBlockColidDispenser, expr_id: NodeId,
         agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
-
-        let children_agg_fns_allowed = if let AggFunction(_) = graph.get_node(expr_id).inner {
+        let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get_node(expr_id).inner {
             // Nested aggregate functions not allowed
             false
         } else {
@@ -182,13 +221,7 @@ impl QueryBlock {
 
         if let Some(children) = children {
             for child_id in children {
-                let datatype = self.resolve_expr(
-                    env,
-                    graph,
-                    colid_dispenser,
-                    child_id,
-                    children_agg_fns_allowed,
-                )?;
+                let datatype = self.resolve_expr(env, graph, colid_dispenser, child_id, children_agg_fns_allowed)?;
                 children_datatypes.push(datatype);
             }
         }
@@ -217,7 +250,7 @@ impl QueryBlock {
             }
             Column { prefix, colname } => {
                 let (quncol, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
-                debug!("ASSIGN <== {}", qtuple_ix);
+                //debug!("ASSIGN <== {}", qtuple_ix);
                 node.inner = CID(qtuple_ix);
                 quncol.datatype
             }
@@ -227,12 +260,12 @@ impl QueryBlock {
             Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
             Literal(Datum::BOOL(_)) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,
-            AggFunction(aggtype) => {
+            AggFunction(aggtype, is_distinct) => {
                 if !agg_fns_allowed {
                     return Err(format!("Aggregate function {:?} not allowed.", aggtype));
                 }
                 match aggtype {
-                    AggType::COUNT | AggType::COUNT_DISTINCT => DataType::INT,
+                    AggType::COUNT => DataType::INT,
                     AggType::MIN | AggType::MAX => children_datatypes[0],
                     AggType::SUM | AggType::AVG => {
                         if children_datatypes[0] != DataType::INT && children_datatypes[0] != DataType::DOUBLE {

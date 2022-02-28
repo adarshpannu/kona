@@ -29,6 +29,8 @@ pub type NodeArena = Arena<crate::flow::FlowNode>;
 
 pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::ast::QueryBlock>>;
 
+pub use std::mem::replace;
+
 macro_rules! mkrcrc {
     ($arg:expr) => {{
         Rc::new(RefCell::new($arg))

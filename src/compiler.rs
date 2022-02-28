@@ -37,7 +37,7 @@ impl Compiler {
             .map(|ne| {
                 let expr_id = ne.expr_id;
                 let (expr, children) = graph.get_node_with_children(expr_id);
-                if let AggFunction(aggtype) = expr {
+                if let AggFunction(aggtype, is_distinct) = expr {
                     children.unwrap()[0]
                 } else {
                     expr_id
