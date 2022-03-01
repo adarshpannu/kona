@@ -3,30 +3,86 @@ digraph example1 {
     nodesep=0.5;
     ordering="in";
   subgraph cluster_QB_1 {
-    "QB_1_queryblock"[label="select_list",shape=box,style=filled];
+    label = "QB_1 [, , , , ]";
+    "QB_1_selectlist"[label="select_list",shape=box,style=filled];
   subgraph cluster_select_listQB_1 {
+    exprnodeNodeId11v1[label="/: 0"];
+    exprnodeNodeId6v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId6v1[label="*"];
+    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId4v1[label="SUM"];
+    exprnodeNodeId36v1 -> exprnodeNodeId4v1;
+    exprnodeNodeId36v1[label="CID #1"];
+    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
+    exprnodeNodeId5v1[label="111.222"];
+    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
+    exprnodeNodeId10v1[label="COUNT"];
+    exprnodeNodeId37v1 -> exprnodeNodeId10v1;
+    exprnodeNodeId37v1[label="CID #2"];
+    exprnodeNodeId11v1 -> "QB_1_selectlist";
+    exprnodeNodeId38v1[label="CID #0: 1"];
+    exprnodeNodeId38v1 -> "QB_1_selectlist";
+    exprnodeNodeId16v1[label="AVG: 2"];
+    exprnodeNodeId39v1 -> exprnodeNodeId16v1;
+    exprnodeNodeId39v1[label="CID #3"];
+    exprnodeNodeId16v1 -> "QB_1_selectlist";
+    exprnodeNodeId18v1[label="SUM: 3"];
+    exprnodeNodeId40v1 -> exprnodeNodeId18v1;
+    exprnodeNodeId40v1[label="CID #4"];
+    exprnodeNodeId18v1 -> "QB_1_selectlist";
+    exprnodeNodeId25v1[label="+: 4"];
+    exprnodeNodeId23v1 -> exprnodeNodeId25v1;
+    exprnodeNodeId23v1[label="+"];
+    exprnodeNodeId21v1 -> exprnodeNodeId23v1;
+    exprnodeNodeId21v1[label="+"];
+    exprnodeNodeId19v1 -> exprnodeNodeId21v1;
+    exprnodeNodeId19v1[label="1"];
+    exprnodeNodeId20v1 -> exprnodeNodeId21v1;
+    exprnodeNodeId20v1[label="55"];
+    exprnodeNodeId22v1 -> exprnodeNodeId23v1;
+    exprnodeNodeId22v1[label="DEPT_ID"];
+    exprnodeNodeId24v1 -> exprnodeNodeId25v1;
+    exprnodeNodeId24v1[label="55"];
+    exprnodeNodeId25v1 -> "QB_1_selectlist";
 }
-    "QUN_3"[label="/ subq", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_3"[label="/ Main", fillcolor=black, fontcolor=white, style=filled]
 }
-    "QUN_3" -> "QB_2_queryblock";
+    "QUN_3" -> "QB_2_selectlist";
   subgraph cluster_QB_2 {
-    "QB_2_queryblock"[label="select_list",shape=box,style=filled];
+    label = "QB_2 [, , , , ]";
+    "QB_2_selectlist"[label="select_list",shape=box,style=filled];
   subgraph cluster_select_listQB_2 {
-    exprnodeNodeId22v1[label="+"];
-    exprnodeNodeId20v1 -> exprnodeNodeId22v1;
-    exprnodeNodeId20v1[label="DEPT_ID"];
-    exprnodeNodeId21v1 -> exprnodeNodeId22v1;
-    exprnodeNodeId21v1[label="55"];
-    exprnodeNodeId22v1 -> "QB_2_queryblock";
+    exprnodeNodeId31v1[label="+: 0"];
+    exprnodeNodeId29v1 -> exprnodeNodeId31v1;
+    exprnodeNodeId29v1[label="DEPT_ID"];
+    exprnodeNodeId30v1 -> exprnodeNodeId31v1;
+    exprnodeNodeId30v1[label="55"];
+    exprnodeNodeId31v1 -> "QB_2_selectlist";
+    exprnodeNodeId3v1[label="+: 1"];
+    exprnodeNodeId1v1 -> exprnodeNodeId3v1;
+    exprnodeNodeId1v1[label="AGE"];
+    exprnodeNodeId2v1 -> exprnodeNodeId3v1;
+    exprnodeNodeId2v1[label="10"];
+    exprnodeNodeId3v1 -> "QB_2_selectlist";
+    exprnodeNodeId9v1[label="+: 2"];
+    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId7v1[label="AGE"];
+    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId8v1[label="50"];
+    exprnodeNodeId9v1 -> "QB_2_selectlist";
+    exprnodeNodeId15v1[label="AGE: 3"];
+    exprnodeNodeId15v1 -> "QB_2_selectlist";
+    exprnodeNodeId17v1[label="DEPT_ID: 4"];
+    exprnodeNodeId17v1 -> "QB_2_selectlist";
 }
     "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_2 {
-    exprnodeNodeId19v1[label=">"];
-    exprnodeNodeId17v1 -> exprnodeNodeId19v1;
-    exprnodeNodeId17v1[label="AGE"];
-    exprnodeNodeId18v1 -> exprnodeNodeId19v1;
-    exprnodeNodeId18v1[label="50"];
-    exprnodeNodeId19v1 -> QB_2_pred_list;
+    exprnodeNodeId28v1[label=">"];
+    exprnodeNodeId26v1 -> exprnodeNodeId28v1;
+    exprnodeNodeId26v1[label="AGE"];
+    exprnodeNodeId27v1 -> exprnodeNodeId28v1;
+    exprnodeNodeId27v1[label="50"];
+    exprnodeNodeId28v1 -> QB_2_pred_list;
     "QB_2_pred_list"[label="pred_list",shape=box,style=filled];
 }
 }

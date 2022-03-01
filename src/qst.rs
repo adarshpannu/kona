@@ -65,7 +65,7 @@ impl QueryBlock {
         // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
         self.split_groupby(env, graph)?;
 
-        return(Ok(()));
+        return (Ok(()));
 
         //let qgm_resolved_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_resolved.dot");
         //qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
@@ -111,9 +111,11 @@ impl QueryBlock {
     pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
         if self.group_by.is_some() {
             debug!("*** split_groupby");
-            let select_list = std::mem::replace(&mut self.select_list, vec![]);
-            let group_by = std::mem::replace(&mut self.group_by, None).unwrap();
-            let having_clause = std::mem::replace(&mut self.having_clause, None);
+            //let select_list = replace(&mut self.select_list, vec![]);
+            let group_by = replace(&mut self.group_by, None).unwrap();
+            let group_by_expr_count = group_by.len();
+
+            let having_clause = replace(&mut self.having_clause, None);
 
             // Transform group_by into inner-select-list
             let mut inner_select_list = group_by
@@ -121,12 +123,15 @@ impl QueryBlock {
                 .map(|expr_id| NamedExpr::new(None, expr_id, &graph))
                 .collect::<Vec<NamedExpr>>();
 
-            Self::transform_groupby_selectlist(env, graph, &mut inner_select_list);
+            // Contruct outer select-list by replacing agg() references with inner columns
+            for ne in self.select_list.iter_mut() {
+                Self::transform_groupby_expr(env, graph, &mut inner_select_list, group_by_expr_count, &mut ne.expr_id);
+            }
 
             let outer_qb = self;
             let inner_qb = QueryBlock::new(
                 graph.next_id(),
-                std::mem::replace(&mut outer_qb.name, None),
+                replace(&mut outer_qb.name, None),
                 outer_qb.qbtype,
                 inner_select_list,
                 replace(&mut outer_qb.quns, vec![]),
@@ -142,12 +147,114 @@ impl QueryBlock {
             outer_qb.name = None;
             outer_qb.qbtype = QueryBlockType::GroupBy;
             outer_qb.quns = vec![outer_qun];
-
         }
         Ok(())
     }
 
-    pub fn transform_groupby_selectlist(env: &Env, graph: &mut Graph<Expr>, select_list: &mut Vec<NamedExpr>) {}
+    fn identical_exprs(graph: &Graph<Expr>, expr_id1: NodeId, expr_id2: NodeId) -> bool {
+        let (expr1, children1) = graph.get_node_with_children(expr_id1);
+        let (expr2, children2) = graph.get_node_with_children(expr_id2);
+        let shallow_matched = match (expr1, expr2) {
+            (CID(c1), CID(c2)) => c1 == c2,
+            (BinaryExpr(c1), BinaryExpr(c2)) => c1 == c2,
+            (RelExpr(c1), RelExpr(c2)) => c1 == c2,
+            (LogExpr(c1), LogExpr(c2)) => c1 == c2,
+            (
+                Column {
+                    prefix: p1,
+                    colname: n1,
+                },
+                Column {
+                    prefix: p2,
+                    colname: n2,
+                },
+            ) => p1 == p2 && n1 == n2,
+            (Literal(c1), Literal(c2)) => c1 == c2,
+            (NegatedExpr, NegatedExpr) => true,
+            (BetweenExpr, BetweenExpr) => true,
+            (InListExpr, InListExpr) => true,
+            _ => false,
+        };
+        if shallow_matched {
+            if children1.is_some() != children2.is_some() {
+                return false;
+            }
+            if children1.is_some() && children2.is_some() {
+                let children1 = children1.unwrap();
+                let children2 = children2.unwrap();
+                if children1.len() == children2.len() {
+                    for (&child1, &child2) in children1.iter().zip(children2.iter()) {
+                        if !Self::identical_exprs(graph, child1, child2) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    fn find(
+        graph: &Graph<Expr>, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: NodeId,
+    ) -> Option<usize> {
+        // Does this expression already exist in the select_list[..until_index]?
+        for (ix, ne) in select_list.iter().enumerate() {
+            if ix >= group_by_expr_count {
+                return None;
+            } else if Self::identical_exprs(graph, expr_id, ne.expr_id) {
+                debug!("find: {:?}", expr_id);
+                return Some(ix);
+            }
+        }
+        None
+    }
+
+    fn append(graph: &Graph<Expr>, select_list: &mut Vec<NamedExpr>, expr_id: NodeId) -> usize {
+        // Does this expression already exist in the select_list?
+        for (ix, ne) in select_list.iter().enumerate() {
+            if Self::identical_exprs(graph, expr_id, ne.expr_id) {
+                return ix;
+            }
+        }
+
+        select_list.push(NamedExpr { alias: None, expr_id });
+        return select_list.len() - 1;
+    }
+
+    pub fn transform_groupby_expr(
+        env: &Env, graph: &mut Graph<Expr>, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
+        expr_id: &mut NodeId,
+    ) {
+        let node = graph.get_node(*expr_id);
+        if let AggFunction(_, _) = node.inner {
+            // Aggregate-function: replace argument with CID reference to inner query-block
+            let child_id = node.children.as_ref().unwrap()[0];
+            let cid = Self::append(graph, select_list, child_id);
+            let new_child_id = graph.add_node(CID(cid), None);
+            let node = graph.get_node_mut(*expr_id);
+            node.children = Some(vec![new_child_id]);
+        } else if let Some(cid) = Self::find(&graph, &select_list, group_by_expr_count, *expr_id) {
+            // Expression in GROUP-BY list, all good
+            let new_child_id = graph.add_node(CID(cid), None);
+            *expr_id = new_child_id;
+        } else if let Column { prefix, colname } = &node.inner {
+            // User error: Unaggregated expression in select-list not in group-by clause
+            error!(
+                "Column {} is referenced in select list but it is not specified in the GROUP-BY list",
+                colname
+            );
+        } else if let Some(mut children) = node.children.clone() {
+            let mut children2 = vec![];
+            for child_id in children.iter_mut() {
+                Self::transform_groupby_expr(env, graph, select_list, group_by_expr_count, child_id);
+                children2.push(*child_id);
+            }
+            let node = graph.get_node_mut(*expr_id);
+            node.children = Some(children);
+        }
+    }
 
     pub fn resolve_column(
         &self, env: &Env, colid_dispenser: &mut QueryBlockColidDispenser, prefix: Option<&String>, colname: &String,

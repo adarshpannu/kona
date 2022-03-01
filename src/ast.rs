@@ -126,11 +126,18 @@ impl Quantifier {
     }
 
     pub fn display(&self) -> String {
+        let qbname = if let Some(qblock) = self.qblock.as_ref() {
+            let qblock = qblock.borrow();
+            format!("{:?}", qblock.qbtype)
+        } else {
+            String::from("")
+        };
+
         format!(
             "{}/{} {}",
             self.name.as_ref().unwrap_or(&"".to_string()),
             self.alias.as_ref().unwrap_or(&"".to_string()),
-            if self.qblock.is_some() { "subq" } else { "" }
+            qbname
         )
     }
 
@@ -227,22 +234,22 @@ impl QueryBlock {
         let select_names = format!("{:?}", select_names).replace("\"", "");
 
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
-        //fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
+        fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
         fprint!(
             file,
-            "    \"{}_queryblock\"[label=\"select_list\",shape=box,style=filled];\n",
+            "    \"{}_selectlist\"[label=\"select_list\",shape=box,style=filled];\n",
             self.name()
         );
 
         // Write select_list
         fprint!(file, "  subgraph cluster_select_list{} {{\n", self.name());
-        for nexpr in self.select_list.iter() {
+        for (ix, nexpr) in self.select_list.iter().enumerate() {
             let expr_id = nexpr.expr_id;
-            QGM::write_expr_to_graphvis(qgm, expr_id, file);
+            QGM::write_expr_to_graphvis(qgm, expr_id, file, Some(ix));
             let childid_name = QGM::nodeid_to_str(&expr_id);
             fprint!(
                 file,
-                "    exprnode{} -> \"{}_queryblock\";\n",
+                "    exprnode{} -> \"{}_selectlist\";\n",
                 childid_name,
                 self.name()
             );
@@ -259,7 +266,7 @@ impl QueryBlock {
             );
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
-                //fprint!(file, "    \"{}\" -> \"{}_queryblock\";\n", qun.name(), qblock.name());
+                //fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 //qblock.write_qblock_to_graphviz(qgm, file)?
             }
         }
@@ -268,7 +275,7 @@ impl QueryBlock {
         if let Some(expr) = self.pred_list {
             fprint!(file, "  subgraph cluster_pred_list{} {{\n", self.name());
 
-            QGM::write_expr_to_graphvis(qgm, expr, file);
+            QGM::write_expr_to_graphvis(qgm, expr, file, None);
 
             let id = QGM::nodeid_to_str(&expr);
             let (expr, children) = qgm.graph.get_node_with_children(expr);
@@ -291,8 +298,8 @@ impl QueryBlock {
                 self.name()
             );
 
-            for &expr_id in group_by.iter() {
-                QGM::write_expr_to_graphvis(qgm, expr_id, file);
+            for (ix, &expr_id) in group_by.iter().enumerate() {
+                QGM::write_expr_to_graphvis(qgm, expr_id, file, Some(ix));
                 let childid_name = QGM::nodeid_to_str(&expr_id);
                 fprint!(file, "    exprnode{} -> \"{}_group_by\";\n", childid_name, self.name());
             }
@@ -303,7 +310,7 @@ impl QueryBlock {
         if let Some(expr) = self.having_clause {
             fprint!(file, "  subgraph cluster_having_clause{} {{\n", self.name());
 
-            QGM::write_expr_to_graphvis(qgm, expr, file);
+            QGM::write_expr_to_graphvis(qgm, expr, file, None);
 
             let id = QGM::nodeid_to_str(&expr);
             let (expr, children) = qgm.graph.get_node_with_children(expr);
@@ -322,7 +329,7 @@ impl QueryBlock {
         for qun in self.quns.iter().rev() {
             if let Some(qblock) = &qun.qblock {
                 let qblock = &*qblock.borrow();
-                fprint!(file, "    \"{}\" -> \"{}_queryblock\";\n", qun.name(), qblock.name());
+                fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 qblock.write_qblock_to_graphviz(qgm, file)?
             }
         }
@@ -391,16 +398,22 @@ impl QGM {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
-    fn write_expr_to_graphvis(qgm: &QGM, expr: NodeId, file: &mut File) -> std::io::Result<()> {
+    fn write_expr_to_graphvis(qgm: &QGM, expr: NodeId, file: &mut File, ix: Option<usize>) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
         let (expr, children) = qgm.graph.get_node_with_children(expr);
-        fprint!(file, "    exprnode{}[label=\"{}\"];\n", id, expr.name());
+        let ix_str = if let Some(ix) = ix {
+            format!(": {}", ix)
+        } else {
+            String::from("")
+        };
+
+        fprint!(file, "    exprnode{}[label=\"{}{}\"];\n", id, expr.name(), ix_str);
         if let Some(children) = children {
             for &childid in children {
                 let childid_name = Self::nodeid_to_str(&childid);
 
                 fprint!(file, "    exprnode{} -> exprnode{};\n", childid_name, id);
-                Self::write_expr_to_graphvis(qgm, childid, file)?;
+                Self::write_expr_to_graphvis(qgm, childid, file, None)?;
             }
         }
         Ok(())
@@ -408,7 +421,7 @@ impl QGM {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
 pub enum ArithOp {
     Add,
     Sub,
@@ -429,7 +442,7 @@ impl fmt::Display for ArithOp {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
 pub enum LogOp {
     And,
     Or,
@@ -449,7 +462,7 @@ impl fmt::Display for LogOp {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
 pub enum RelOp {
     Eq,
     Ne,
@@ -510,7 +523,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID(offset) => format!("#{}", *offset),
+            CID(offset) => format!("CID #{}", *offset),
             Column {
                 prefix: tablename,
                 colname,

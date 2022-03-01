@@ -132,7 +132,7 @@ pub FullSelect: AST = <cte_list:WithClause?> <mut qblock:QueryBlock> => {
     qblock.name = Some(String::from("main"));
     qblock.qbtype = QueryBlockType::Main;
 
-    let graph = std::mem::replace(&mut parser_state.graph, Graph::new());
+    let graph = replace(&mut parser_state.graph, Graph::new());
 
     let qgm = QGM { qblock, cte_list: cte_list.unwrap_or(vec![]), graph };
     AST::QGM(qgm)

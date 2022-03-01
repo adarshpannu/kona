@@ -69,6 +69,11 @@ impl<T> Graph<T> {
         (&node.inner, node.children.as_ref())
     }
 
+    pub fn get_node_with_children_mut(&mut self, ix: NodeId) -> (&mut T, Option<&mut Vec<NodeId>>) {
+        let mut node = self.sm.get_mut(ix).unwrap();
+        (&mut node.inner, node.children.as_mut())
+    }
+
     pub fn replace(&mut self, ix: NodeId, t: T) {
         let mut node = self.sm.get_mut(ix).unwrap();
         let mut new_node = Node::new(t);
@@ -92,61 +97,3 @@ impl<T> Graph<T> {
         node.children = Some(new_children);
     }
 }
-
-#[derive(Debug)]
-enum TestRelOpType {
-    Lt, Le, Gt, Ge, Ne, Eq
-}
-
-#[derive(Debug)]
-enum TestExpr {
-    Column(String),
-    CID(usize),
-    Integer(isize),
-    Boolean(bool),
-    Star,
-    Select,
-    Cast,
-    Relop(TestRelOpType)
-}
-
-#[test]
-pub fn test_graph() {
-
-    // select (111 = 222), *
-    let mut qgm: Graph<TestExpr> = Graph::new();
-
-    let lhs = qgm.add_node(TestExpr::Integer(111), None);
-    let rhs = qgm.add_node(TestExpr::Integer(222), None);
-    let relop = qgm.add_node(TestExpr::Relop(TestRelOpType::Eq), Some(vec![lhs, rhs]));
-
-    //let mut e = qgm.get_node_mut(e);
-    //*e = Expr::Boolean(false);
-    //qgm.replace_node(2, Expr::Boolean(false));
-
-    let star = qgm.add_node(TestExpr::Star, None);
-
-    let select = qgm.add_node(TestExpr::Select, Some(vec![relop, star]));
-
-    let cols: Vec<NodeId> = vec!["c1", "c2"].into_iter().map(|col| {
-        let expr = TestExpr::Column(col.to_string());
-        qgm.add_node(expr, None)
-    }).collect();
-
-    qgm.replace_many(select, star, cols);
-    dbg!(&qgm);
-}
-
-fn qst(g: &mut Graph<TestExpr>, ix: NodeId) {
-    let expr = &g.get_node(ix).inner;
-    match expr {
-        TestExpr::Relop(_) => {
-
-        },
-        TestExpr::Column(_) => {
-            g.replace(ix, TestExpr::CID(99));
-        }
-        _ => {}
-    }
-}
-

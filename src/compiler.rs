@@ -11,7 +11,7 @@ pub struct Compiler;
 impl Compiler {
     pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
         let arena: NodeArena = Arena::new();
-        let graph = std::mem::replace(&mut qgm.graph, Graph::new());
+        let graph = replace(&mut qgm.graph, Graph::new());
         let topqblock = &qgm.qblock;
 
         // Currently only single-table queries supported.

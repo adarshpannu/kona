@@ -1,5 +1,6 @@
 
 use crate::row::*;
+use crate::includes::*;
 
 #[test]
 fn test_vec() {
@@ -9,12 +10,13 @@ fn test_vec() {
         v.push(DataType::UNKNOWN)
     }
 
-    std::mem::replace(&mut v[1], DataType::BOOL);
-    std::mem::replace(&mut v[2], DataType::BOOL);
+    replace(&mut v[1], DataType::BOOL);
+    replace(&mut v[2], DataType::BOOL);
 
     let n = 10;
     let v = vec![Datum::NULL; n];
     dbg!(&v);
 
-
+    let v2 = &v[..];
+    dbg!(v2.len());
 }
