@@ -67,11 +67,7 @@ impl NamedExpr {
 
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum QueryBlockType {
-    Unassigned,
-    Main,
-    CTE,
-    InlineView,
-    Subquery,
+    Select,
     GroupBy,
 }
 
@@ -233,8 +229,8 @@ impl QueryBlock {
             .collect();
         let select_names = format!("{:?}", select_names).replace("\"", "");
 
+        // --- begin query block cluster ---
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
-        fprint!(file, "    label = \"{} {}\";\n", self.name(), select_names);
         fprint!(
             file,
             "    \"{}_selectlist\"[label=\"select_list\",shape=box,style=filled];\n",
@@ -322,8 +318,10 @@ impl QueryBlock {
             );
             fprint!(file, "}}\n");
         }
+        fprint!(file, "    label = \"{} type={:?}\";\n", self.name(), self.qbtype);
 
         fprint!(file, "}}\n");
+        // --- end query block cluster ---
 
         // Write referenced query blocks
         for qun in self.quns.iter().rev() {
@@ -547,6 +545,51 @@ impl Expr {
             Subquery(qblock) => format!("(subquery)"),
             AggFunction(aggtype, is_distinct) => format!("{:?}", aggtype),
             ScalarFunction(name) => format!("{}()", name),
+        }
+    }
+
+    pub fn isomorphic(graph: &Graph<Expr>, expr_id1: NodeId, expr_id2: NodeId) -> bool {
+        let (expr1, children1) = graph.get_node_with_children(expr_id1);
+        let (expr2, children2) = graph.get_node_with_children(expr_id2);
+        let shallow_matched = match (expr1, expr2) {
+            (CID(c1), CID(c2)) => c1 == c2,
+            (BinaryExpr(c1), BinaryExpr(c2)) => c1 == c2,
+            (RelExpr(c1), RelExpr(c2)) => c1 == c2,
+            (LogExpr(c1), LogExpr(c2)) => c1 == c2,
+            (
+                Column {
+                    prefix: p1,
+                    colname: n1,
+                },
+                Column {
+                    prefix: p2,
+                    colname: n2,
+                },
+            ) => p1 == p2 && n1 == n2,
+            (Literal(c1), Literal(c2)) => c1 == c2,
+            (NegatedExpr, NegatedExpr) => true,
+            (BetweenExpr, BetweenExpr) => true,
+            (InListExpr, InListExpr) => true,
+            _ => false,
+        };
+        if shallow_matched {
+            if children1.is_some() != children2.is_some() {
+                return false;
+            }
+            if children1.is_some() && children2.is_some() {
+                let children1 = children1.unwrap();
+                let children2 = children2.unwrap();
+                if children1.len() == children2.len() {
+                    for (&child1, &child2) in children1.iter().zip(children2.iter()) {
+                        if !Self::isomorphic(graph, child1, child2) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        } else {
+            return false;
         }
     }
 }

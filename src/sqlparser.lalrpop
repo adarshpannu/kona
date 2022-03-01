@@ -130,7 +130,7 @@ pub SetOption: AST = {
 
 pub FullSelect: AST = <cte_list:WithClause?> <mut qblock:QueryBlock> => {
     qblock.name = Some(String::from("main"));
-    qblock.qbtype = QueryBlockType::Main;
+    qblock.qbtype = QueryBlockType::Select;
 
     let graph = replace(&mut parser_state.graph, Graph::new());
 
@@ -147,7 +147,7 @@ pub QueryBlock: QueryBlock = {
     <having:HavingClause?> 
     <order_by:OrderByClause?>  => {
         //let pred_list = if pred_list.is_some() { Some(pred_list.unwrap()) } else { None };
-        QueryBlock::new(parser_state.graph.next_id(), None, QueryBlockType::Subquery, 
+        QueryBlock::new(parser_state.graph.next_id(), None, QueryBlockType::Select, 
             select_list, quns, pred_list, group_by, having, order_by, distinct.unwrap_or(DistinctProperty::All), None)
     }
 };
@@ -171,7 +171,7 @@ CTEList = CommaSeparatedList<CTE>;
 CTE: QueryBlockLink = <name:Identifier> "AS" <mut subqlink:Subquery> => {
     let mut subq = &mut *subqlink.borrow_mut();
     subq.name = Some(name);
-    subq.qbtype = QueryBlockType::CTE;
+    subq.qbtype = QueryBlockType::Select;
     subqlink.clone()
 };
 
