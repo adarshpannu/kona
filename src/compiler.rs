@@ -18,12 +18,12 @@ impl Compiler {
         assert!(topqblock.quns.len() == 1);
 
         let qun = &topqblock.quns[0];
-        assert!(qun.name.is_some() && qun.qblock.is_none());
+        assert!(qun.tablename.is_some() && qun.qblock.is_none());
 
         // Turn QUN -> CSV, pred_list -> Filter
         let mut topnode;
 
-        let name = qun.name.as_ref().unwrap();
+        let name = qun.tablename.as_ref().unwrap();
         let colmap = qun.column_read_map.borrow().clone();
         topnode = CSVNode::new(env, &arena, name.clone(), 4, colmap);
         if let Some(pred_list) = topqblock.pred_list {

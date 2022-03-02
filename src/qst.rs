@@ -59,25 +59,26 @@ impl QueryBlockColidDispenser {
 
 impl QueryBlock {
     pub fn resolve(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
+        debug!("Resolve query block: {}", self.id);
+
         let mut colid_dispenser = QueryBlockColidDispenser::new();
-
-        // Resolve group-by/having clauses, if they exist
-        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
-        self.split_groupby(env, graph)?;
-
-        return (Ok(()));
 
         //let qgm_resolved_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_resolved.dot");
         //qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
 
         // Resolve QUNs first (base tables and any nested subqueries)
         for qun in self.quns.iter_mut() {
-            let tablename = qun.name.as_ref().unwrap(); // this will fail for subqueries, and that's ok for now
-            let tbdesc = env.metadata.get_tabledesc(tablename);
-            if tbdesc.is_none() {
-                return Err(format!("Table {} not cataloged.", dquote(tablename)));
+            if let Some(tablename) = qun.tablename.as_ref() {
+                let tablename = qun.tablename.as_ref().unwrap(); // this will fail for subqueries, and that's ok for now
+                let tbdesc = env.metadata.get_tabledesc(tablename);
+                if tbdesc.is_none() {
+                    return Err(format!("Table {} not cataloged.", dquote(tablename)));
+                }
+                qun.tabledesc = tbdesc;
+            } else if let Some(qblock) = qun.qblock.as_ref() {
+                let mut qblock = qblock.borrow_mut();
+                qblock.resolve(env, graph);
             }
-            qun.tabledesc = tbdesc;
         }
 
         // Resolve select list
@@ -87,30 +88,35 @@ impl QueryBlock {
         }
 
         // Resolve predicates
-        let mut pred_list = vec![];
-        if self.pred_list.is_some() {
-            let expr_id = self.pred_list.unwrap();
-
+        if let Some(&expr_id) = self.pred_list.as_ref() {
             self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
-
-            self.extract(graph, expr_id, &mut pred_list)
         }
 
-        for exprid in pred_list {
-            let expr = graph.get_node(exprid);
-            //info!("Extracted: {:?}", expr)
+        // Resolve group-by
+        if let Some(group_by) = self.group_by.as_ref() {
+            for &expr_id in group_by.iter() {
+                self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
+            }
+        }
+
+        // Resolve having-clause
+        if let Some(&expr_id) = self.having_clause.as_ref() {
+            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, true)?;
         }
 
         for qun in self.quns.iter() {
             //info!("Qun: {}, column_map:{:?}", qun.id, qun.column_read_map)
         }
 
+        // Resolve group-by/having clauses, if they exist
+        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
+        self.split_groupby(env, graph)?;
+
         Ok(())
     }
 
     pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
         if self.group_by.is_some() {
-            debug!("*** split_groupby");
             //let select_list = replace(&mut self.select_list, vec![]);
             let group_by = replace(&mut self.group_by, None).unwrap();
             let group_by_expr_count = group_by.len();
@@ -130,7 +136,13 @@ impl QueryBlock {
 
             // Fixup having clause -> outer qb filter
             let outer_pred_list = if let Some(mut having_clause) = having_clause {
-                Self::transform_groupby_expr(env, graph, &mut inner_select_list, group_by_expr_count, &mut having_clause)?;
+                Self::transform_groupby_expr(
+                    env,
+                    graph,
+                    &mut inner_select_list,
+                    group_by_expr_count,
+                    &mut having_clause,
+                )?;
                 Some(having_clause)
             } else {
                 None
@@ -192,11 +204,19 @@ impl QueryBlock {
         expr_id: &mut NodeId,
     ) -> Result<(), String> {
         let node = graph.get_node(*expr_id);
-        if let AggFunction(_, _) = node.inner {
+        if let AggFunction(aggtype, _) = node.inner {
             // Aggregate-function: replace argument with CID reference to inner query-block
             let child_id = node.children.as_ref().unwrap()[0];
             let cid = Self::append(graph, select_list, child_id);
-            let new_child_id = graph.add_node(CID(cid), None);
+            let new_child_id = if aggtype == AggType::AVG {
+                // AVG -> SUM / COUNT
+                let cid = graph.add_node(CID(cid), None);
+                let sum = graph.add_node(AggFunction(AggType::SUM, false), Some(vec![cid]));
+                let cnt = graph.add_node(AggFunction(AggType::COUNT, false), Some(vec![cid]));
+                graph.add_node(BinaryExpr(ArithOp::Div), Some(vec![sum, cnt]))
+            } else {
+                graph.add_node(CID(cid), None)
+            };
             let node = graph.get_node_mut(*expr_id);
             node.children = Some(vec![new_child_id]);
         } else if let Some(cid) = Self::find(&graph, &select_list, group_by_expr_count, *expr_id) {
@@ -303,6 +323,7 @@ impl QueryBlock {
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
+            CID(_) => node.datatype,
             RelExpr(relop) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
@@ -347,7 +368,10 @@ impl QueryBlock {
                     }
                 }
             }
-            _ => todo!(),
+            _ => {
+                debug!("TODO: {:?}", &expr);
+                todo!();
+            }
         };
         node.datatype = datatype;
         Ok(datatype)

@@ -76,7 +76,7 @@ pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<NodeId>);
 #[derive(Serialize, Deserialize)]
 pub struct Quantifier {
     pub id: usize,
-    pub name: Option<String>,
+    pub tablename: Option<String>,
     pub qblock: Option<QueryBlockLink>,
     pub alias: Option<String>,
 
@@ -91,7 +91,7 @@ impl fmt::Debug for Quantifier {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Quantifier")
             .field("id", &self.id)
-            .field("name", &self.name)
+            .field("name", &self.tablename)
             .field("alias", &self.alias)
             .finish()
     }
@@ -104,7 +104,7 @@ impl Quantifier {
 
         Quantifier {
             id,
-            name,
+            tablename: name,
             qblock,
             alias,
             tabledesc: None,
@@ -117,7 +117,7 @@ impl Quantifier {
     }
 
     pub fn matches_name_or_alias(&self, prefix: &String) -> bool {
-        self.name.as_ref().map(|e| e == prefix).unwrap_or(false)
+        self.tablename.as_ref().map(|e| e == prefix).unwrap_or(false)
             || self.alias.as_ref().map(|e| e == prefix).unwrap_or(false)
     }
 
@@ -131,7 +131,7 @@ impl Quantifier {
 
         format!(
             "{}/{} {}",
-            self.name.as_ref().unwrap_or(&"".to_string()),
+            self.tablename.as_ref().unwrap_or(&"".to_string()),
             self.alias.as_ref().unwrap_or(&"".to_string()),
             qbname
         )
@@ -160,7 +160,7 @@ pub enum DistinctProperty {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueryBlock {
-    id: usize,
+    pub id: usize,
     pub name: Option<String>,
     pub qbtype: QueryBlockType,
     pub select_list: Vec<NamedExpr>,
