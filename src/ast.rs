@@ -79,6 +79,7 @@ pub struct Quantifier {
     pub tablename: Option<String>,
     pub qblock: Option<QueryBlockLink>,
     pub alias: Option<String>,
+    pub pred_list: Option<NodeId>,
 
     #[serde(skip)]
     pub tabledesc: Option<Rc<dyn TableDesc>>,
@@ -107,6 +108,7 @@ impl Quantifier {
             tablename: name,
             qblock,
             alias,
+            pred_list: None,
             tabledesc: None,
             column_read_map: RefCell::new(HashMap::new()),
         }
@@ -165,9 +167,9 @@ pub struct QueryBlock {
     pub qbtype: QueryBlockType,
     pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
-    pub pred_list: Option<NodeId>,
+    pub pred_list: Option<Vec<NodeId>>,
     pub group_by: Option<Vec<NodeId>>,
-    pub having_clause: Option<NodeId>,
+    pub having_clause: Option<Vec<NodeId>>,
     pub order_by: Option<Vec<(NodeId, Ordering)>>,
     pub distinct: DistinctProperty,
     pub topN: Option<usize>,
@@ -176,7 +178,7 @@ pub struct QueryBlock {
 impl QueryBlock {
     pub fn new(
         id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Option<NodeId>, group_by: Option<Vec<NodeId>>, having_clause: Option<NodeId>,
+        pred_list: Option<Vec<NodeId>>, group_by: Option<Vec<NodeId>>, having_clause: Option<Vec<NodeId>>,
         order_by: Option<Vec<(NodeId, Ordering)>>, distinct: DistinctProperty, topN: Option<usize>,
     ) -> Self {
         QueryBlock {
@@ -268,14 +270,15 @@ impl QueryBlock {
         }
 
         // Write pred_list
-        if let Some(expr) = self.pred_list {
+        if let Some(pred_list) = self.pred_list.as_ref() {
             fprint!(file, "  subgraph cluster_pred_list{} {{\n", self.name());
 
-            QGM::write_expr_to_graphvis(qgm, expr, file, None);
-
-            let id = QGM::nodeid_to_str(&expr);
-            let (expr, children) = qgm.graph.get_node_with_children(expr);
-            fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
+            for &expr_id in pred_list {
+                QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
+                let id = QGM::nodeid_to_str(&expr_id);
+                let (expr, children) = qgm.graph.get_node_with_children(expr_id);
+                fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
+            }
             fprint!(
                 file,
                 "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n",
@@ -303,14 +306,16 @@ impl QueryBlock {
         }
 
         // Write having_clause
-        if let Some(expr) = self.having_clause {
+        if let Some(having_clause) = self.having_clause.as_ref() {
             fprint!(file, "  subgraph cluster_having_clause{} {{\n", self.name());
 
-            QGM::write_expr_to_graphvis(qgm, expr, file, None);
+            for &expr_id in having_clause {
+                QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
 
-            let id = QGM::nodeid_to_str(&expr);
-            let (expr, children) = qgm.graph.get_node_with_children(expr);
-            fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
+                let id = QGM::nodeid_to_str(&expr_id);
+                let (expr, children) = qgm.graph.get_node_with_children(expr_id);
+                fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
+            }
             fprint!(
                 file,
                 "    \"{}_having_clause\"[label=\"having_clause\",shape=box,style=filled];\n",
@@ -523,11 +528,11 @@ impl Expr {
         match self {
             CID(offset) => format!("CID #{}", *offset),
             Column {
-                prefix: tablename,
+                prefix,
                 colname,
             } => {
-                if let Some(tablename) = tablename {
-                    format!("{}.{}", tablename, colname)
+                if let Some(prefix) = prefix {
+                    format!("{}.{}", prefix, colname)
                 } else {
                     format!("{}", colname)
                 }

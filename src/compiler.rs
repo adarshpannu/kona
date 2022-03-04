@@ -26,8 +26,10 @@ impl Compiler {
         let name = qun.tablename.as_ref().unwrap();
         let colmap = qun.column_read_map.borrow().clone();
         topnode = CSVNode::new(env, &arena, name.clone(), 4, colmap);
-        if let Some(pred_list) = topqblock.pred_list {
-            topnode = topnode.filter(&arena, pred_list);
+        if let Some(pred_list) = topqblock.pred_list.as_ref() {
+            for &pred_id in pred_list {
+                topnode = topnode.filter(&arena, pred_id);
+            }
         }
 
         // Compile selectlist, temporarily stripping agg functions

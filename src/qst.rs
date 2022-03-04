@@ -88,8 +88,10 @@ impl QueryBlock {
         }
 
         // Resolve predicates
-        if let Some(&expr_id) = self.pred_list.as_ref() {
-            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
+        if let Some(pred_list) = self.pred_list.as_ref() {
+            for &expr_id in pred_list {
+                self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
+            }
         }
 
         // Resolve group-by
@@ -100,8 +102,10 @@ impl QueryBlock {
         }
 
         // Resolve having-clause
-        if let Some(&expr_id) = self.having_clause.as_ref() {
-            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, true)?;
+        if let Some(having_clause) = self.having_clause.as_ref() {
+            for &expr_id in having_clause {
+                self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, true)?;
+            }
         }
 
         for qun in self.quns.iter() {
@@ -135,15 +139,20 @@ impl QueryBlock {
             }
 
             // Fixup having clause -> outer qb filter
-            let outer_pred_list = if let Some(mut having_clause) = having_clause {
-                Self::transform_groupby_expr(
-                    env,
-                    graph,
-                    &mut inner_select_list,
-                    group_by_expr_count,
-                    &mut having_clause,
-                )?;
-                Some(having_clause)
+            let outer_pred_list = if let Some(having_clause) = having_clause {
+                let mut new_having_clause = vec![];
+                for having_pred in having_clause.iter() {
+                    let mut new_pred_id = *having_pred;
+                    Self::transform_groupby_expr(
+                        env,
+                        graph,
+                        &mut inner_select_list,
+                        group_by_expr_count,
+                        &mut new_pred_id,
+                    );
+                    new_having_clause.push(new_pred_id);
+                };
+                Some(new_having_clause)
             } else {
                 None
             };

@@ -5,80 +5,38 @@ digraph example1 {
   subgraph cluster_QB_1 {
     "QB_1_selectlist"[label="select_list",shape=box,style=filled];
   subgraph cluster_select_listQB_1 {
-    exprnodeNodeId11v1[label="/: 0"];
-    exprnodeNodeId6v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId6v1[label="*"];
-    exprnodeNodeId4v1 -> exprnodeNodeId6v1;
-    exprnodeNodeId4v1[label="SUM"];
-    exprnodeNodeId3v1 -> exprnodeNodeId4v1;
-    exprnodeNodeId3v1[label="+"];
+    exprnodeNodeId3v1[label="*: 0"];
     exprnodeNodeId1v1 -> exprnodeNodeId3v1;
-    exprnodeNodeId1v1[label="AGE"];
+    exprnodeNodeId1v1[label="DEPT_ID"];
     exprnodeNodeId2v1 -> exprnodeNodeId3v1;
-    exprnodeNodeId2v1[label="10"];
-    exprnodeNodeId5v1 -> exprnodeNodeId6v1;
-    exprnodeNodeId5v1[label="99"];
-    exprnodeNodeId10v1 -> exprnodeNodeId11v1;
-    exprnodeNodeId10v1[label="COUNT"];
-    exprnodeNodeId9v1 -> exprnodeNodeId10v1;
-    exprnodeNodeId9v1[label="+"];
-    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId7v1[label="AGE"];
-    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
-    exprnodeNodeId8v1[label="50"];
-    exprnodeNodeId11v1 -> "QB_1_selectlist";
-    exprnodeNodeId14v1[label="+: 1"];
-    exprnodeNodeId12v1 -> exprnodeNodeId14v1;
-    exprnodeNodeId12v1[label="DEPT_ID"];
-    exprnodeNodeId13v1 -> exprnodeNodeId14v1;
-    exprnodeNodeId13v1[label="55"];
-    exprnodeNodeId14v1 -> "QB_1_selectlist";
-    exprnodeNodeId16v1[label="AVG: 2"];
-    exprnodeNodeId15v1 -> exprnodeNodeId16v1;
-    exprnodeNodeId15v1[label="AGE"];
-    exprnodeNodeId16v1 -> "QB_1_selectlist";
+    exprnodeNodeId2v1[label="100"];
+    exprnodeNodeId3v1 -> "QB_1_selectlist";
+    exprnodeNodeId4v1[label="NAME: 1"];
+    exprnodeNodeId4v1 -> "QB_1_selectlist";
+    exprnodeNodeId5v1[label="NAME: 2"];
+    exprnodeNodeId5v1 -> "QB_1_selectlist";
 }
     "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_1 {
-    exprnodeNodeId19v1[label=">"];
-    exprnodeNodeId17v1 -> exprnodeNodeId19v1;
-    exprnodeNodeId17v1[label="AGE"];
-    exprnodeNodeId18v1 -> exprnodeNodeId19v1;
-    exprnodeNodeId18v1[label="50"];
-    exprnodeNodeId19v1 -> QB_1_pred_list;
+    exprnodeNodeId14v1[label="Or"];
+    exprnodeNodeId10v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId10v1[label="="];
+    exprnodeNodeId6v1 -> exprnodeNodeId10v1;
+    exprnodeNodeId6v1[label="DEPT_ID"];
+    exprnodeNodeId9v1 -> exprnodeNodeId10v1;
+    exprnodeNodeId9v1[label="/"];
+    exprnodeNodeId7v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId7v1[label="8"];
+    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId8v1[label="2"];
+    exprnodeNodeId13v1 -> exprnodeNodeId14v1;
+    exprnodeNodeId13v1[label="="];
+    exprnodeNodeId11v1 -> exprnodeNodeId13v1;
+    exprnodeNodeId11v1[label="NAME"];
+    exprnodeNodeId12v1 -> exprnodeNodeId13v1;
+    exprnodeNodeId12v1[label="\"kate\""];
+    exprnodeNodeId14v1 -> QB_1_pred_list;
     "QB_1_pred_list"[label="pred_list",shape=box,style=filled];
-}
-  subgraph cluster_group_byQB_1 {
-    "QB_1_group_by"[label="group_by",shape=box,style=filled];
-    exprnodeNodeId22v1[label="+: 0"];
-    exprnodeNodeId20v1 -> exprnodeNodeId22v1;
-    exprnodeNodeId20v1[label="DEPT_ID"];
-    exprnodeNodeId21v1 -> exprnodeNodeId22v1;
-    exprnodeNodeId21v1[label="55"];
-    exprnodeNodeId22v1 -> "QB_1_group_by";
-}
-  subgraph cluster_having_clauseQB_1 {
-    exprnodeNodeId32v1[label="And"];
-    exprnodeNodeId26v1 -> exprnodeNodeId32v1;
-    exprnodeNodeId26v1[label=">"];
-    exprnodeNodeId24v1 -> exprnodeNodeId26v1;
-    exprnodeNodeId24v1[label="SUM"];
-    exprnodeNodeId23v1 -> exprnodeNodeId24v1;
-    exprnodeNodeId23v1[label="AGE"];
-    exprnodeNodeId25v1 -> exprnodeNodeId26v1;
-    exprnodeNodeId25v1[label="100"];
-    exprnodeNodeId31v1 -> exprnodeNodeId32v1;
-    exprnodeNodeId31v1[label=">"];
-    exprnodeNodeId29v1 -> exprnodeNodeId31v1;
-    exprnodeNodeId29v1[label="+"];
-    exprnodeNodeId27v1 -> exprnodeNodeId29v1;
-    exprnodeNodeId27v1[label="DEPT_ID"];
-    exprnodeNodeId28v1 -> exprnodeNodeId29v1;
-    exprnodeNodeId28v1[label="55"];
-    exprnodeNodeId30v1 -> exprnodeNodeId31v1;
-    exprnodeNodeId30v1[label="10"];
-    exprnodeNodeId32v1 -> QB_1_having_clause;
-    "QB_1_having_clause"[label="having_clause",shape=box,style=filled];
 }
     label = "QB_1 type=Select";
 }
