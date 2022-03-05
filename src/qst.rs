@@ -69,7 +69,6 @@ impl QueryBlock {
         // Resolve QUNs first (base tables and any nested subqueries)
         for qun in self.quns.iter_mut() {
             if let Some(tablename) = qun.tablename.as_ref() {
-                let tablename = qun.tablename.as_ref().unwrap(); // this will fail for subqueries, and that's ok for now
                 let tbdesc = env.metadata.get_tabledesc(tablename);
                 if tbdesc.is_none() {
                     return Err(format!("Table {} not cataloged.", dquote(tablename)));
@@ -151,7 +150,7 @@ impl QueryBlock {
                         &mut new_pred_id,
                     );
                     new_having_clause.push(new_pred_id);
-                };
+                }
                 Some(new_having_clause)
             } else {
                 None
@@ -232,7 +231,13 @@ impl QueryBlock {
             // Expression in GROUP-BY list, all good
             let new_child_id = graph.add_node(CID(cid), None);
             *expr_id = new_child_id;
-        } else if let Column { prefix, colname } = &node.inner {
+        } else if let Column {
+            prefix,
+            colname,
+            qun_id,
+            offset,
+        } = &node.inner
+        {
             // User error: Unaggregated expression in select-list not in group-by clause
             return Err(format!(
                 "Column {} is referenced in select-list/having-clause but it is not specified in the GROUP-BY list",
@@ -328,7 +333,7 @@ impl QueryBlock {
         }
 
         let mut node = graph.get_node_mut(expr_id);
-        let expr = &node.inner;
+        let mut expr = &mut node.inner;
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
@@ -350,10 +355,16 @@ impl QueryBlock {
                     children_datatypes[0]
                 }
             }
-            Column { prefix, colname } => {
+            Column {
+                prefix,
+                colname,
+                ref mut qun_id,
+                ref mut offset,
+            } => {
                 let (quncol, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
-                //debug!("ASSIGN <== {}", qtuple_ix);
-                node.inner = CID(qtuple_ix);
+                *qun_id = quncol.qun_id;
+                *offset = qtuple_ix;
+                //debug!("ASSIGN {:?}.{:?} = qun_id={}, qtuple_ix={}", prefix, colname, qun_id, qtuple_ix);
                 quncol.datatype
             }
             LogExpr(logop) => DataType::BOOL,

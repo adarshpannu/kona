@@ -53,6 +53,8 @@ impl NamedExpr {
             if let Expr::Column {
                 prefix: tablename,
                 colname,
+                qun_id,
+                offset,
             } = expr
             {
                 alias = Some(colname.clone())
@@ -507,7 +509,12 @@ pub enum AggType {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
-    Column { prefix: Option<String>, colname: String },
+    Column {
+        prefix: Option<String>,
+        colname: String,
+        qun_id: usize,
+        offset: usize,
+    },
     Star,
     Literal(Datum),
     NegatedExpr,
@@ -530,11 +537,13 @@ impl Expr {
             Column {
                 prefix,
                 colname,
+                qun_id,
+                offset,
             } => {
                 if let Some(prefix) = prefix {
-                    format!("{}.{}", prefix, colname)
+                    format!("{}.{} (qun={}, offset={})", prefix, colname, *qun_id, *offset)
                 } else {
-                    format!("{}", colname)
+                    format!("{} (qun={}, offset={})", colname, *qun_id, *offset)
                 }
             }
             Star => format!("*"),
@@ -565,10 +574,14 @@ impl Expr {
                 Column {
                     prefix: p1,
                     colname: n1,
+                    qun_id: _,
+                    offset: _,
                 },
                 Column {
                     prefix: p2,
                     colname: n2,
+                    qun_id: _,
+                    offset: _,
                 },
             ) => p1 == p2 && n1 == n2,
             (Literal(c1), Literal(c2)) => c1 == c2,
