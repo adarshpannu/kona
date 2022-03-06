@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct QunColumn {
-    qun_id: QunId,
+    qunid: QunId,
     col_id: ColId,
     datatype: DataType,
 }
@@ -234,8 +234,8 @@ impl QueryBlock {
         } else if let Column {
             prefix,
             colname,
-            qun_id,
-            offset,
+            qunid,
+            colid,
         } = &node.inner
         {
             // User error: Unaggregated expression in select-list not in group-by clause
@@ -259,7 +259,7 @@ impl QueryBlock {
         &self, env: &Env, colid_dispenser: &mut QueryBlockColidDispenser, prefix: Option<&String>, colname: &String,
     ) -> Result<(QunColumn, usize), String> {
         let mut retval = None;
-        let mut offset = 0;
+        let mut colid = 0;
 
         for qun in self.quns.iter() {
             let desc = qun.tabledesc.as_ref().unwrap().clone();
@@ -278,13 +278,13 @@ impl QueryBlock {
             if let Some(coldesc) = coldesc {
                 if retval.is_none() {
                     retval = Some(QunColumn {
-                        qun_id: qun.id,
+                        qunid: qun.id,
                         col_id: coldesc.0,
                         datatype: coldesc.1,
                     });
-                    offset = colid_dispenser.next_id(retval.unwrap());
+                    colid = colid_dispenser.next_id(retval.unwrap());
                     let mut column_map = qun.column_read_map.borrow_mut();
-                    column_map.insert(coldesc.0, offset);
+                    column_map.insert(coldesc.0, colid);
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
@@ -300,7 +300,7 @@ impl QueryBlock {
         }
 
         if let Some(retval) = retval {
-            Ok((retval, offset))
+            Ok((retval, colid))
         } else {
             let colstr = if let Some(prefix) = prefix {
                 format!("{}.{}", prefix, colname)
@@ -358,13 +358,13 @@ impl QueryBlock {
             Column {
                 prefix,
                 colname,
-                ref mut qun_id,
-                ref mut offset,
+                qunid: ref mut qunid,
+                colid: ref mut colid,
             } => {
                 let (quncol, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
-                *qun_id = quncol.qun_id;
-                *offset = qtuple_ix;
-                //debug!("ASSIGN {:?}.{:?} = qun_id={}, qtuple_ix={}", prefix, colname, qun_id, qtuple_ix);
+                *qunid = quncol.qunid;
+                *colid = qtuple_ix;
+                //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
                 quncol.datatype
             }
             LogExpr(logop) => DataType::BOOL,

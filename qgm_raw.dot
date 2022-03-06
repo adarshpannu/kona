@@ -1,0 +1,42 @@
+digraph example1 {
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+  subgraph cluster_QB_2 {
+    "QB_2_selectlist"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_2 {
+    exprnodeNodeId1v1[label="EMP.NAME (qun=0, colid=0): 0"];
+    exprnodeNodeId1v1 -> "QB_2_selectlist";
+    exprnodeNodeId2v1[label="DEPT.DEPT_ID (qun=0, colid=0): 1"];
+    exprnodeNodeId2v1 -> "QB_2_selectlist";
+}
+    "QUN_1"[label="DEPT/ ", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_0"[label="EMP/ ", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_pred_listQB_2 {
+    exprnodeNodeId13v1[label="And"];
+    exprnodeNodeId9v1 -> exprnodeNodeId13v1;
+    exprnodeNodeId9v1[label="And"];
+    exprnodeNodeId5v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId5v1[label="="];
+    exprnodeNodeId3v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId3v1[label="EMP.DEPT_ID (qun=0, colid=0)"];
+    exprnodeNodeId4v1 -> exprnodeNodeId5v1;
+    exprnodeNodeId4v1[label="DEPT.DEPT_ID (qun=0, colid=0)"];
+    exprnodeNodeId8v1 -> exprnodeNodeId9v1;
+    exprnodeNodeId8v1[label=">"];
+    exprnodeNodeId6v1 -> exprnodeNodeId8v1;
+    exprnodeNodeId6v1[label="EMP.AGE (qun=0, colid=0)"];
+    exprnodeNodeId7v1 -> exprnodeNodeId8v1;
+    exprnodeNodeId7v1[label="35"];
+    exprnodeNodeId12v1 -> exprnodeNodeId13v1;
+    exprnodeNodeId12v1[label="="];
+    exprnodeNodeId10v1 -> exprnodeNodeId12v1;
+    exprnodeNodeId10v1[label="DEPT.NAME (qun=0, colid=0)"];
+    exprnodeNodeId11v1 -> exprnodeNodeId12v1;
+    exprnodeNodeId11v1[label="\"Engineering\""];
+    exprnodeNodeId13v1 -> QB_2_pred_list;
+    "QB_2_pred_list"[label="pred_list",shape=box,style=filled];
+}
+    label = "QB_2 type=Select";
+}
+}

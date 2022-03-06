@@ -63,7 +63,7 @@ impl Expr {
         let (expr, children) = &graph.get_node_with_children(expr_id);
         match expr {
             CID(ix) => row.get_column(*ix).clone(),
-            Column { prefix, colname, qun_id, offset} => row.get_column(*offset).clone(),
+            Column { prefix, colname, qunid, colid} => row.get_column(*colid).clone(),
             Literal(lit) => lit.clone(),
             RelExpr(op) => {
                 let children = children.unwrap();

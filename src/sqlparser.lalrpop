@@ -312,7 +312,7 @@ Factor: NodeId = {
 }
 
 Term: NodeId = {
-    <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1, qun_id: 0, offset: 0 }, None),
+    <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1, qunid: 0, colid: 0 }, None),
     QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
     Number,
     ScalarFunction,

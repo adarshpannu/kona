@@ -53,8 +53,8 @@ impl NamedExpr {
             if let Expr::Column {
                 prefix: tablename,
                 colname,
-                qun_id,
-                offset,
+                qunid: qunid,
+                colid: colid,
             } = expr
             {
                 alias = Some(colname.clone())
@@ -512,8 +512,8 @@ pub enum Expr {
     Column {
         prefix: Option<String>,
         colname: String,
-        qun_id: usize,
-        offset: usize,
+        qunid: usize,
+        colid: usize,
     },
     Star,
     Literal(Datum),
@@ -533,17 +533,17 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID(offset) => format!("CID #{}", *offset),
+            CID(colid) => format!("CID #{}", *colid),
             Column {
                 prefix,
                 colname,
-                qun_id,
-                offset,
+                qunid,
+                colid,
             } => {
                 if let Some(prefix) = prefix {
-                    format!("{}.{} (qun={}, offset={})", prefix, colname, *qun_id, *offset)
+                    format!("{}.{} (qun={}, colid={})", prefix, colname, *qunid, *colid)
                 } else {
-                    format!("{} (qun={}, offset={})", colname, *qun_id, *offset)
+                    format!("{} (qun={}, colid={})", colname, *qunid, *colid)
                 }
             }
             Star => format!("*"),
@@ -574,14 +574,14 @@ impl Expr {
                 Column {
                     prefix: p1,
                     colname: n1,
-                    qun_id: _,
-                    offset: _,
+                    qunid: _,
+                    colid: _,
                 },
                 Column {
                     prefix: p2,
                     colname: n2,
-                    qun_id: _,
-                    offset: _,
+                    qunid: _,
+                    colid: _,
                 },
             ) => p1 == p2 && n1 == n2,
             (Literal(c1), Literal(c2)) => c1 == c2,
