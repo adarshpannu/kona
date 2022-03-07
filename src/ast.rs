@@ -1,7 +1,7 @@
 use crate::graph::{Graph, NodeId};
 use crate::includes::*;
 use crate::metadata::TableDesc;
-use crate::row::{Datum, Row};
+use crate::row::*;
 use crate::sqlparser;
 use std::collections::HashMap;
 use Expr::*;
@@ -36,7 +36,7 @@ pub enum AST {
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: Graph<Expr>, // arena allocator
+    pub graph: Graph<Expr, ExprProps>, // arena allocator
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ pub struct NamedExpr {
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_id: NodeId, graph: &Graph<Expr>) -> Self {
+    pub fn new(alias: Option<String>, expr_id: NodeId, graph: &Graph<Expr, ExprProps>) -> Self {
         let expr = &graph.get_node(expr_id).inner;
         let mut alias = alias;
         if alias.is_none() {
@@ -344,7 +344,7 @@ impl QueryBlock {
 }
 
 pub struct ParserState {
-    pub graph: Graph<Expr>,
+    pub graph: Graph<Expr, ExprProps>,
 }
 
 impl ParserState {
@@ -506,6 +506,17 @@ pub enum AggType {
 }
 
 /***************************************************************************************************/
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct ExprProps {
+    pub datatype: DataType
+}
+
+impl std::default::Default for ExprProps {
+    fn default() -> Self {
+        ExprProps { datatype: DataType::UNKNOWN }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
     CID(usize),
@@ -562,7 +573,7 @@ impl Expr {
         }
     }
 
-    pub fn isomorphic(graph: &Graph<Expr>, expr_id1: NodeId, expr_id2: NodeId) -> bool {
+    pub fn isomorphic(graph: &Graph<Expr, ExprProps>, expr_id1: NodeId, expr_id2: NodeId) -> bool {
         let (expr1, children1) = graph.get_node_with_children(expr_id1);
         let (expr2, children2) = graph.get_node_with_children(expr_id2);
         let shallow_matched = match (expr1, expr2) {

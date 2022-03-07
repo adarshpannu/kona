@@ -58,7 +58,7 @@ impl QueryBlockColidDispenser {
 }
 
 impl QueryBlock {
-    pub fn resolve(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
+    pub fn resolve(&mut self, env: &Env, graph: &mut Graph<Expr, ExprProps>) -> Result<(), String> {
         debug!("Resolve query block: {}", self.id);
 
         let mut colid_dispenser = QueryBlockColidDispenser::new();
@@ -118,7 +118,7 @@ impl QueryBlock {
         Ok(())
     }
 
-    pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<Expr>) -> Result<(), String> {
+    pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<Expr, ExprProps>) -> Result<(), String> {
         if self.group_by.is_some() {
             //let select_list = replace(&mut self.select_list, vec![]);
             let group_by = replace(&mut self.group_by, None).unwrap();
@@ -181,7 +181,7 @@ impl QueryBlock {
     }
 
     fn find(
-        graph: &Graph<Expr>, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: NodeId,
+        graph: &Graph<Expr, ExprProps>, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: NodeId,
     ) -> Option<usize> {
         // Does this expression already exist in the select_list[..until_index]?
         for (ix, ne) in select_list.iter().enumerate() {
@@ -194,7 +194,7 @@ impl QueryBlock {
         None
     }
 
-    fn append(graph: &Graph<Expr>, select_list: &mut Vec<NamedExpr>, expr_id: NodeId) -> usize {
+    fn append(graph: &Graph<Expr, ExprProps>, select_list: &mut Vec<NamedExpr>, expr_id: NodeId) -> usize {
         // Does this expression already exist in the select_list?
         if let Some(ix) = Self::find(graph, select_list, select_list.len(), expr_id) {
             // ... yes, return its index
@@ -208,7 +208,7 @@ impl QueryBlock {
     // transform_groupby_expr: Traverse expression `expr_id` (which is part of aggregate qb select list) such that any subexpressions are replaced with
     // corresponding references to inner/select qb select-list using CID#
     pub fn transform_groupby_expr(
-        env: &Env, graph: &mut Graph<Expr>, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
+        env: &Env, graph: &mut Graph<Expr, ExprProps>, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
         expr_id: &mut NodeId,
     ) -> Result<(), String> {
         let node = graph.get_node(*expr_id);
@@ -312,7 +312,7 @@ impl QueryBlock {
     }
 
     pub fn resolve_expr(
-        &self, env: &Env, graph: &mut Graph<Expr>, colid_dispenser: &mut QueryBlockColidDispenser, expr_id: NodeId,
+        &self, env: &Env, graph: &mut Graph<Expr, ExprProps>, colid_dispenser: &mut QueryBlockColidDispenser, expr_id: NodeId,
         agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get_node(expr_id).inner {
@@ -337,7 +337,7 @@ impl QueryBlock {
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
-            CID(_) => node.datatype,
+            CID(_) => node.properties.datatype,
             RelExpr(relop) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
@@ -393,11 +393,11 @@ impl QueryBlock {
                 todo!();
             }
         };
-        node.datatype = datatype;
+        node.properties.datatype = datatype;
         Ok(datatype)
     }
 
-    pub fn extract(&mut self, graph: &mut Graph<Expr>, pred_id: NodeId, pred_list: &mut Vec<NodeId>) {
+    pub fn extract(&mut self, graph: &mut Graph<Expr, ExprProps>, pred_id: NodeId, pred_list: &mut Vec<NodeId>) {
         let (expr, children) = graph.get_node_with_children(pred_id);
         if let LogExpr(crate::ast::LogOp::And) = expr {
             let children = children.unwrap();

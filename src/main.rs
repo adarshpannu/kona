@@ -91,7 +91,7 @@ pub fn run_flow(env: &mut Env, flow: &Flow) {
 pub fn make_simple_flow(env: &Env) -> Flow {
     let arena: NodeArena = Arena::new();
 
-    let mut qgm: Graph<Expr> = Graph::new();
+    let mut qgm: Graph<Expr, ExprProps> = Graph::new();
 
     // Expression: $column-1 < 25
     let lhs = qgm.add_node(CID(0), None);
@@ -201,7 +201,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/simple.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/simple.fsql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

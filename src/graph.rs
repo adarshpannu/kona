@@ -1,32 +1,50 @@
-use crate::includes::*;
-use slotmap::{SlotMap, new_key_type};
+use crate::{includes::*, ast::ExprProps};
 use crate::row::DataType;
+use slotmap::{new_key_type, SlotMap};
 
 new_key_type! { pub struct NodeId; }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Node<T> {
+pub struct Node<T, P>
+where
+    P: std::default::Default,
+{
     pub inner: T,
+    pub properties: P,
     pub children: Option<Vec<NodeId>>,
-    pub datatype: DataType
 }
 
-impl<T> Node<T> {
-    pub fn new(t: T) -> Self {
-        Node { inner: t, children: None, datatype: DataType::UNKNOWN }
+impl<T, P> Node<T, P>
+where
+    P: std::default::Default,
+{
+    pub fn new(t: T, properties: P) -> Self {
+        Node {
+            inner: t,
+            properties: properties,
+            children: None,
+        }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Graph<T> {
-    pub sm: SlotMap<NodeId, Node<T>>,
+pub struct Graph<T, P>
+where
+    P: std::default::Default,
+{
+    pub sm: SlotMap<NodeId, Node<T, P>>,
     next_id: usize,
-
 }
 
-impl<T> Graph<T> {
+impl<T, P> Graph<T, P>
+where
+    P: std::default::Default,
+{
     pub fn new() -> Self {
-        Graph { sm: SlotMap::with_key(), next_id: 0 }
+        Graph {
+            sm: SlotMap::with_key(),
+            next_id: 0,
+        }
     }
 
     pub fn next_id(&mut self) -> usize {
@@ -36,7 +54,8 @@ impl<T> Graph<T> {
     }
 
     pub fn add_node(&mut self, t: T, children: Option<Vec<NodeId>>) -> NodeId {
-        let mut node = Node::new(t);
+        let properties = P::default();
+        let mut node = Node::new(t, properties);
         node.children = children;
         self.sm.insert(node)
     }
@@ -54,12 +73,12 @@ impl<T> Graph<T> {
         }
     }
 
-    pub fn get_node(&self, ix: NodeId) -> &Node<T> {
+    pub fn get_node(&self, ix: NodeId) -> &Node<T, P> {
         let node = self.sm.get(ix).unwrap();
         node
     }
 
-    pub fn get_node_mut(&mut self, ix: NodeId) -> &mut Node<T> {
+    pub fn get_node_mut(&mut self, ix: NodeId) -> &mut Node<T, P> {
         let mut node = self.sm.get_mut(ix).unwrap();
         node
     }
@@ -74,9 +93,9 @@ impl<T> Graph<T> {
         (&mut node.inner, node.children.as_mut())
     }
 
-    pub fn replace(&mut self, ix: NodeId, t: T) {
+    pub fn replace(&mut self, ix: NodeId, t: T, p: P) {
         let mut node = self.sm.get_mut(ix).unwrap();
-        let mut new_node = Node::new(t);
+        let mut new_node = Node::new(t, p);
         *node = new_node;
     }
 
