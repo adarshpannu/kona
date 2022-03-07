@@ -200,7 +200,9 @@ pub(crate) struct CSVNode {
 impl CSVNode {
     pub fn new<'a>(env: &Env, arena: &'a NodeArena, name: String, npartitions: usize, colmap: ColMap) -> &'a FlowNode {
         let tbldesc = env.metadata.get_tabledesc(&name).unwrap();
-        let (colnames, coltypes) = (tbldesc.colnames().clone(), tbldesc.coltypes().clone());
+        let columns = tbldesc.columns();
+        let colnames = columns.iter().map(|col| col.name.clone()).collect();
+        let coltypes = columns.iter().map(|col| col.datatype).collect();
 
         let filename = tbldesc.filename();
         let partitions = compute_partitions(filename, npartitions as u64).unwrap();

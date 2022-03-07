@@ -14,7 +14,7 @@ use std::rc::Rc;
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct QunColumn {
     qunid: QunId,
-    col_id: ColId,
+    colid: ColId,
     datatype: DataType,
 }
 
@@ -279,12 +279,12 @@ impl QueryBlock {
                 if retval.is_none() {
                     retval = Some(QunColumn {
                         qunid: qun.id,
-                        col_id: coldesc.0,
-                        datatype: coldesc.1,
+                        colid: coldesc.colid,
+                        datatype: coldesc.datatype
                     });
                     colid = colid_dispenser.next_id(retval.unwrap());
                     let mut column_map = qun.column_read_map.borrow_mut();
-                    column_map.insert(coldesc.0, colid);
+                    column_map.insert(coldesc.colid, colid);
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",

@@ -1,0 +1,37 @@
+
+QGM -> Logical plan
+====================
+
+A logical plan has LOPs: Scan, Join, Agg, etc.
+
+Each LOP has:
+    input: Vec<NodeId>  // expression ids
+    output: Vec<NodeId> // expression ids
+    input_lops
+
+
+Collect all column references for each QUN. These will turn into baseline column projections.
+
+Classify predicates:
+- Local: Only references columns from a single QUN
+- Equi-join: column-expr-1 = column-expr-2 where column-exprs have disjoint QUNs
+- Other
+
+=========================
+
+Join enumeration:
+
+If we have just 1, we're done.
+
+If we have 2 tables:
+
+If 2+ tables, iterate over all pairs that have equi-join edges.
+Then add each remaining table that has a join edge to subgraph.
+If multiple tables, pick one.
+
+For each table added to the mix:
+    Inputs: Add projected columns as inputs.
+    Outputs: Add any select-list columns + Add any fully-bound pred-expressions 
+
+
+

@@ -22,19 +22,17 @@ pub struct CSVDesc {
     filename: String,
     header: bool,
     separator: char,
-    colnames: Vec<String>,
-    coltypes: Vec<DataType>,
+    columns: Vec<ColDesc>,
 }
 
 impl CSVDesc {
     pub fn new(filename: String, separator: char, header: bool) -> Self {
-        let (colnames, coltypes) = Self::infer_metadata(&filename, separator, header);
+        let columns = Self::infer_metadata(&filename, separator, header);
         CSVDesc {
             filename,
             header,
             separator,
-            colnames,
-            coltypes,
+            columns,
         }
     }
 
@@ -49,14 +47,18 @@ impl CSVDesc {
         }
     }
 
-    pub fn infer_metadata(filename: &str, separator: char, header: bool) -> (Vec<String>, Vec<DataType>) {
+    pub fn infer_metadata(filename: &str, separator: char, header: bool) -> Vec<ColDesc> {
         let mut iter = read_lines(&filename).unwrap();
         let mut colnames: Vec<String> = vec![];
         let mut coltypes: Vec<DataType> = vec![];
         let mut first_row = true;
 
         while let Some(line) = iter.next() {
-            let cols: Vec<String> = line.unwrap().split(separator).map(|e| e.to_owned().to_uppercase()).collect();
+            let cols: Vec<String> = line
+                .unwrap()
+                .split(separator)
+                .map(|e| e.to_owned().to_uppercase())
+                .collect();
             if colnames.len() == 0 {
                 if header {
                     colnames = cols
@@ -78,29 +80,42 @@ impl CSVDesc {
                 first_row = false;
             }
         }
-        (colnames, coltypes)
+        colnames
+            .into_iter()
+            .zip(coltypes)
+            .enumerate()
+            .map(|(id, (name, datatype))| ColDesc { colid: id, name, datatype })
+            .collect()
     }
 }
 
 pub trait TableDesc {
     fn filename(&self) -> &String;
-    fn colnames(&self) -> &Vec<String>;
-    fn coltypes(&self) -> &Vec<DataType>;
+    fn columns(&self) -> &Vec<ColDesc>;
     fn header(&self) -> bool;
     fn separator(&self) -> char;
     fn describe(&self) -> String {
         String::from("")
     }
-    fn get_coldesc(&self, colname: &String) -> Option<(ColId, DataType)>;
+    fn get_coldesc(&self, colname: &String) -> Option<&ColDesc>;
+}
+
+#[derive(Debug)]
+pub struct ColDesc {
+    pub colid: usize,
+    pub name: String,
+    pub datatype: DataType,
+}
+
+impl ColDesc {
+    pub fn new(colid: usize, name: String, datatype: DataType) -> ColDesc {
+        ColDesc { colid, name, datatype }
+    }
 }
 
 impl TableDesc for CSVDesc {
-    fn colnames(&self) -> &Vec<String> {
-        &self.colnames
-    }
-
-    fn coltypes(&self) -> &Vec<DataType> {
-        &self.coltypes
+    fn columns(&self) -> &Vec<ColDesc> {
+        &self.columns
     }
 
     fn filename(&self) -> &String {
@@ -111,9 +126,8 @@ impl TableDesc for CSVDesc {
         format!("Type: CSV, {:?}", self)
     }
 
-    fn get_coldesc(&self, colname: &String) -> Option<(ColId, DataType)> {
-        let ix = self.colnames.iter().position(|cn| cn == colname);
-        ix.map(|ix| (ix, self.coltypes[ix]))
+    fn get_coldesc(&self, colname: &String) -> Option<&ColDesc> {
+        self.columns.iter().find(|&cd| cd.name == *colname)
     }
 
     fn header(&self) -> bool {
@@ -180,23 +194,10 @@ impl Metadata {
         info!("  FILENAME = \"{}\"", tbldesc.filename());
         info!("  HEADER = {}", tbldesc.header());
         info!("  SEPARATOR = '{}'", tbldesc.separator());
-        info!("  {} COLUMNS", tbldesc.colnames().len());
-        for (colname, coltype) in tbldesc.colnames().iter().zip(tbldesc.coltypes()) {
-            info!("      {} {:?}", colname, coltype);
+        info!("  {} COLUMNS", tbldesc.columns().len());
+        for cd in tbldesc.columns() {
+            info!("      {} {:?}", cd.name, cd.datatype);
         }
-
-        /*
-                fn filename(&self) -> &String;
-        fn colnames(&self) -> &Vec<String>;
-        fn coltypes(&self) -> &Vec<DataType>;
-        fn header(&self) -> bool;
-        fn separator(&self) -> char;
-        fn describe(&self) -> String {
-            String::from("")
-        }
-        fn get_coldesc(&self, colname: &String) -> Option<(ColId, DataType)>;
-
-            */
         Ok(())
     }
 

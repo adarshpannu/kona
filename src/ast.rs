@@ -87,7 +87,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub column_read_map: RefCell<HashMap<ColId, usize>>,
+    pub column_read_map: RefCell<HashMap<ColId, usize>>,  // ColID is offset in source tuple -> usize is in target tuple.
 }
 
 impl fmt::Debug for Quantifier {
