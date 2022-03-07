@@ -97,7 +97,7 @@ pub trait TableDesc {
     fn describe(&self) -> String {
         String::from("")
     }
-    fn get_coldesc(&self, colname: &String) -> Option<&ColDesc>;
+    fn get_column(&self, colname: &String) -> Option<&ColDesc>;
 }
 
 #[derive(Debug)]
@@ -126,7 +126,7 @@ impl TableDesc for CSVDesc {
         format!("Type: CSV, {:?}", self)
     }
 
-    fn get_coldesc(&self, colname: &String) -> Option<&ColDesc> {
+    fn get_column(&self, colname: &String) -> Option<&ColDesc> {
         self.columns.iter().find(|&cd| cd.name == *colname)
     }
 

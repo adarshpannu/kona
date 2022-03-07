@@ -266,13 +266,13 @@ impl QueryBlock {
             let coldesc = if let Some(prefix) = prefix {
                 // Prefixed column: look at specific qun
                 if qun.matches_name_or_alias(prefix) {
-                    desc.get_coldesc(colname)
+                    desc.get_column(colname)
                 } else {
                     None
                 }
             } else {
                 // Unprefixed column: look at all QUNs
-                desc.get_coldesc(colname)
+                desc.get_column(colname)
             };
 
             if let Some(coldesc) = coldesc {
