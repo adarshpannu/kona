@@ -36,7 +36,7 @@ pub enum AST {
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: Graph<Expr, ExprProps>, // arena allocator
+    pub graph: Graph<Expr, ExprProp>, // arena allocator
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ pub struct NamedExpr {
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_id: NodeId, graph: &Graph<Expr, ExprProps>) -> Self {
+    pub fn new(alias: Option<String>, expr_id: NodeId, graph: &Graph<Expr, ExprProp>) -> Self {
         let expr = &graph.get_node(expr_id).inner;
         let mut alias = alias;
         if alias.is_none() {
@@ -344,7 +344,7 @@ impl QueryBlock {
 }
 
 pub struct ParserState {
-    pub graph: Graph<Expr, ExprProps>,
+    pub graph: Graph<Expr, ExprProp>,
 }
 
 impl ParserState {
@@ -507,13 +507,13 @@ pub enum AggType {
 
 /***************************************************************************************************/
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub struct ExprProps {
+pub struct ExprProp {
     pub datatype: DataType
 }
 
-impl std::default::Default for ExprProps {
+impl std::default::Default for ExprProp {
     fn default() -> Self {
-        ExprProps { datatype: DataType::UNKNOWN }
+        ExprProp { datatype: DataType::UNKNOWN }
     }
 }
 
@@ -552,9 +552,9 @@ impl Expr {
                 colid,
             } => {
                 if let Some(prefix) = prefix {
-                    format!("{}.{} (qun={}, colid={})", prefix, colname, *qunid, *colid)
+                    format!("{}.{} ({}.{})", prefix, colname, *qunid, *colid)
                 } else {
-                    format!("{} (qun={}, colid={})", colname, *qunid, *colid)
+                    format!("{} ({}.{})", colname, *qunid, *colid)
                 }
             }
             Star => format!("*"),
@@ -573,7 +573,7 @@ impl Expr {
         }
     }
 
-    pub fn isomorphic(graph: &Graph<Expr, ExprProps>, expr_id1: NodeId, expr_id2: NodeId) -> bool {
+    pub fn isomorphic(graph: &Graph<Expr, ExprProp>, expr_id1: NodeId, expr_id2: NodeId) -> bool {
         let (expr1, children1) = graph.get_node_with_children(expr_id1);
         let (expr2, children2) = graph.get_node_with_children(expr_id2);
         let shallow_matched = match (expr1, expr2) {

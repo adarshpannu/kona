@@ -18,6 +18,7 @@ pub mod row;
 pub mod task;
 pub mod qst;
 pub mod graph;
+pub mod aps;
 pub mod compiler;
 
 use ast::{Expr::*, *};
@@ -28,6 +29,7 @@ use graph::Graph;
 use metadata::Metadata;
 use compiler::Compiler;
 use row::*;
+use aps::*;
 pub mod scratch;
 
 use std::collections::HashMap;
@@ -174,8 +176,9 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
 
                 if ! env.get_boolean_option("PARSE_ONLY") {
-                    let flow = Compiler::compile(env, &mut qgm).unwrap();
-                    run_flow(env, &flow);
+                    //let flow = Compiler::compile(env, &mut qgm).unwrap();
+                    //run_flow(env, &flow);
+                    APS::find_best_plan(env, &mut qgm);
                 }
             }
             _ => unimplemented!(),
@@ -201,7 +204,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/simple.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.fsql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);

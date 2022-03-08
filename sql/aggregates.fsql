@@ -6,7 +6,7 @@ DESCRIBE TABLE emp;
 
 select sum(age + 10)*99 / count(age + 50), dept_id + 55, avg(distinct age)
 from emp
-where age > 50
+where age > 50 and dept_id < 99
 group by dept_id + 55
 having sum(age) > 100 and dept_id + 55 > 10
 ;

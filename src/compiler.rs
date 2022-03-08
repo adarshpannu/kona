@@ -1,4 +1,3 @@
-use crate::ast::*;
 use crate::ast::{Expr::*, *};
 use crate::flow::*;
 use crate::graph::*;
@@ -59,7 +58,7 @@ impl Compiler {
 
 /***************************************************************************************************/
 impl Expr {
-    pub fn eval<'a>(graph: &Graph<Expr, ExprProps>, expr_id: NodeId, row: &'a Row) -> Datum {
+    pub fn eval<'a>(graph: &Graph<Expr, ExprProp>, expr_id: NodeId, row: &'a Row) -> Datum {
         let (expr, children) = &graph.get_node_with_children(expr_id);
         match expr {
             CID(ix) => row.get_column(*ix).clone(),
