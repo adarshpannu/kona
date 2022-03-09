@@ -87,7 +87,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub column_read_map: RefCell<HashMap<ColId, usize>>,  // ColID is offset in source tuple -> usize is in target tuple.
+    pub column_read_map: RefCell<HashMap<ColId, usize>>, // ColID is offset in source tuple -> usize is in target tuple.
 }
 
 impl fmt::Debug for Quantifier {
@@ -508,12 +508,14 @@ pub enum AggType {
 /***************************************************************************************************/
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ExprProp {
-    pub datatype: DataType
+    pub datatype: DataType,
 }
 
 impl std::default::Default for ExprProp {
     fn default() -> Self {
-        ExprProp { datatype: DataType::UNKNOWN }
+        ExprProp {
+            datatype: DataType::UNKNOWN,
+        }
     }
 }
 
@@ -621,50 +623,62 @@ impl Expr {
             return false;
         }
     }
-}
 
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!();
-        /*
-        match self {
-            CID(cid) => write!(f, "${}", cid),
-            Column { tablename, colname } => {
-                write!(f, "{:?}.{}", tablename, colname)
-            }
-            Star => write!(f, "*"),
-            Literal(v) => write!(f, "{}", v),
-            BinaryExpr(lhs, op, rhs) => {
-                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
-            }
-            NegatedExpr(lhs) => write!(f, "-({})", lhs.borrow()),
-            ExistsExpr(lhs) => unimplemented!(),
-            RelExpr(lhs, op, rhs) => {
-                write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
-            }
-            BetweenExpr(e, lhs, rhs) => {
-                write!(f, "({} {} {})", e.borrow(), lhs.borrow(), rhs.borrow())
-            }
-            InListExpr(_, _) => unimplemented!(),
-            InSubqExpr(_, _) => unimplemented!(),
-            LogExpr(lhs, op, rhs) => {
-                if let Some(rhs) = rhs {
-                    write!(f, "({} {} {})", lhs.borrow(), op, rhs.borrow())
+    pub fn to_string(expr_id: NodeId, graph: &Graph<Expr, ExprProp>) -> String {
+        let (expr, children) = graph.get_node_with_children(expr_id);
+        match expr {
+            CID(colid) => format!("CID #{}", *colid),
+            Column { prefix, colname, .. } => {
+                if let Some(prefix) = prefix {
+                    format!("{}.{}", prefix, colname)
                 } else {
-                    write!(f, "({} {})", lhs.borrow(), op)
+                    format!("{}", colname)
                 }
             }
-            Subquery(qblock) => {
-                write!(f, "(subq)")
+            Star => format!("*"),
+            Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
+            BinaryExpr(op) => {
+                let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
+                format!(
+                    "{} {} {}",
+                    Self::to_string(lhs_id, graph),
+                    op,
+                    Self::to_string(rhs_id, graph)
+                )
             }
-            AggFunction (aggtype, arg) => write!(f, "{:?} {}", aggtype, arg.borrow()),
-            ScalarFunction ( name, args) => write!(f, "{}({:?})", name, args),
+            NegatedExpr => "-".to_string(),
+            RelExpr(op) => {
+                let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
+                format!(
+                    "{} {} {}",
+                    Self::to_string(lhs_id, graph),
+                    op,
+                    Self::to_string(rhs_id, graph)
+                )
+            }
+            LogExpr(op) => {
+                let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
+                format!(
+                    "{} {} {}",
+                    Self::to_string(lhs_id, graph),
+                    op,
+                    Self::to_string(rhs_id, graph)
+                )
+            }
+            BetweenExpr => format!("BETWEEEN"),
+            InListExpr => format!("IN"),
+            InSubqExpr => format!("IN_SUBQ"),
+            ExistsExpr => format!("EXISTS"),
+            Subquery(qblock) => format!("(subquery)"),
+            AggFunction(aggtype, is_distinct) => format!("{:?}", aggtype),
+            ScalarFunction(name) => format!("{}()", name),
+            _ => {
+                debug!("todo - {:?}", expr);
+                todo!()
+            }
         }
-        */
-        Ok(())
     }
 }
-
 enum E {
     A,
     B(String, String),

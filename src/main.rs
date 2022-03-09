@@ -204,7 +204,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
     //let filename = "/Users/adarshrp/tmp/first.sql";
 
     let jobres = run_job(&mut env, filename);
