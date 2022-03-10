@@ -20,6 +20,7 @@ pub mod qst;
 pub mod graph;
 pub mod aps;
 pub mod compiler;
+//pub mod bitmap;
 
 use ast::{Expr::*, *};
 use ast::{ParserState, AST};

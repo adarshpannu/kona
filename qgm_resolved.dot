@@ -80,6 +80,12 @@ digraph example1 {
     exprnodeNodeId36v1 -> exprnodeNodeId37v1;
     exprnodeNodeId36v1[label="T3 (2.3)"];
     exprnodeNodeId37v1 -> QB_3_pred_list;
+    exprnodeNodeId41v1[label=">"];
+    exprnodeNodeId39v1 -> exprnodeNodeId41v1;
+    exprnodeNodeId39v1[label="R2 (0.0)"];
+    exprnodeNodeId40v1 -> exprnodeNodeId41v1;
+    exprnodeNodeId40v1[label="T2 (2.2)"];
+    exprnodeNodeId41v1 -> QB_3_pred_list;
     "QB_3_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_3 type=Select";
