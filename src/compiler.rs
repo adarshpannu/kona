@@ -1,4 +1,5 @@
-use crate::ast::{Expr::*, *};
+use crate::expr::{Expr::*, *};
+use crate::ast::*;
 use crate::flow::*;
 use crate::graph::*;
 use crate::includes::*;
@@ -32,7 +33,7 @@ impl Compiler {
         }
 
         // Compile selectlist, temporarily stripping agg functions
-        let select_list: Vec<NodeId> = topqblock
+        let select_list: Vec<ExprId> = topqblock
             .select_list
             .iter()
             .map(|ne| {
@@ -58,7 +59,7 @@ impl Compiler {
 
 /***************************************************************************************************/
 impl Expr {
-    pub fn eval<'a>(graph: &Graph<Expr, ExprProp>, expr_id: NodeId, row: &'a Row) -> Datum {
+    pub fn eval<'a>(graph: &Graph<ExprId, Expr, ExprProp>, expr_id: ExprId, row: &'a Row) -> Datum {
         let (expr, children) = &graph.get_node_with_children(expr_id);
         match expr {
             CID(ix) => row.get_column(*ix).clone(),

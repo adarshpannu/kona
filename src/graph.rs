@@ -1,20 +1,22 @@
 use crate::row::DataType;
-use crate::{ast::ExprProp, includes::*};
+use crate::includes::*;
 use slotmap::{new_key_type, SlotMap};
 
-new_key_type! { pub struct NodeId; }
+new_key_type! { pub struct ExprId; }
+
+new_key_type! { pub struct POPId; }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Node<T, P>
+pub struct Node<K, T, P>
 where
     P: std::default::Default,
 {
     pub inner: T,
     pub properties: P,
-    pub children: Option<Vec<NodeId>>,
+    pub children: Option<Vec<K>>,
 }
 
-impl<T, P> Node<T, P>
+impl<K, T, P> Node<K, T, P>
 where
     P: std::default::Default,
 {
@@ -28,17 +30,19 @@ where
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Graph<T, P>
+pub struct Graph<K, T, P>
 where
     P: std::default::Default,
+    K: slotmap::Key
 {
-    pub sm: SlotMap<NodeId, Node<T, P>>,
+    pub sm: SlotMap<K, Node<K, T, P>>,
     next_id: usize,
 }
 
-impl<T, P> Graph<T, P>
+impl<K, T, P> Graph<K, T, P>
 where
     P: std::default::Default,
+    K: slotmap::Key
 {
     pub fn new() -> Self {
         Graph {
@@ -53,14 +57,14 @@ where
         retval
     }
 
-    pub fn add_node(&mut self, t: T, children: Option<Vec<NodeId>>) -> NodeId {
+    pub fn add_node(&mut self, t: T, children: Option<Vec<K>>) -> K {
         let properties = P::default();
         let mut node = Node::new(t, properties);
         node.children = children;
         self.sm.insert(node)
     }
 
-    pub fn add_node_with_props(&mut self, t: T, properties: P, children: Option<Vec<NodeId>>) -> NodeId {
+    pub fn add_node_with_props(&mut self, t: T, properties: P, children: Option<Vec<K>>) -> K {
         let mut node = Node::new(t, properties);
         node.children = children;
         self.sm.insert(node)
@@ -70,7 +74,7 @@ where
         self.sm.len()
     }
 
-    pub fn get_children(&self, ix: NodeId) -> Option<Vec<NodeId>> {
+    pub fn get_children(&self, ix: K) -> Option<Vec<K>> {
         let expr = self.sm.get(ix).unwrap();
         if let Some(children) = &expr.children {
             Some(children.clone())
@@ -79,37 +83,37 @@ where
         }
     }
 
-    pub fn get_node(&self, ix: NodeId) -> &Node<T, P> {
+    pub fn get_node(&self, ix: K) -> &Node<K, T, P> {
         let node = self.sm.get(ix).unwrap();
         node
     }
 
-    pub fn get_node_mut(&mut self, ix: NodeId) -> &mut Node<T, P> {
+    pub fn get_node_mut(&mut self, ix: K) -> &mut Node<K, T, P> {
         let mut node = self.sm.get_mut(ix).unwrap();
         node
     }
 
-    pub fn get_node_with_children(&self, ix: NodeId) -> (&T, Option<&Vec<NodeId>>) {
+    pub fn get_node_with_children(&self, ix: K) -> (&T, Option<&Vec<K>>) {
         let node = self.sm.get(ix).unwrap();
         (&node.inner, node.children.as_ref())
     }
 
-    pub fn get_node_with_children_mut(&mut self, ix: NodeId) -> (&mut T, Option<&mut Vec<NodeId>>) {
+    pub fn get_node_with_children_mut(&mut self, ix: K) -> (&mut T, Option<&mut Vec<K>>) {
         let mut node = self.sm.get_mut(ix).unwrap();
         (&mut node.inner, node.children.as_mut())
     }
 
-    pub fn replace(&mut self, ix: NodeId, t: T, p: P) {
+    pub fn replace(&mut self, ix: K, t: T, p: P) {
         let mut node = self.sm.get_mut(ix).unwrap();
         let mut new_node = Node::new(t, p);
         *node = new_node;
     }
 
-    pub fn replace_many(&mut self, parent_ix: NodeId, ix: NodeId, mut children: Vec<NodeId>) {
+    pub fn replace_many(&mut self, parent_ix: K, ix: K, mut children: Vec<K>) {
         // Node#ix is deleted
         // children already present in graph although not connected
         let mut node = self.sm.get_mut(parent_ix).unwrap();
-        let mut new_children: Vec<NodeId> = vec![];
+        let mut new_children: Vec<K> = vec![];
         let seen_old_child = false;
 
         for &child_ix in node.children.as_ref().unwrap() {
@@ -122,7 +126,7 @@ where
         node.children = Some(new_children);
     }
 
-    pub fn iter<'a>(&'a self, root: NodeId) -> GraphIterator<'a, T, P> {
+    pub fn iter<'a>(&'a self, root: K) -> GraphIterator<'a, K, T, P> {
         GraphIterator {
             graph: self,
             queue: vec![root],
@@ -130,20 +134,22 @@ where
     }
 }
 
-pub struct GraphIterator<'a, T, P>
+pub struct GraphIterator<'a, K, T, P>
 where
     P: std::default::Default,
+    K: slotmap::Key
 {
-    graph: &'a Graph<T, P>,
-    queue: Vec<NodeId>,
+    graph: &'a Graph<K, T, P>,
+    queue: Vec<K>,
 }
 
 // Breadth-first iterator
-impl<'a, T, P> Iterator for GraphIterator<'a, T, P>
+impl<'a, K, T, P> Iterator for GraphIterator<'a, K, T, P>
 where
     P: std::default::Default,
+    K: slotmap::Key
 {
-    type Item = NodeId;
+    type Item = K;
     fn next(&mut self) -> Option<Self::Item> {
         if self.queue.len() == 0 {
             return None;
@@ -157,5 +163,3 @@ where
         cur_id
     }
 }
-
-impl NodeId {}

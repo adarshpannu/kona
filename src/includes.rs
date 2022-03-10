@@ -15,7 +15,7 @@ pub type PartitionId = usize;
 pub type ColMap = std::collections::HashMap<ColId, usize>;
 
 pub use crate::Env;
-use crate::graph::NodeId;
+use crate::graph::ExprId;
 use crate::row::DataType;
 
 pub use serde::{Serialize, Deserialize};
@@ -30,10 +30,3 @@ pub type NodeArena = Arena<crate::flow::FlowNode>;
 pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::ast::QueryBlock>>;
 
 pub use std::mem::replace;
-
-macro_rules! mkrcrc {
-    ($arg:expr) => {{
-        Rc::new(RefCell::new($arg))
-    }};
-}
-

@@ -1,14 +1,14 @@
-#![allow(warnings)]
 
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::io::Write;
 use std::rc::Rc;
 
-use crate::graph::{Graph, NodeId};
+use crate::graph::{Graph, ExprId};
+
 use crate::graphviz::htmlify;
 use crate::metadata::CSVDesc;
-use crate::{ast::*, csv::*, includes::*, row::*, task::*};
+use crate::{ast::*, expr::*, csv::*, includes::*, row::*, task::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum NodeInner {
@@ -45,7 +45,7 @@ impl FlowNode {
 
 /***************************************************************************************************/
 impl FlowNode {
-    pub fn emit<'a>(&self, arena: &'a NodeArena, select_list: Vec<NodeId>) -> &'a FlowNode {
+    pub fn emit<'a>(&self, arena: &'a NodeArena, select_list: Vec<ExprId>) -> &'a FlowNode {
         let npartitions = self.npartitions;
         let retval = FlowNode::new(&arena, vec![self.id()], npartitions, EmitNode::new(select_list));
         retval
@@ -57,7 +57,7 @@ impl FlowNode {
         retval
     }
 
-    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_id: NodeId) -> &'a FlowNode {
+    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_id: ExprId) -> &'a FlowNode {
         let npartitions = self.npartitions;
         let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr_id));
         retval
@@ -313,7 +313,7 @@ impl ProjectNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 struct FilterNode {
-    expr: NodeId,
+    expr: ExprId,
 }
 
 impl FilterNode {
@@ -335,7 +335,7 @@ impl FilterNode {
 }
 
 impl FilterNode {
-    fn new(expr: NodeId) -> NodeInner {
+    fn new(expr: ExprId) -> NodeInner {
         NodeInner::FilterNode(FilterNode { expr })
     }
 }
@@ -467,11 +467,11 @@ impl AggNode {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 struct EmitNode {
-    select_list: Vec<NodeId>,
+    select_list: Vec<ExprId>,
 }
 
 impl EmitNode {
-    fn new(select_list: Vec<NodeId>) -> NodeInner {
+    fn new(select_list: Vec<ExprId>) -> NodeInner {
         NodeInner::EmitNode(EmitNode { select_list })
     }
 
@@ -504,7 +504,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<FlowNode>,
-    pub graph: Graph<Expr, ExprProp>, // arena allocator
+    pub graph: Graph<ExprId, Expr, ExprProp>, // arena allocator
 }
 
 impl Flow {

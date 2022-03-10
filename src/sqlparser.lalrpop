@@ -3,9 +3,10 @@ use lalrpop_util::ParseError;
 
 use crate::includes::*;
 
-use crate::ast::{Expr::*, *};
+use crate::expr::{Expr::*, *};
 use crate::row::*;
-use crate::graph::{Graph, NodeId};
+use crate::ast::*;
+use crate::graph::{Graph, ExprId};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
@@ -192,7 +193,7 @@ HavingClause = "HAVING" <LogExpr>;
 
 OrderByClause = "ORDER" "BY" <CommaSeparatedList<OrderCol>>;
 
-OrderCol: (NodeId, Ordering) = <e:Expr> <o:OrderSort?> => (e, o.unwrap_or(Ordering::Asc));
+OrderCol: (ExprId, Ordering) = <e:Expr> <o:OrderSort?> => (e, o.unwrap_or(Ordering::Asc));
 
 OrderSort: Ordering = {
     "ASC" => Ordering::Asc,
@@ -218,17 +219,17 @@ NamedExpr: NamedExpr = {
     <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr, &parser_state.graph)
 }
 
-pub LogExpr: NodeId = {
+pub LogExpr: ExprId = {
     <LogExprFactor>,
     <l:LogExpr> "OR" <r:LogExprFactor> => parser_state.graph.add_node(LogExpr(LogOp::Or), Some(vec![l, r]))
 }
 
-LogExprFactor: NodeId = {
+LogExprFactor: ExprId = {
     <l:LogExprFactor> "AND" <r:RelExpr> => parser_state.graph.add_node(LogExpr(LogOp::And), Some(vec![l, r])),
     RelExpr,
 }
 
-RelExpr: NodeId = {
+RelExpr: ExprId = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => parser_state.graph.add_node(RelExpr(op), Some(vec![l, r])),
     <l:Expr> "IS" <not:"NOT"?> "NULL" => {
         let r = parser_state.graph.add_node(Literal(Datum::NULL), None);
@@ -272,7 +273,7 @@ RelExpr: NodeId = {
     "(" <LogExpr> ")",
 }
 
-RelExprRHS: NodeId = {
+RelExprRHS: ExprId = {
     <rhs:Expr> => rhs,
     <prefix:SubqueryQuantifier> <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
 }
@@ -287,7 +288,7 @@ RelOp: RelOp = {
     "=" => RelOp::Eq,
 }
 
-InExprRHS: (bool, Vec<NodeId>) = {
+InExprRHS: (bool, Vec<ExprId>) = {
     <subq:Subquery> => (true, vec![parser_state.graph.add_node(Subquery(subq), None)]),
     "(" <InList> ")" => (false, <>)
 }
@@ -299,19 +300,19 @@ SubqueryQuantifier = {
     "ANY",
 }
 
-pub Expr: NodeId = {
+pub Expr: ExprId = {
     <l:Expr> "+" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Add), Some(vec!(l, r))),
     <l:Expr> "-" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Sub), Some(vec!(l, r))),
     Factor,
 }
 
-Factor: NodeId = {
+Factor: ExprId = {
     <l:Factor> "*" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Mul), Some(vec!(l, r))),
     <l:Factor> "/" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Div), Some(vec!(l, r))),
     Term,
 }
 
-Term: NodeId = {
+Term: ExprId = {
     <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1, qunid: 0, colid: 0 }, None),
     QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
     Number,
@@ -322,7 +323,7 @@ Term: NodeId = {
     <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
 }
 
-AggFunction: NodeId = {
+AggFunction: ExprId = {
     <aggtype:AggName> "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
         parser_state.graph.add_node(AggFunction(aggtype, distinct.is_some()), Some(vec![arg]))
 
@@ -337,12 +338,12 @@ AggName: AggType = {
     "COUNT" => AggType::COUNT,
 }
 
-AggArg: NodeId = {
+AggArg: ExprId = {
     <arg:Expr> => arg,
     "*" => parser_state.graph.add_node(Star, None)
 }
 
-ScalarFunction: NodeId = {
+ScalarFunction: ExprId = {
     <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.graph.add_node(ScalarFunction(name), Some(args)),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
         let datatype = parser_state.graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
@@ -353,7 +354,7 @@ ScalarFunction: NodeId = {
 
 FunctionArgs = CommaSeparatedList<Expr>;
 
-Number: NodeId = {
+Number: ExprId = {
     Integer =>? { isize::from_str(<>)
         .map(|i| parser_state.graph.add_node(Literal(Datum::INT(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 

@@ -20,17 +20,19 @@ pub mod qst;
 pub mod graph;
 pub mod aps;
 pub mod compiler;
-//pub mod bitmap;
+pub mod expr;
 
-use ast::{Expr::*, *};
-use ast::{ParserState, AST};
 use clp::CLParser;
+
+use expr::{Expr::*, *};
+use ast::*;
 use flow::*;
-use graph::Graph;
-use metadata::Metadata;
-use compiler::Compiler;
+use graph::*;
+use metadata::*;
+use compiler::*;
 use row::*;
 use aps::*;
+
 pub mod scratch;
 
 use std::collections::HashMap;

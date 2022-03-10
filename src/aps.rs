@@ -1,9 +1,7 @@
-use crate::ast::{Expr::*, *};
-use crate::flow::*;
+use crate::expr::{Expr::*, *};
+use crate::ast::*;
 use crate::graph::*;
 use crate::includes::*;
-use crate::row::*;
-use crate::task::*;
 use std::collections::{HashSet, HashMap};
 
 pub struct APS;
@@ -18,12 +16,12 @@ enum POP {
 
 struct POPProps {
     quns: HashSet<usize>,
-    preds: HashSet<NodeId>,
-    output: Vec<NodeId>,
+    preds: HashSet<ExprId>,
+    output: Vec<ExprId>,
 }
 
 impl POPProps {
-    fn new(quns: HashSet<usize>, preds: HashSet<NodeId>, output: Vec<NodeId>) -> Self {
+    fn new(quns: HashSet<usize>, preds: HashSet<ExprId>, output: Vec<ExprId>) -> Self {
         POPProps { quns, preds, output }
     }
 }
@@ -49,9 +47,9 @@ enum PredicateType {
 impl APS {
     pub fn find_best_plan(env: &Env, qgm: &mut QGM) -> Result<(), String> {
         let graph = replace(&mut qgm.graph, Graph::new());
-        let mut pop_graph: Graph<POP, POPProps> = Graph::new();
+        let mut pop_graph: Graph<POPId, POP, POPProps> = Graph::new();
         let topqblock = &qgm.qblock;
-        let mut worklist: Vec<NodeId> = vec![];
+        let mut worklist: Vec<POPId> = vec![];
 
         assert!(qgm.cte_list.len() == 0);
 
@@ -82,8 +80,8 @@ impl APS {
             .collect::<Vec<_>>();
 
         // Classify predicates
-        let mut pred_to_quns_map: HashMap<NodeId, HashSet<usize>> = HashMap::new();
-        let mut quns_to_pred_map: HashMap<HashSet<usize>, NodeId> = HashMap::new();
+        let mut pred_to_quns_map: HashMap<ExprId, HashSet<usize>> = HashMap::new();
+        let mut quns_to_pred_map: HashMap<HashSet<usize>, ExprId> = HashMap::new();
 
         if let Some(pred_list) = topqblock.pred_list.as_ref() {
             for &pred_id in pred_list.iter() {
@@ -145,7 +143,7 @@ impl APS {
         Ok(())
     }
 
-    pub fn get_unique_cols(graph: &Graph<Expr, ExprProp>, root_node_id: NodeId) -> HashSet<(usize, usize)> {
+    pub fn get_unique_cols(graph: &Graph<ExprId, Expr, ExprProp>, root_node_id: ExprId) -> HashSet<(usize, usize)> {
         let qun_col_pairs: HashSet<(usize, usize)> = graph
             .iter(root_node_id)
             .filter_map(|nodeid| {
@@ -159,7 +157,7 @@ impl APS {
         qun_col_pairs
     }
 
-    pub fn get_unique_quns(graph: &Graph<Expr, ExprProp>, root_node_id: NodeId) -> HashSet<usize> {
+    pub fn get_unique_quns(graph: &Graph<ExprId, Expr, ExprProp>, root_node_id: ExprId) -> HashSet<usize> {
         let qun_col_pairs = Self::get_unique_cols(graph, root_node_id);
         qun_col_pairs.iter().map(|&(qunid, colid)| qunid).collect()
     }

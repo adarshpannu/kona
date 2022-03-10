@@ -1,12 +1,11 @@
-// QST: Query Semantics
+// QST: Query Semantic Transforms
 
-use crate::ast::{Expr::*, *};
-use crate::graph::{Graph, NodeId};
+use crate::expr::{Expr::*, *};
+use crate::ast::*;
+use crate::graph::{Graph, ExprId};
 use crate::row::{DataType, Datum};
 
 use crate::includes::*;
-use log::Log;
-use slotmap::secondary::Entry;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -58,7 +57,7 @@ impl QueryBlockColidDispenser {
 }
 
 impl QueryBlock {
-    pub fn resolve(&mut self, env: &Env, graph: &mut Graph<Expr, ExprProp>) -> Result<(), String> {
+    pub fn resolve(&mut self, env: &Env, graph: &mut Graph<ExprId, Expr, ExprProp>) -> Result<(), String> {
         debug!("Resolve query block: {}", self.id);
 
         let mut colid_dispenser = QueryBlockColidDispenser::new();
@@ -124,7 +123,7 @@ impl QueryBlock {
         Ok(())
     }
 
-    pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<Expr, ExprProp>) -> Result<(), String> {
+    pub fn split_groupby(&mut self, env: &Env, graph: &mut Graph<ExprId, Expr, ExprProp>) -> Result<(), String> {
         if self.group_by.is_some() {
             //let select_list = replace(&mut self.select_list, vec![]);
             let group_by = replace(&mut self.group_by, None).unwrap();
@@ -187,7 +186,7 @@ impl QueryBlock {
     }
 
     fn find(
-        graph: &Graph<Expr, ExprProp>, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: NodeId,
+        graph: &Graph<ExprId, Expr, ExprProp>, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: ExprId,
     ) -> Option<usize> {
         // Does this expression already exist in the select_list[..until_index]?
         for (ix, ne) in select_list.iter().enumerate() {
@@ -200,7 +199,7 @@ impl QueryBlock {
         None
     }
 
-    fn append(graph: &Graph<Expr, ExprProp>, select_list: &mut Vec<NamedExpr>, expr_id: NodeId) -> usize {
+    fn append(graph: &Graph<ExprId, Expr, ExprProp>, select_list: &mut Vec<NamedExpr>, expr_id: ExprId) -> usize {
         // Does this expression already exist in the select_list?
         if let Some(ix) = Self::find(graph, select_list, select_list.len(), expr_id) {
             // ... yes, return its index
@@ -214,8 +213,8 @@ impl QueryBlock {
     // transform_groupby_expr: Traverse expression `expr_id` (which is part of aggregate qb select list) such that any subexpressions are replaced with
     // corresponding references to inner/select qb select-list using CID#
     pub fn transform_groupby_expr(
-        env: &Env, graph: &mut Graph<Expr, ExprProp>, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
-        expr_id: &mut NodeId,
+        env: &Env, graph: &mut Graph<ExprId, Expr, ExprProp>, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
+        expr_id: &mut ExprId,
     ) -> Result<(), String> {
         let node = graph.get_node(*expr_id);
         if let AggFunction(aggtype, _) = node.inner {
@@ -318,8 +317,8 @@ impl QueryBlock {
     }
 
     pub fn resolve_expr(
-        &self, env: &Env, graph: &mut Graph<Expr, ExprProp>, colid_dispenser: &mut QueryBlockColidDispenser,
-        expr_id: NodeId, agg_fns_allowed: bool,
+        &self, env: &Env, graph: &mut Graph<ExprId, Expr, ExprProp>, colid_dispenser: &mut QueryBlockColidDispenser,
+        expr_id: ExprId, agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get_node(expr_id).inner {
             // Nested aggregate functions not allowed
@@ -403,9 +402,9 @@ impl QueryBlock {
         Ok(datatype)
     }
 
-    pub fn get_boolean_factors(graph: &Graph<Expr, ExprProp>, pred_id: NodeId, boolean_factors: &mut Vec<NodeId>) {
+    pub fn get_boolean_factors(graph: &Graph<ExprId, Expr, ExprProp>, pred_id: ExprId, boolean_factors: &mut Vec<ExprId>) {
         let (expr, children) = graph.get_node_with_children(pred_id);
-        if let LogExpr(crate::ast::LogOp::And) = expr {
+        if let LogExpr(crate::expr::LogOp::And) = expr {
             let children = children.unwrap();
             let lhs = children[0];
             let rhs = children[1];
