@@ -1,7 +1,7 @@
 // QST: Query Semantic Transforms
 
 use crate::expr::{Expr::*, *};
-use crate::ast::*;
+use crate::qgm::*;
 use crate::graph::{Graph, ExprId};
 use crate::row::{DataType, Datum};
 

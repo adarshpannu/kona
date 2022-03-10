@@ -5,11 +5,11 @@ use crate::includes::*;
 
 use crate::expr::{Expr::*, *};
 use crate::row::*;
-use crate::ast::*;
+use crate::qgm::*;
 use crate::graph::{Graph, ExprId};
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::ast::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
+use crate::qgm::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
 
 grammar(parser_state: &mut ParserState);
 

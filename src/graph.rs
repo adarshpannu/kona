@@ -1,4 +1,3 @@
-use crate::row::DataType;
 use crate::includes::*;
 use slotmap::{new_key_type, SlotMap};
 

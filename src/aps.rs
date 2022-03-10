@@ -1,5 +1,5 @@
 use crate::expr::{Expr::*, *};
-use crate::ast::*;
+use crate::qgm::*;
 use crate::graph::*;
 use crate::includes::*;
 use std::collections::{HashSet, HashMap};

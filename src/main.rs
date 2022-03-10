@@ -7,40 +7,38 @@ extern crate lalrpop_util;
 
 lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
-pub mod ast;
-pub mod csv;
-pub mod flow;
-pub mod graphviz;
 pub mod includes;
-pub mod logging;
-pub mod metadata;
-pub mod row;
-pub mod task;
-pub mod qst;
+
 pub mod graph;
+pub mod ast;
+pub mod qgm;
+pub mod expr;
+
+pub mod qst;
 pub mod aps;
 pub mod compiler;
-pub mod expr;
+
+pub mod logging;
+pub mod graphviz;
+
+pub mod metadata;
+pub mod csv;
+pub mod flow;
+pub mod row;
+pub mod task;
 
 use clp::CLParser;
 
-use expr::{Expr::*, *};
-use ast::*;
+use qgm::*;
 use flow::*;
-use graph::*;
 use metadata::*;
-use compiler::*;
-use row::*;
 use aps::*;
 
 pub mod scratch;
 
 use std::collections::HashMap;
-use std::cell::RefCell;
 use std::fs;
-use std::rc::Rc;
 use task::ThreadPool;
-use slotmap::SlotMap;
 
 pub struct Env {
     thread_pool: ThreadPool,

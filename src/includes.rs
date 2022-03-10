@@ -15,8 +15,6 @@ pub type PartitionId = usize;
 pub type ColMap = std::collections::HashMap<ColId, usize>;
 
 pub use crate::Env;
-use crate::graph::ExprId;
-use crate::row::DataType;
 
 pub use serde::{Serialize, Deserialize};
 
@@ -27,6 +25,6 @@ pub use typed_arena::Arena;
 
 pub type NodeArena = Arena<crate::flow::FlowNode>;
 
-pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::ast::QueryBlock>>;
+pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::qgm::QueryBlock>>;
 
 pub use std::mem::replace;
