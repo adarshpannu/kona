@@ -156,8 +156,8 @@ impl Expr {
     }
 
     pub fn isomorphic(graph: &Graph<ExprId, Expr, ExprProp>, expr_id1: ExprId, expr_id2: ExprId) -> bool {
-        let (expr1, children1) = graph.get_node_with_children(expr_id1);
-        let (expr2, children2) = graph.get_node_with_children(expr_id2);
+        let (expr1, _, children1) = graph.get(expr_id1);
+        let (expr2, _, children2) = graph.get(expr_id2);
         let shallow_matched = match (expr1, expr2) {
             (CID(c1), CID(c2)) => c1 == c2,
             (BinaryExpr(c1), BinaryExpr(c2)) => c1 == c2,
@@ -205,7 +205,7 @@ impl Expr {
     }
 
     pub fn to_string(expr_id: ExprId, graph: &Graph<ExprId, Expr, ExprProp>) -> String {
-        let (expr, children) = graph.get_node_with_children(expr_id);
+        let (expr, _, children) = graph.get(expr_id);
         match expr {
             CID(colid) => format!("CID #{}", *colid),
             Column { prefix, colname, .. } => {

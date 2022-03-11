@@ -210,7 +210,7 @@ impl QueryBlock {
         expr_id: &mut ExprId,
     ) -> Result<(), String> {
         let node = graph.get_node(*expr_id);
-        if let AggFunction(aggtype, _) = node.inner {
+        if let AggFunction(aggtype, _) = node.contents {
             // Aggregate-function: replace argument with CID reference to inner query-block
             let child_id = node.children.as_ref().unwrap()[0];
             let cid = Self::append(graph, select_list, child_id);
@@ -234,7 +234,7 @@ impl QueryBlock {
             colname,
             qunid,
             colid,
-        } = &node.inner
+        } = &node.contents
         {
             // User error: Unaggregated expression in select-list not in group-by clause
             return Err(format!(
@@ -309,7 +309,7 @@ impl QueryBlock {
         &self, env: &Env, graph: &mut Graph<ExprId, Expr, ExprProp>, colid_dispenser: &mut QueryBlockColidDispenser,
         expr_id: ExprId, agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
-        let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get_node(expr_id).inner {
+        let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get_node(expr_id).contents {
             // Nested aggregate functions not allowed
             false
         } else {
@@ -327,7 +327,7 @@ impl QueryBlock {
         }
 
         let mut node = graph.get_node_mut(expr_id);
-        let mut expr = &mut node.inner;
+        let mut expr = &mut node.contents;
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
@@ -392,7 +392,7 @@ impl QueryBlock {
     }
 
     pub fn get_boolean_factors(graph: &Graph<ExprId, Expr, ExprProp>, pred_id: ExprId, boolean_factors: &mut Vec<ExprId>) {
-        let (expr, children) = graph.get_node_with_children(pred_id);
+        let (expr, _, children) = graph.get(pred_id);
         if let LogExpr(crate::expr::LogOp::And) = expr {
             let children = children.unwrap();
             let lhs = children[0];

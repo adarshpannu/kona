@@ -2,7 +2,6 @@ use crate::includes::*;
 use slotmap::{new_key_type, SlotMap};
 
 new_key_type! { pub struct ExprId; }
-
 new_key_type! { pub struct POPId; }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -10,7 +9,7 @@ pub struct Node<K, T, P>
 where
     P: std::default::Default,
 {
-    pub inner: T,
+    pub contents: T,
     pub properties: P,
     pub children: Option<Vec<K>>,
 }
@@ -21,7 +20,7 @@ where
 {
     pub fn new(t: T, properties: P) -> Self {
         Node {
-            inner: t,
+            contents: t,
             properties,
             children: None,
         }
@@ -76,10 +75,20 @@ where
     pub fn get_children(&self, ix: K) -> Option<Vec<K>> {
         let expr = self.sm.get(ix).unwrap();
         if let Some(children) = &expr.children {
-            Some(children.clone())
+            Some(children.clone()) // fixme
         } else {
             None
         }
+    }
+    
+    pub fn get(&self, ix: K) -> (&T, &P, Option<&Vec<K>>) {
+        let node = self.sm.get(ix).unwrap();
+        (&node.contents, &node.properties, node.children.as_ref())
+    }
+
+    pub fn get_mut(&mut self, ix: K) -> (&mut T, &mut P, Option<&mut Vec<K>>) {
+        let mut node = self.sm.get_mut(ix).unwrap();
+        (&mut node.contents, &mut node.properties, node.children.as_mut())
     }
 
     pub fn get_node(&self, ix: K) -> &Node<K, T, P> {
@@ -90,16 +99,6 @@ where
     pub fn get_node_mut(&mut self, ix: K) -> &mut Node<K, T, P> {
         let mut node = self.sm.get_mut(ix).unwrap();
         node
-    }
-
-    pub fn get_node_with_children(&self, ix: K) -> (&T, Option<&Vec<K>>) {
-        let node = self.sm.get(ix).unwrap();
-        (&node.inner, node.children.as_ref())
-    }
-
-    pub fn get_node_with_children_mut(&mut self, ix: K) -> (&mut T, Option<&mut Vec<K>>) {
-        let mut node = self.sm.get_mut(ix).unwrap();
-        (&mut node.inner, node.children.as_mut())
     }
 
     pub fn replace(&mut self, ix: K, t: T, p: P) {
@@ -155,7 +154,8 @@ where
         }
         let cur_id = self.queue.pop();
         if let Some(cur_id) = cur_id {
-            if let Some(children) = self.graph.get_children(cur_id) {
+            let (_, _, children) = self.graph.get(cur_id);
+            if let Some(children) = children {
                 self.queue.extend(children.iter());
             }
         }

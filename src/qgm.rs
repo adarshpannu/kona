@@ -45,7 +45,7 @@ pub struct NamedExpr {
 
 impl NamedExpr {
     pub fn new(alias: Option<String>, expr_id: ExprId, graph: &Graph<ExprId, Expr, ExprProp>) -> Self {
-        let expr = &graph.get_node(expr_id).inner;
+        let expr = &graph.get_node(expr_id).contents;
         let mut alias = alias;
         if alias.is_none() {
             if let Expr::Column {
@@ -276,7 +276,7 @@ impl QueryBlock {
             for &expr_id in pred_list {
                 QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
                 let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, children) = qgm.graph.get_node_with_children(expr_id);
+                let (expr, _, children) = qgm.graph.get(expr_id);
                 fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
             }
             fprint!(
@@ -313,7 +313,7 @@ impl QueryBlock {
                 QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
 
                 let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, children) = qgm.graph.get_node_with_children(expr_id);
+                let (expr, _, children) = qgm.graph.get(expr_id);
                 fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
             }
             fprint!(
@@ -403,7 +403,7 @@ impl QGM {
 
     fn write_expr_to_graphvis(qgm: &QGM, expr: ExprId, file: &mut File, order_ix: Option<usize>) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
-        let (expr, children) = qgm.graph.get_node_with_children(expr);
+        let (expr, _, children) = qgm.graph.get(expr);
         let ix_str = if let Some(ix) = order_ix {
             format!(": {}", ix)
         } else {
