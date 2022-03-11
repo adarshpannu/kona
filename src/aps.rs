@@ -1,13 +1,15 @@
 use crate::expr::{Expr::*, *};
-use crate::qgm::*;
 use crate::graph::*;
+use crate::graph::*;
+
 use crate::includes::*;
-use std::collections::{HashSet, HashMap};
+use crate::qgm::*;
+use std::collections::{HashMap, HashSet};
 
 pub struct APS;
 
 enum POP {
-    TableScan { colids: Vec<ColId> },
+    TableScan { qunid: QunId, colids: Vec<ColId> },
     HashJoin,
     NLJoin,
     Sort,
@@ -15,14 +17,18 @@ enum POP {
 }
 
 struct POPProps {
-    quns: HashSet<usize>,
+    quns: HashSet<QunId>,
     preds: HashSet<ExprId>,
-    output: Vec<ExprId>,
+    projections: Vec<ColId>,
 }
 
 impl POPProps {
-    fn new(quns: HashSet<usize>, preds: HashSet<ExprId>, output: Vec<ExprId>) -> Self {
-        POPProps { quns, preds, output }
+    fn new(quns: HashSet<QunId>, preds: HashSet<ExprId>, projections: Vec<ColId>) -> Self {
+        POPProps {
+            quns,
+            preds,
+            projections,
+        }
     }
 }
 
@@ -31,17 +37,17 @@ impl std::default::Default for POPProps {
         POPProps {
             quns: HashSet::new(),
             preds: HashSet::new(),
-            output: vec![],
+            projections: vec![],
         }
     }
 }
 
 #[derive(Debug)]
 enum PredicateType {
-    Constant,  // 1 = 2
-    Local,     // t.col1 = t.col2 + 20
-    EquiJoin,  // r.col1 + 10 = s.col2 + 20
-    Other,     // r.col1 > s.col1
+    Constant, // 1 = 2
+    Local,    // t.col1 = t.col2 + 20
+    EquiJoin, // r.col1 + 10 = s.col2 + 20
+    Other,    // r.col1 > s.col1
 }
 
 impl APS {
@@ -58,30 +64,18 @@ impl APS {
             .select_list
             .iter()
             .flat_map(|ne| {
-                let cols = graph
-                    .iter(ne.expr_id)
-                    .filter_map(|nodeid| {
-                        if let Column {
-                            prefix,
-                            colname,
-                            qunid,
-                            colid,
-                        } = &graph.get_node(nodeid).inner
-                        {
-                            debug!("COL: {:?}.{:?}", prefix, colname);
-                            Some((*qunid, *colid))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                cols
+                Self::get_unique_cols(&graph, ne.expr_id)
+                    .into_iter()
+                    .collect::<Vec<QunCol>>()
             })
             .collect::<Vec<_>>();
 
-        // Classify predicates
-        let mut pred_to_quns_map: HashMap<ExprId, HashSet<usize>> = HashMap::new();
-        let mut quns_to_pred_map: HashMap<HashSet<usize>, ExprId> = HashMap::new();
+        // Process predicates:
+        // 1. Classify predicates: pred -> type
+        // 2. Collect quns + cols for each predicates: pred -> set(quns)
+        let mut pred_to_quns_map: HashMap<ExprId, HashSet<QunId>> = HashMap::new();
+        let mut pred_to_type_map: HashMap<ExprId, PredicateType> = HashMap::new();
+        let mut pred_to_quncols_map: HashMap<ExprId, HashSet<QunCol>> = HashMap::new();
 
         if let Some(pred_list) = topqblock.pred_list.as_ref() {
             for &pred_id in pred_list.iter() {
@@ -114,6 +108,7 @@ impl APS {
                     &quns,
                     pred_type
                 );
+                pred_to_type_map.insert(pred_id, pred_type);
                 pred_to_quns_map.insert(pred_id, quns.clone());
             }
         }
@@ -124,7 +119,7 @@ impl APS {
             let mut quns = HashSet::new();
             quns.insert(qun.id);
             let props = POPProps::new(quns, HashSet::new(), vec![]);
-            let popnode = pop_graph.add_node_with_props(POP::TableScan { colids }, props, None);
+            let popnode = pop_graph.add_node_with_props(POP::TableScan { qunid: qun.id, colids }, props, None);
             worklist.push(popnode);
         }
 
@@ -143,12 +138,12 @@ impl APS {
         Ok(())
     }
 
-    pub fn get_unique_cols(graph: &Graph<ExprId, Expr, ExprProp>, root_node_id: ExprId) -> HashSet<(usize, usize)> {
-        let qun_col_pairs: HashSet<(usize, usize)> = graph
+    pub fn get_unique_cols(graph: &Graph<ExprId, Expr, ExprProp>, root_node_id: ExprId) -> HashSet<QunCol> {
+        let qun_col_pairs: HashSet<QunCol> = graph
             .iter(root_node_id)
             .filter_map(|nodeid| {
                 if let Column { qunid, colid, .. } = &graph.get_node(nodeid).inner {
-                    Some((*qunid, *colid))
+                    Some(QunCol(*qunid, *colid))
                 } else {
                     None
                 }
@@ -157,8 +152,8 @@ impl APS {
         qun_col_pairs
     }
 
-    pub fn get_unique_quns(graph: &Graph<ExprId, Expr, ExprProp>, root_node_id: ExprId) -> HashSet<usize> {
+    pub fn get_unique_quns(graph: &Graph<ExprId, Expr, ExprProp>, root_node_id: ExprId) -> HashSet<QunId> {
         let qun_col_pairs = Self::get_unique_cols(graph, root_node_id);
-        qun_col_pairs.iter().map(|&(qunid, colid)| qunid).collect()
+        qun_col_pairs.iter().map(|quncol| quncol.0).collect()
     }
 }

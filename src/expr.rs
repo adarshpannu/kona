@@ -101,12 +101,12 @@ impl std::default::Default for ExprProp {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
-    CID(usize),
+    CID(ColId),
     Column {
         prefix: Option<String>,
         colname: String,
-        qunid: usize,
-        colid: usize,
+        qunid: QunId,
+        colid: ColId,
     },
     Star,
     Literal(Datum),

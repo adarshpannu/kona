@@ -100,13 +100,13 @@ pub trait TableDesc {
 
 #[derive(Debug)]
 pub struct ColDesc {
-    pub colid: usize,
+    pub colid: ColId,
     pub name: String,
     pub datatype: DataType,
 }
 
 impl ColDesc {
-    pub fn new(colid: usize, name: String, datatype: DataType) -> ColDesc {
+    pub fn new(colid: ColId, name: String, datatype: DataType) -> ColDesc {
         ColDesc { colid, name, datatype }
     }
 }

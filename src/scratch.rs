@@ -2,21 +2,22 @@
 use crate::row::*;
 use crate::includes::*;
 
+use bitmaps::Bitmap;
+
 #[test]
 fn test_vec() {
-    let mut v = vec![];
+    let mut bitmap: Bitmap<10> = Bitmap::new();
+    bitmap.set(8, true);
 
-    for i in 0..10 {
-        v.push(DataType::UNKNOWN)
+    let mut bitmap2: Bitmap<10> = Bitmap::new();
+    bitmap2.set(3, true);
+
+    let x = bitmap | bitmap2;
+
+    for b in x.into_iter() {
+        dbg!(&b);
     }
 
-    replace(&mut v[1], DataType::BOOL);
-    replace(&mut v[2], DataType::BOOL);
+    dbg!(std::mem::size_of::<Bitmap<256>>());
 
-    let n = 10;
-    let v = vec![Datum::NULL; n];
-    dbg!(&v);
-
-    let v2 = &v[..];
-    dbg!(v2.len());
 }

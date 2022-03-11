@@ -10,9 +10,13 @@ pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/flare";
 pub type FlowNodeId = usize;
 pub type ColId = usize;
 pub type QunId = usize;
+pub type QBId = usize;
 pub type PartitionId = usize;
 
-pub type ColMap = std::collections::HashMap<ColId, usize>;
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub struct QunCol(pub QunId, pub ColId);
+
+pub type ColMap = std::collections::HashMap<ColId, ColId>;
 
 pub use crate::Env;
 

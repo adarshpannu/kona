@@ -54,15 +54,15 @@ pub struct Row {
 }
 
 impl Row {
-    pub fn get_column_mut(&mut self, ix: usize) -> &mut Column {
+    pub fn get_column_mut(&mut self, ix: ColId) -> &mut Column {
         &mut self.cols[ix]
     }
 
-    pub fn set_column(&mut self, ix: usize, newcol: &Column) {
+    pub fn set_column(&mut self, ix: ColId, newcol: &Column) {
         self.cols[ix] = newcol.clone()
     }
 
-    pub fn get_column(&self, ix: usize) -> &Column {
+    pub fn get_column(&self, ix: ColId) -> &Column {
         &self.cols[ix]
     }
 
@@ -75,7 +75,7 @@ impl Row {
     }
 
     pub fn project(&self, colids: &Vec<ColId>) -> Row {
-        let cols = colids.iter().map(|&ix| self.cols[ix].clone()).collect::<Vec<Column>>();
+        let cols = colids.iter().map(|&colid| self.cols[colid].clone()).collect::<Vec<Column>>();
         Row::from(cols)
     }
 

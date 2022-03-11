@@ -10,13 +10,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub struct QunColumn {
-    qunid: QunId,
-    colid: ColId,
-    datatype: DataType,
-}
-
 impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
         debug!("Normalize QGM");
@@ -33,8 +26,8 @@ fn dquote(s: &String) -> String {
 }
 
 pub struct QueryBlockColidDispenser {
-    hashmap: HashMap<QunColumn, usize>,
-    next_id: usize,
+    hashmap: HashMap<QunCol, ColId>,
+    next_id: ColId,
 }
 
 impl QueryBlockColidDispenser {
@@ -45,7 +38,7 @@ impl QueryBlockColidDispenser {
         }
     }
 
-    fn next_id(&mut self, quncol: QunColumn) -> usize {
+    fn next_id(&mut self, quncol: QunCol) -> ColId {
         let next_id = self.next_id;
         let e = self.hashmap.entry(quncol).or_insert(next_id);
         if *e == next_id {
@@ -262,7 +255,7 @@ impl QueryBlock {
 
     pub fn resolve_column(
         &self, env: &Env, colid_dispenser: &mut QueryBlockColidDispenser, prefix: Option<&String>, colname: &String,
-    ) -> Result<(QunColumn, usize), String> {
+    ) -> Result<(QunCol, DataType, ColId), String> {
         let mut retval = None;
         let mut colid = 0;
 
@@ -282,12 +275,8 @@ impl QueryBlock {
 
             if let Some(coldesc) = coldesc {
                 if retval.is_none() {
-                    retval = Some(QunColumn {
-                        qunid: qun.id,
-                        colid: coldesc.colid,
-                        datatype: coldesc.datatype,
-                    });
-                    colid = colid_dispenser.next_id(retval.unwrap());
+                    retval = Some((QunCol(qun.id, coldesc.colid), coldesc.datatype));
+                    colid = colid_dispenser.next_id(retval.unwrap().0);
                     let mut column_map = qun.column_read_map.borrow_mut();
                     column_map.insert(coldesc.colid, colid);
                 } else {
@@ -305,7 +294,7 @@ impl QueryBlock {
         }
 
         if let Some(retval) = retval {
-            Ok((retval, colid))
+            Ok((retval.0, retval.1, colid))
         } else {
             let colstr = if let Some(prefix) = prefix {
                 format!("{}.{}", prefix, colname)
@@ -366,11 +355,11 @@ impl QueryBlock {
                 qunid: ref mut qunid,
                 colid: ref mut colid,
             } => {
-                let (quncol, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
-                *qunid = quncol.qunid;
+                let (quncol, datatype, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
+                *qunid = quncol.0;
                 *colid = qtuple_ix;
                 //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
-                quncol.datatype
+                datatype
             }
             LogExpr(logop) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,

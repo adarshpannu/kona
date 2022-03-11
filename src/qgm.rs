@@ -75,7 +75,7 @@ pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprId>);
 
 #[derive(Serialize, Deserialize)]
 pub struct Quantifier {
-    pub id: usize,
+    pub id: QunId,
     pub tablename: Option<String>,
     pub qblock: Option<QueryBlockLink>,
     pub alias: Option<String>,
@@ -85,7 +85,7 @@ pub struct Quantifier {
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 
     #[serde(skip)]
-    pub column_read_map: RefCell<HashMap<ColId, usize>>, // ColID is offset in source tuple -> usize is in target tuple.
+    pub column_read_map: RefCell<HashMap<ColId, ColId>>, // ColID in source tuple -> ColID in target tuple.
 }
 
 impl fmt::Debug for Quantifier {
@@ -99,7 +99,7 @@ impl fmt::Debug for Quantifier {
 }
 
 impl Quantifier {
-    pub fn new(id: usize, name: Option<String>, qblock: Option<QueryBlockLink>, alias: Option<String>) -> Self {
+    pub fn new(id: QunId, name: Option<String>, qblock: Option<QueryBlockLink>, alias: Option<String>) -> Self {
         // Either we have a named base table, or we have a queryblock (but not both)
         assert!((name.is_some() && qblock.is_none()) || (name.is_none() && qblock.is_some()));
 
@@ -143,7 +143,7 @@ impl Quantifier {
         format!("QUN_{}", self.id)
     }
 
-    pub fn get_column_map(&self) -> HashMap<ColId, usize> {
+    pub fn get_column_map(&self) -> HashMap<ColId, ColId> {
         self.column_read_map.borrow().clone()
     }
 }
@@ -162,7 +162,7 @@ pub enum DistinctProperty {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueryBlock {
-    pub id: usize,
+    pub id: QBId,
     pub name: Option<String>,
     pub qbtype: QueryBlockType,
     pub select_list: Vec<NamedExpr>,
@@ -177,7 +177,7 @@ pub struct QueryBlock {
 
 impl QueryBlock {
     pub fn new(
-        id: usize, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
+        id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
         pred_list: Option<Vec<ExprId>>, group_by: Option<Vec<ExprId>>, having_clause: Option<Vec<ExprId>>,
         order_by: Option<Vec<(ExprId, Ordering)>>, distinct: DistinctProperty, topN: Option<usize>,
     ) -> Self {
@@ -401,10 +401,10 @@ impl QGM {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
-    fn write_expr_to_graphvis(qgm: &QGM, expr: ExprId, file: &mut File, ix: Option<usize>) -> std::io::Result<()> {
+    fn write_expr_to_graphvis(qgm: &QGM, expr: ExprId, file: &mut File, order_ix: Option<usize>) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
         let (expr, children) = qgm.graph.get_node_with_children(expr);
-        let ix_str = if let Some(ix) = ix {
+        let ix_str = if let Some(ix) = order_ix {
             format!(": {}", ix)
         } else {
             String::from("")
