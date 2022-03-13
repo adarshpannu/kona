@@ -36,8 +36,6 @@ digraph example1 {
     "QUN_1"[label="S/ ", fillcolor=black, fontcolor=white, style=filled]
     "QUN_0"[label="R/ ", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_3 {
-    exprnodeExprId42v1[label="And"];
-    exprnodeExprId38v1 -> exprnodeExprId42v1;
     exprnodeExprId38v1[label="And"];
     exprnodeExprId32v1 -> exprnodeExprId38v1;
     exprnodeExprId32v1[label="And"];
@@ -87,13 +85,7 @@ digraph example1 {
     exprnodeExprId34v1[label="T2 (0.0)"];
     exprnodeExprId36v1 -> exprnodeExprId37v1;
     exprnodeExprId36v1[label="T3 (0.0)"];
-    exprnodeExprId41v1 -> exprnodeExprId42v1;
-    exprnodeExprId41v1[label=">"];
-    exprnodeExprId39v1 -> exprnodeExprId41v1;
-    exprnodeExprId39v1[label="R2 (0.0)"];
-    exprnodeExprId40v1 -> exprnodeExprId41v1;
-    exprnodeExprId40v1[label="T2 (0.0)"];
-    exprnodeExprId42v1 -> QB_3_pred_list;
+    exprnodeExprId38v1 -> QB_3_pred_list;
     "QB_3_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_3 type=Select";

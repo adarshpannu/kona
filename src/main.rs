@@ -10,6 +10,7 @@ lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 pub mod includes;
 
 pub mod graph;
+pub mod bitset;
 pub mod ast;
 pub mod qgm;
 pub mod expr;

@@ -504,7 +504,7 @@ impl EmitNode {}
 pub struct Flow {
     pub id: usize,
     pub nodes: Vec<FlowNode>,
-    pub graph: Graph<ExprId, Expr, ExprProp>, // arena allocator
+    pub graph: ExprGraph, // arena allocator
 }
 
 impl Flow {

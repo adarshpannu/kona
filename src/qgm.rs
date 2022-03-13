@@ -14,6 +14,12 @@ use std::rc::Rc;
 use std::fmt;
 use std::process::Command;
 
+macro_rules! fprint {
+    ($file:expr, $($args:expr),*) => {{
+        $file.write_all(format!($($args),*).as_bytes());
+    }};
+}
+
 #[derive(Debug)]
 pub enum AST {
     CatalogTable {
@@ -34,7 +40,7 @@ pub enum AST {
 pub struct QGM {
     pub qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: Graph<ExprId, Expr, ExprProp>, // arena allocator
+    pub graph: ExprGraph, // arena allocator
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,8 +50,8 @@ pub struct NamedExpr {
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_id: ExprId, graph: &Graph<ExprId, Expr, ExprProp>) -> Self {
-        let expr = &graph.get_node(expr_id).contents;
+    pub fn new(alias: Option<String>, expr_id: ExprId, graph: &ExprGraph) -> Self {
+        let expr = &graph.get(expr_id).contents;
         let mut alias = alias;
         if alias.is_none() {
             if let Expr::Column {
@@ -214,12 +220,6 @@ impl QueryBlock {
     }
 }
 
-macro_rules! fprint {
-    ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes());
-    }};
-}
-
 impl QueryBlock {
     pub(crate) fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
         // Write current query block first
@@ -276,7 +276,7 @@ impl QueryBlock {
             for &expr_id in pred_list {
                 QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
                 let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, _, children) = qgm.graph.get(expr_id);
+                let (expr, _, children) = qgm.graph.get3(expr_id);
                 fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
             }
             fprint!(
@@ -313,7 +313,7 @@ impl QueryBlock {
                 QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
 
                 let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, _, children) = qgm.graph.get(expr_id);
+                let (expr, _, children) = qgm.graph.get3(expr_id);
                 fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
             }
             fprint!(
@@ -342,7 +342,7 @@ impl QueryBlock {
 }
 
 pub struct ParserState {
-    pub graph: Graph<ExprId, Expr, ExprProp>,
+    pub graph: ExprGraph,
 }
 
 impl ParserState {
@@ -403,7 +403,7 @@ impl QGM {
 
     fn write_expr_to_graphvis(qgm: &QGM, expr: ExprId, file: &mut File, order_ix: Option<usize>) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
-        let (expr, _, children) = qgm.graph.get(expr);
+        let (expr, _, children) = qgm.graph.get3(expr);
         let ix_str = if let Some(ix) = order_ix {
             format!(": {}", ix)
         } else {

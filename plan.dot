@@ -1,0 +1,15 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+    popnodePOPId4v1 -> popnodePOPId5v1;
+    popnodePOPId2v1 -> popnodePOPId4v1;
+    popnodePOPId2v1[label="TableScan|[1]"];
+    popnodePOPId1v1 -> popnodePOPId4v1;
+    popnodePOPId1v1[label="TableScan|[0]"];
+    popnodePOPId4v1[label="HashJoin|[0, 1]"];
+    popnodePOPId3v1 -> popnodePOPId5v1;
+    popnodePOPId3v1[label="TableScan|[2]"];
+    popnodePOPId5v1[label="HashJoin|[0, 1, 2]"];
+}

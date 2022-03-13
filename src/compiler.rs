@@ -37,7 +37,7 @@ impl Compiler {
             .iter()
             .map(|ne| {
                 let expr_id = ne.expr_id;
-                let (expr, _, children) = graph.get(expr_id);
+                let (expr, _, children) = graph.get3(expr_id);
                 if let AggFunction(aggtype, is_distinct) = expr {
                     children.unwrap()[0]
                 } else {
@@ -58,8 +58,8 @@ impl Compiler {
 
 /***************************************************************************************************/
 impl Expr {
-    pub fn eval<'a>(graph: &Graph<ExprId, Expr, ExprProp>, expr_id: ExprId, row: &'a Row) -> Datum {
-        let (expr, _, children) = &graph.get(expr_id);
+    pub fn eval<'a>(graph: &ExprGraph, expr_id: ExprId, row: &'a Row) -> Datum {
+        let (expr, _, children) = &graph.get3(expr_id);
         match expr {
             CID(ix) => row.get_column(*ix).clone(),
             Column { prefix, colname, qunid, colid} => row.get_column(*colid).clone(),

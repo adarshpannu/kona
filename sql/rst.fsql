@@ -1,6 +1,7 @@
 CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/R.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/S.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/T.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE R;
 DESCRIBE TABLE S;
@@ -12,5 +13,6 @@ where r0 = 10
 and r1 + 1 = s2 + 2
 and r2 + s2 = t3 + 3
 and r2 + t2 = t3
-and r2 > t2;
+//and r2 > t2
+;
 

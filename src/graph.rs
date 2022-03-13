@@ -81,22 +81,22 @@ where
         }
     }
     
-    pub fn get(&self, ix: K) -> (&T, &P, Option<&Vec<K>>) {
+    pub fn get3(&self, ix: K) -> (&T, &P, Option<&Vec<K>>) {
         let node = self.sm.get(ix).unwrap();
         (&node.contents, &node.properties, node.children.as_ref())
     }
 
-    pub fn get_mut(&mut self, ix: K) -> (&mut T, &mut P, Option<&mut Vec<K>>) {
+    pub fn get3_mut(&mut self, ix: K) -> (&mut T, &mut P, Option<&mut Vec<K>>) {
         let mut node = self.sm.get_mut(ix).unwrap();
         (&mut node.contents, &mut node.properties, node.children.as_mut())
     }
 
-    pub fn get_node(&self, ix: K) -> &Node<K, T, P> {
+    pub fn get(&self, ix: K) -> &Node<K, T, P> {
         let node = self.sm.get(ix).unwrap();
         node
     }
 
-    pub fn get_node_mut(&mut self, ix: K) -> &mut Node<K, T, P> {
+    pub fn get_mut(&mut self, ix: K) -> &mut Node<K, T, P> {
         let mut node = self.sm.get_mut(ix).unwrap();
         node
     }
@@ -154,7 +154,7 @@ where
         }
         let cur_id = self.queue.pop();
         if let Some(cur_id) = cur_id {
-            let (_, _, children) = self.graph.get(cur_id);
+            let (_, _, children) = self.graph.get3(cur_id);
             if let Some(children) = children {
                 self.queue.extend(children.iter());
             }
