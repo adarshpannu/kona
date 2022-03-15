@@ -129,13 +129,13 @@ pub SetOption: AST = {
 
 // -------------------- QUERY --------------------
 
-pub FullSelect: AST = <cte_list:WithClause?> <mut qblock:QueryBlock> => {
-    qblock.name = Some(String::from("main"));
-    qblock.qbtype = QueryBlockType::Select;
+pub FullSelect: AST = <cte_list:WithClause?> <mut main_qblock:QueryBlock> => {
+    main_qblock.name = Some(String::from("main"));
+    main_qblock.qbtype = QueryBlockType::Select;
 
     let graph = replace(&mut parser_state.graph, Graph::new());
 
-    let qgm = QGM { qblock, cte_list: cte_list.unwrap_or(vec![]), graph };
+    let qgm = QGM::new(main_qblock, cte_list.unwrap_or(vec![]), graph);
     AST::QGM(qgm)
 };
 

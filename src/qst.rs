@@ -1,8 +1,8 @@
 // QST: Query Semantic Transforms
 
 use crate::expr::{Expr::*, *};
+use crate::graph::{ExprId, Graph};
 use crate::qgm::*;
-use crate::graph::{Graph, ExprId};
 use crate::row::{DataType, Datum};
 
 use crate::includes::*;
@@ -15,7 +15,7 @@ impl QGM {
         debug!("Normalize QGM");
 
         // Resolve top-level QB
-        self.qblock.resolve(env, &mut self.graph)?;
+        self.main_qblock.resolve(env, &mut self.graph, &mut self.metadata)?;
 
         Ok(())
     }
@@ -50,7 +50,7 @@ impl QueryBlockColidDispenser {
 }
 
 impl QueryBlock {
-    pub fn resolve(&mut self, env: &Env, graph: &mut ExprGraph) -> Result<(), String> {
+    pub fn resolve(&mut self, env: &Env, graph: &mut ExprGraph, metadata: &mut QGMMetadata) -> Result<(), String> {
         debug!("Resolve query block: {}", self.id);
 
         let mut colid_dispenser = QueryBlockColidDispenser::new();
@@ -59,27 +59,29 @@ impl QueryBlock {
         for qun in self.quns.iter_mut() {
             if let Some(tablename) = qun.tablename.as_ref() {
                 let tbdesc = env.metadata.get_tabledesc(tablename);
-                if tbdesc.is_none() {
+                if let Some(tbdesc0) = tbdesc.as_ref() {
+                    metadata.add_tabledesc(qun.id, Rc::clone(tbdesc0));
+                    qun.tabledesc = tbdesc;
+                } else {
                     return Err(format!("Table {} not cataloged.", dquote(tablename)));
                 }
-                qun.tabledesc = tbdesc;
             } else if let Some(qblock) = qun.qblock.as_ref() {
                 let mut qblock = qblock.borrow_mut();
-                qblock.resolve(env, graph);
+                qblock.resolve(env, graph, metadata);
             }
         }
 
         // Resolve select list
         for ne in self.select_list.iter() {
             let expr_id = ne.expr_id;
-            self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, true)?;
+            self.resolve_expr(env, graph, metadata, &mut colid_dispenser, expr_id, true)?;
         }
 
         // Resolve predicates
         if let Some(pred_list) = self.pred_list.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_id in pred_list {
-                self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
+                self.resolve_expr(env, graph, metadata, &mut colid_dispenser, expr_id, false)?;
                 Self::get_boolean_factors(&graph, expr_id, &mut boolean_factors)
             }
             self.pred_list = Some(boolean_factors);
@@ -88,7 +90,7 @@ impl QueryBlock {
         // Resolve group-by
         if let Some(group_by) = self.group_by.as_ref() {
             for &expr_id in group_by.iter() {
-                self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, false)?;
+                self.resolve_expr(env, graph, metadata, &mut colid_dispenser, expr_id, false)?;
             }
         }
 
@@ -96,7 +98,7 @@ impl QueryBlock {
         if let Some(having_clause) = self.having_clause.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_id in having_clause {
-                self.resolve_expr(env, graph, &mut colid_dispenser, expr_id, true)?;
+                self.resolve_expr(env, graph, metadata, &mut colid_dispenser, expr_id, true)?;
                 Self::get_boolean_factors(&graph, expr_id, &mut boolean_factors)
             }
             self.having_clause = Some(boolean_factors);
@@ -303,8 +305,8 @@ impl QueryBlock {
     }
 
     pub fn resolve_expr(
-        &self, env: &Env, graph: &mut ExprGraph, colid_dispenser: &mut QueryBlockColidDispenser,
-        expr_id: ExprId, agg_fns_allowed: bool,
+        &self, env: &Env, graph: &mut ExprGraph, metadata: &mut QGMMetadata,
+        colid_dispenser: &mut QueryBlockColidDispenser, expr_id: ExprId, agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get(expr_id).contents {
             // Nested aggregate functions not allowed
@@ -318,7 +320,14 @@ impl QueryBlock {
 
         if let Some(children) = children {
             for child_id in children {
-                let datatype = self.resolve_expr(env, graph, colid_dispenser, child_id, children_agg_fns_allowed)?;
+                let datatype = self.resolve_expr(
+                    env,
+                    graph,
+                    metadata,
+                    colid_dispenser,
+                    child_id,
+                    children_agg_fns_allowed,
+                )?;
                 children_datatypes.push(datatype);
             }
         }
@@ -352,9 +361,10 @@ impl QueryBlock {
                 qunid: ref mut qunid,
                 colid: ref mut colid,
             } => {
-                let (quncol, datatype, qtuple_ix) = self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
+                let (quncol, datatype, qtuple_ix) =
+                    self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
-                *colid = qtuple_ix;
+                *colid = quncol.1; /// FIXME - No longer using qtuple!! *colid =  qtuple_ix;
                 //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
                 datatype
             }

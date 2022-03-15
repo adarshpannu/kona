@@ -2,92 +2,92 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
-  subgraph cluster_QB_3 {
-    "QB_3_selectlist"[label="select_list",shape=box,style=filled];
-  subgraph cluster_select_listQB_3 {
-    exprnodeExprId3v1[label="/: 0"];
+  subgraph cluster_QB_1 {
+    "QB_1_selectlist"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_1 {
+    exprnodeExprId11v1[label="/: 0"];
+    exprnodeExprId6v1 -> exprnodeExprId11v1;
+    exprnodeExprId6v1[label="*"];
+    exprnodeExprId4v1 -> exprnodeExprId6v1;
+    exprnodeExprId4v1[label="SUM"];
+    exprnodeExprId3v1 -> exprnodeExprId4v1;
+    exprnodeExprId3v1[label="+"];
     exprnodeExprId1v1 -> exprnodeExprId3v1;
-    exprnodeExprId1v1[label="R2 (0.0)"];
+    exprnodeExprId1v1[label="AGE (0.0)"];
     exprnodeExprId2v1 -> exprnodeExprId3v1;
-    exprnodeExprId2v1[label="R0 (0.0)"];
-    exprnodeExprId3v1 -> "QB_3_selectlist";
-    exprnodeExprId8v1[label="*: 1"];
-    exprnodeExprId4v1 -> exprnodeExprId8v1;
-    exprnodeExprId4v1[label="88"];
-    exprnodeExprId7v1 -> exprnodeExprId8v1;
-    exprnodeExprId7v1[label="+"];
-    exprnodeExprId5v1 -> exprnodeExprId7v1;
-    exprnodeExprId5v1[label="R2 (0.0)"];
-    exprnodeExprId6v1 -> exprnodeExprId7v1;
-    exprnodeExprId6v1[label="T2 (0.0)"];
-    exprnodeExprId8v1 -> "QB_3_selectlist";
-    exprnodeExprId13v1[label="/: 2"];
-    exprnodeExprId11v1 -> exprnodeExprId13v1;
-    exprnodeExprId11v1[label="*"];
-    exprnodeExprId9v1 -> exprnodeExprId11v1;
-    exprnodeExprId9v1[label="T3 (0.0)"];
+    exprnodeExprId2v1[label="10"];
+    exprnodeExprId5v1 -> exprnodeExprId6v1;
+    exprnodeExprId5v1[label="99"];
     exprnodeExprId10v1 -> exprnodeExprId11v1;
-    exprnodeExprId10v1[label="77"];
-    exprnodeExprId12v1 -> exprnodeExprId13v1;
-    exprnodeExprId12v1[label="S3 (0.0)"];
-    exprnodeExprId13v1 -> "QB_3_selectlist";
-}
-    "QUN_2"[label="T/ ", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_1"[label="S/ ", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_0"[label="R/ ", fillcolor=black, fontcolor=white, style=filled]
-  subgraph cluster_pred_listQB_3 {
-    exprnodeExprId38v1[label="And"];
-    exprnodeExprId32v1 -> exprnodeExprId38v1;
-    exprnodeExprId32v1[label="And"];
-    exprnodeExprId24v1 -> exprnodeExprId32v1;
-    exprnodeExprId24v1[label="And"];
-    exprnodeExprId16v1 -> exprnodeExprId24v1;
-    exprnodeExprId16v1[label="="];
-    exprnodeExprId14v1 -> exprnodeExprId16v1;
-    exprnodeExprId14v1[label="R0 (0.0)"];
+    exprnodeExprId10v1[label="COUNT"];
+    exprnodeExprId9v1 -> exprnodeExprId10v1;
+    exprnodeExprId9v1[label="+"];
+    exprnodeExprId7v1 -> exprnodeExprId9v1;
+    exprnodeExprId7v1[label="AGE (0.0)"];
+    exprnodeExprId8v1 -> exprnodeExprId9v1;
+    exprnodeExprId8v1[label="50"];
+    exprnodeExprId11v1 -> "QB_1_selectlist";
+    exprnodeExprId14v1[label="+: 1"];
+    exprnodeExprId12v1 -> exprnodeExprId14v1;
+    exprnodeExprId12v1[label="DEPT_ID (0.0)"];
+    exprnodeExprId13v1 -> exprnodeExprId14v1;
+    exprnodeExprId13v1[label="55"];
+    exprnodeExprId14v1 -> "QB_1_selectlist";
+    exprnodeExprId16v1[label="AVG: 2"];
     exprnodeExprId15v1 -> exprnodeExprId16v1;
-    exprnodeExprId15v1[label="10"];
-    exprnodeExprId23v1 -> exprnodeExprId24v1;
-    exprnodeExprId23v1[label="="];
-    exprnodeExprId19v1 -> exprnodeExprId23v1;
-    exprnodeExprId19v1[label="+"];
-    exprnodeExprId17v1 -> exprnodeExprId19v1;
-    exprnodeExprId17v1[label="R1 (0.0)"];
-    exprnodeExprId18v1 -> exprnodeExprId19v1;
-    exprnodeExprId18v1[label="1"];
-    exprnodeExprId22v1 -> exprnodeExprId23v1;
-    exprnodeExprId22v1[label="+"];
-    exprnodeExprId20v1 -> exprnodeExprId22v1;
-    exprnodeExprId20v1[label="S2 (0.0)"];
-    exprnodeExprId21v1 -> exprnodeExprId22v1;
-    exprnodeExprId21v1[label="2"];
-    exprnodeExprId31v1 -> exprnodeExprId32v1;
-    exprnodeExprId31v1[label="="];
-    exprnodeExprId27v1 -> exprnodeExprId31v1;
-    exprnodeExprId27v1[label="+"];
-    exprnodeExprId25v1 -> exprnodeExprId27v1;
-    exprnodeExprId25v1[label="R2 (0.0)"];
-    exprnodeExprId26v1 -> exprnodeExprId27v1;
-    exprnodeExprId26v1[label="S2 (0.0)"];
-    exprnodeExprId30v1 -> exprnodeExprId31v1;
-    exprnodeExprId30v1[label="+"];
-    exprnodeExprId28v1 -> exprnodeExprId30v1;
-    exprnodeExprId28v1[label="T3 (0.0)"];
-    exprnodeExprId29v1 -> exprnodeExprId30v1;
-    exprnodeExprId29v1[label="3"];
-    exprnodeExprId37v1 -> exprnodeExprId38v1;
-    exprnodeExprId37v1[label="="];
-    exprnodeExprId35v1 -> exprnodeExprId37v1;
-    exprnodeExprId35v1[label="+"];
-    exprnodeExprId33v1 -> exprnodeExprId35v1;
-    exprnodeExprId33v1[label="R2 (0.0)"];
-    exprnodeExprId34v1 -> exprnodeExprId35v1;
-    exprnodeExprId34v1[label="T2 (0.0)"];
-    exprnodeExprId36v1 -> exprnodeExprId37v1;
-    exprnodeExprId36v1[label="T3 (0.0)"];
-    exprnodeExprId38v1 -> QB_3_pred_list;
-    "QB_3_pred_list"[label="pred_list",shape=box,style=filled];
+    exprnodeExprId15v1[label="AGE (0.0)"];
+    exprnodeExprId16v1 -> "QB_1_selectlist";
 }
-    label = "QB_3 type=Select";
+    "QUN_0"[label="EMP/  #0", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_pred_listQB_1 {
+    exprnodeExprId23v1[label="And"];
+    exprnodeExprId19v1 -> exprnodeExprId23v1;
+    exprnodeExprId19v1[label=">"];
+    exprnodeExprId17v1 -> exprnodeExprId19v1;
+    exprnodeExprId17v1[label="AGE (0.0)"];
+    exprnodeExprId18v1 -> exprnodeExprId19v1;
+    exprnodeExprId18v1[label="50"];
+    exprnodeExprId22v1 -> exprnodeExprId23v1;
+    exprnodeExprId22v1[label="<"];
+    exprnodeExprId20v1 -> exprnodeExprId22v1;
+    exprnodeExprId20v1[label="DEPT_ID (0.0)"];
+    exprnodeExprId21v1 -> exprnodeExprId22v1;
+    exprnodeExprId21v1[label="99"];
+    exprnodeExprId23v1 -> QB_1_pred_list;
+    "QB_1_pred_list"[label="pred_list",shape=box,style=filled];
+}
+  subgraph cluster_group_byQB_1 {
+    "QB_1_group_by"[label="group_by",shape=box,style=filled];
+    exprnodeExprId26v1[label="+: 0"];
+    exprnodeExprId24v1 -> exprnodeExprId26v1;
+    exprnodeExprId24v1[label="DEPT_ID (0.0)"];
+    exprnodeExprId25v1 -> exprnodeExprId26v1;
+    exprnodeExprId25v1[label="55"];
+    exprnodeExprId26v1 -> "QB_1_group_by";
+}
+  subgraph cluster_having_clauseQB_1 {
+    exprnodeExprId36v1[label="And"];
+    exprnodeExprId30v1 -> exprnodeExprId36v1;
+    exprnodeExprId30v1[label=">"];
+    exprnodeExprId28v1 -> exprnodeExprId30v1;
+    exprnodeExprId28v1[label="SUM"];
+    exprnodeExprId27v1 -> exprnodeExprId28v1;
+    exprnodeExprId27v1[label="AGE (0.0)"];
+    exprnodeExprId29v1 -> exprnodeExprId30v1;
+    exprnodeExprId29v1[label="100"];
+    exprnodeExprId35v1 -> exprnodeExprId36v1;
+    exprnodeExprId35v1[label=">"];
+    exprnodeExprId33v1 -> exprnodeExprId35v1;
+    exprnodeExprId33v1[label="+"];
+    exprnodeExprId31v1 -> exprnodeExprId33v1;
+    exprnodeExprId31v1[label="DEPT_ID (0.0)"];
+    exprnodeExprId32v1 -> exprnodeExprId33v1;
+    exprnodeExprId32v1[label="55"];
+    exprnodeExprId34v1 -> exprnodeExprId35v1;
+    exprnodeExprId34v1[label="10"];
+    exprnodeExprId36v1 -> QB_1_having_clause;
+    "QB_1_having_clause"[label="having_clause",shape=box,style=filled];
+}
+    label = "QB_1 type=Select";
 }
 }

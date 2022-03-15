@@ -13,6 +13,6 @@ where r0 = 10
 and r1 + 1 = s2 + 2
 and r2 + s2 = t3 + 3
 and r2 + t2 = t3
-//and r2 > t2
+and r2 != t2
 ;
 

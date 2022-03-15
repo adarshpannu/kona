@@ -36,11 +36,50 @@ pub enum AST {
     },
 }
 
+pub struct QGMMetadata {
+    tabledescmap: HashMap<QunId, Rc<dyn TableDesc>>,
+}
+
+impl QGMMetadata {
+    pub fn new() -> QGMMetadata {
+        QGMMetadata {
+            tabledescmap: HashMap::new(),
+        }
+    }
+
+    pub fn add_tabledesc(&mut self, qunid: QunId, tabledesc: Rc<dyn TableDesc>) {
+        self.tabledescmap.insert(qunid, tabledesc);
+    }
+
+    pub fn get_colname(&self, quncol: QunCol) -> &String {
+        let tabledesc = self.tabledescmap.get(&quncol.0).unwrap();
+        &tabledesc.columns()[quncol.1].name
+    }
+}
+
+impl fmt::Debug for QGMMetadata {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("QGMMetadata").finish()
+    }
+}
+
 #[derive(Debug)]
 pub struct QGM {
-    pub qblock: QueryBlock,
+    pub main_qblock: QueryBlock,
     pub cte_list: Vec<QueryBlockLink>,
-    pub graph: ExprGraph, // arena allocator
+    pub graph: ExprGraph,
+    pub metadata: QGMMetadata,
+}
+
+impl QGM {
+    pub fn new(main_qblock: QueryBlock, cte_list: Vec<QueryBlockLink>, graph: ExprGraph) -> QGM {
+        QGM {
+            main_qblock,
+            cte_list,
+            graph,
+            metadata: QGMMetadata::new()
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -138,10 +177,11 @@ impl Quantifier {
         };
 
         format!(
-            "{}/{} {}",
+            "{}/{} {} #{}",
             self.tablename.as_ref().unwrap_or(&"".to_string()),
             self.alias.as_ref().unwrap_or(&"".to_string()),
-            qbname
+            qbname,
+            self.id
         )
     }
 
@@ -365,7 +405,7 @@ impl QGM {
         //fprint!(file, "    color=lightgrey;\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
 
-        self.qblock.write_qblock_to_graphviz(self, &mut file);
+        self.main_qblock.write_qblock_to_graphviz(self, &mut file);
 
         // Write subqueries (CTEs)
         for qblock in self.cte_list.iter() {
@@ -401,7 +441,9 @@ impl QGM {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
-    fn write_expr_to_graphvis(qgm: &QGM, expr: ExprId, file: &mut File, order_ix: Option<usize>) -> std::io::Result<()> {
+    fn write_expr_to_graphvis(
+        qgm: &QGM, expr: ExprId, file: &mut File, order_ix: Option<usize>,
+    ) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
         let (expr, _, children) = qgm.graph.get3(expr);
         let ix_str = if let Some(ix) = order_ix {

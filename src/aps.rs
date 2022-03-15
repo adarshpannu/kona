@@ -5,10 +5,10 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 
-use crate::includes::*;
 use crate::bitset::*;
-use crate::graph::*;
 use crate::expr::{Expr::*, *};
+use crate::graph::*;
+use crate::includes::*;
 use crate::qgm::*;
 use std::process::Command;
 
@@ -26,7 +26,7 @@ macro_rules! fprint {
 
 #[derive(Debug)]
 pub enum POP {
-    TableScan,
+    TableScan { input_cols: Bitset<QunCol> },
     HashJoin,
     NLJoin,
     Sort,
@@ -36,7 +36,7 @@ pub enum POP {
 #[derive(Debug)]
 pub struct POPProps {
     quns: Bitset<QunId>,
-    cols: Bitset<QunCol>,
+    cols: Bitset<QunCol>, // output cols
     preds: Bitset<ExprId>,
 }
 
@@ -79,10 +79,11 @@ enum PredicateType {
 
 impl APS {
     pub fn find_best_plan(env: &Env, qgm: &mut QGM) -> Result<(), String> {
-        let graph = replace(&mut qgm.graph, Graph::new());
+        //let graph = replace(&mut qgm.graph, Graph::new());
+        let graph = &qgm.graph;
         let mut pop_graph: POPGraph = Graph::new();
 
-        let mainqblock = &qgm.qblock;
+        let mainqblock = &qgm.main_qblock;
         let mut worklist: Vec<POPId> = vec![];
 
         assert!(qgm.cte_list.len() == 0);
@@ -102,6 +103,8 @@ impl APS {
             })
             .for_each(|quncol| all_quncols_bitset.set(quncol));
         let select_list_quncol_bitset = all_quncols_bitset.clone(); // shallow copy
+
+        debug!("select_list_quncols: {:?}", Self::quncols_bitset_to_string(qgm, &select_list_quncol_bitset));
 
         // Process predicates:
         // 1. Classify predicates: pred -> type
@@ -164,28 +167,39 @@ impl APS {
             let mut quns_bitset = all_quns_bitset.clone().clear();
             quns_bitset.set(qun.id);
 
-            // Set cols: find all column references for this qun
-            let mut quncols_bitset = all_quncols_bitset.clone().clear();
+            // Set input cols: find all column references for this qun
+            let mut input_quncols_bitset = all_quncols_bitset.clone().clear();
             qun.get_column_map()
                 .keys()
-                .for_each(|&colid| quncols_bitset.set(QunCol(qun.id, colid)));
+                .for_each(|&colid| input_quncols_bitset.set(QunCol(qun.id, colid)));
 
-            // Set preds: find preds that refer to this qun
+            // Set output cols + preds
+            let mut unbound_quncols_bitset = select_list_quncol_bitset.clone();
+
             let mut preds_bitset = all_preds_bitset.clone().clear();
             pred_map
                 .iter()
                 .for_each(|(&pred_id, (pred_type, quncols_bitset, quns_bitset))| {
-                    if quns_bitset.bitmap.len() == 1 && quns_bitset.get(qun.id) {
-                        preds_bitset.set(pred_id);
-                    };
+                    if quns_bitset.get(qun.id) {
+                        if quns_bitset.bitmap.len() == 1 {
+                            // Set preds: find local preds that refer to this qun
+                            preds_bitset.set(pred_id);
+                        } else {
+                            // Set output columns: Only project cols in the select-list + unbound join preds
+                            unbound_quncols_bitset.bitmap = unbound_quncols_bitset.bitmap | quncols_bitset.bitmap;
+                        }
+                    }
                 });
+
+            let mut output_quncols_bitset = select_list_quncol_bitset.clone();
+            output_quncols_bitset.bitmap = unbound_quncols_bitset.bitmap & input_quncols_bitset.bitmap;
 
             for pred_id in preds_bitset.elements().iter() {
                 pred_map.remove_entry(pred_id);
             }
 
             // Set props
-            let props = POPProps::new(quns_bitset, quncols_bitset, preds_bitset);
+            let props = POPProps::new(quns_bitset, output_quncols_bitset, preds_bitset);
             debug!(
                 "POPNODE quns={:?}, cols={:?}, preds={:?}",
                 &props.quns.elements(),
@@ -193,13 +207,18 @@ impl APS {
                 &props.preds.elements()
             );
 
-            let popnode = pop_graph.add_node_with_props(POP::TableScan, props, None);
+            let popnode = pop_graph.add_node_with_props(
+                POP::TableScan {
+                    input_cols: input_quncols_bitset,
+                },
+                props,
+                None,
+            );
 
             worklist.push(popnode);
         }
 
         let n = mainqblock.quns.len();
-        dbg!(&n);
         for ix in (2..=n).rev() {
             let mut join_status = None;
 
@@ -249,23 +268,30 @@ impl APS {
                         for (pred_id, pred_type) in join_preds {
                             join_bitset.set(pred_id);
                             pred_map.remove_entry(&pred_id);
+                            debug!("Remove pred: {:?}", &pred_id);
                         }
 
                         let mut props = props1.union(&props2);
-                        props.preds.bitmap = props.preds.bitmap | join_bitset.bitmap;
+                        props.preds.bitmap = join_bitset.bitmap;
+
+                        // Compute cols to flow through. Retain all cols in the select-list + unbound preds
+                        let mut colbitmap = select_list_quncol_bitset.clone().bitmap;
+                        for (_, (_, pred_quncol_bitmap, _)) in pred_map.iter() {
+                            colbitmap = colbitmap | pred_quncol_bitmap.bitmap;
+                        }
+                        props.cols.bitmap = colbitmap;
 
                         let join_node =
                             pop_graph.add_node_with_props(POP::HashJoin, props, Some(vec![plan1_id, plan2_id]));
-                        join_status = Some((ix1, ix2, join_node));
+                        join_status = Some((plan1_id, plan2_id, join_node));
 
                         break 'outer;
                     }
                 }
             }
 
-            if let Some((ix1, ix2, join_node)) = join_status {
-                worklist.remove(ix1);
-                worklist.remove(ix2 - 1);
+            if let Some((plan1_id, plan2_id, join_node)) = join_status {
+                worklist.retain(|&elem| (elem != plan1_id && elem != plan2_id));
                 worklist.push(join_node);
             } else {
                 panic!("No join found!!!")
@@ -276,7 +302,7 @@ impl APS {
         let root_pop_id = worklist[0];
 
         let plan_filename = format!("{}/{}", GRAPHVIZDIR, "plan.dot");
-        APS::write_plan_to_graphviz(&pop_graph, root_pop_id, &plan_filename);
+        APS::write_plan_to_graphviz(qgm, &pop_graph, root_pop_id, &plan_filename);
         Ok(())
     }
 
@@ -301,7 +327,9 @@ impl APS {
 }
 
 impl APS {
-    pub(crate) fn write_plan_to_graphviz(pop_graph: &POPGraph, pop_id: POPId, filename: &str) -> std::io::Result<()> {
+    pub(crate) fn write_plan_to_graphviz(
+        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPId, filename: &str,
+    ) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
@@ -309,7 +337,7 @@ impl APS {
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        Self::write_pop_to_graphviz(pop_graph, pop_id, &mut file);
+        Self::write_pop_to_graphviz(qgm, pop_graph, pop_id, &mut file);
 
         fprint!(file, "}}\n");
 
@@ -333,7 +361,38 @@ impl APS {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
-    pub(crate) fn write_pop_to_graphviz(pop_graph: &POPGraph, pop_id: POPId, file: &mut File) -> std::io::Result<()> {
+    fn quncols_bitset_to_string(qgm: &QGM, quncols: &Bitset<QunCol>) -> String {
+        let cols = quncols
+            .elements()
+            .iter()
+            .map(|&quncol| qgm.metadata.get_colname(quncol))
+            .collect::<Vec<&String>>();
+        let mut colstring = String::from("");
+        for col in cols {
+            colstring.push_str(col);
+            colstring.push_str(" ");
+        }
+        colstring
+    }
+
+    fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprId>) -> String {
+        let mut predstring = String::from("{");
+        let preds = preds.elements();
+        for (ix, &pred_id) in preds.iter().enumerate() {
+            debug!("PRED: {:?}", &pred_id);
+            let predstr = Expr::to_string(pred_id, &qgm.graph);
+            predstring.push_str(&predstr);
+            if ix < preds.len() - 1 {
+                predstring.push_str("|")
+            }
+        }
+        predstring.push_str("}");
+        predstring
+    }
+
+    pub(crate) fn write_pop_to_graphviz(
+        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPId, file: &mut File,
+    ) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&pop_id);
         let (pop, props, children) = pop_graph.get3(pop_id);
 
@@ -341,10 +400,30 @@ impl APS {
             for &childid in children.iter().rev() {
                 let childid_name = Self::nodeid_to_str(&childid);
                 fprint!(file, "    popnode{} -> popnode{};\n", childid_name, id);
-                Self::write_pop_to_graphviz(pop_graph, childid, file)?;
+                Self::write_pop_to_graphviz(qgm, pop_graph, childid, file)?;
             }
         }
-        fprint!(file, "    popnode{}[label=\"{:?}|{:?}\"];\n", id, &pop, props.quns.elements());
+        let colstring = Self::quncols_bitset_to_string(qgm, &props.cols);
+        let predstring = Self::preds_bitset_to_string(qgm, &props.preds);
+
+        let (label, extrastr) = match &pop {
+            POP::TableScan { input_cols } => {
+                let input_cols = Self::quncols_bitset_to_string(qgm, &input_cols);
+                (String::from("TableScan"), input_cols)
+            }
+            _ => (format!("{:?}", &pop), String::from("")),
+        };
+
+        fprint!(
+            file,
+            "    popnode{}[label=\"{}|{:?}|{}|{}|(input = {})\"];\n",
+            id,
+            label,
+            props.quns.elements(),
+            colstring,
+            predstring,
+            extrastr
+        );
 
         Ok(())
     }
