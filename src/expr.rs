@@ -1,6 +1,7 @@
 use crate::includes::*;
 use crate::graph::*;
 use crate::row::*;
+use regex::Regex;
 
 use Expr::*;
 use std::fmt;
@@ -103,7 +104,7 @@ impl std::default::Default for ExprProp {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Expr {
-    CID(ColId),
+    CID(QunId, ColId),
     Column {
         prefix: Option<String>,
         colname: String,
@@ -128,7 +129,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID(colid) => format!("CID #{}", *colid),
+            CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
             Column {
                 prefix,
                 colname,
@@ -161,10 +162,10 @@ impl Expr {
         let (expr1, _, children1) = graph.get3(expr_id1);
         let (expr2, _, children2) = graph.get3(expr_id2);
         let shallow_matched = match (expr1, expr2) {
-            (CID(c1), CID(c2)) => c1 == c2,
-            (BinaryExpr(c1), BinaryExpr(c2)) => c1 == c2,
-            (RelExpr(c1), RelExpr(c2)) => c1 == c2,
-            (LogExpr(c1), LogExpr(c2)) => c1 == c2,
+            (CID(qunid1, colid1), CID(qunid2, colid2)) => qunid1 == qunid2 && colid1 == colid2,
+            (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
+            (RelExpr(c1), RelExpr(c2)) => *c1 == *c2,
+            (LogExpr(c1), LogExpr(c2)) => *c1 == *c2,
             (
                 Column {
                     prefix: p1,
@@ -179,7 +180,7 @@ impl Expr {
                     colid: _,
                 },
             ) => p1 == p2 && n1 == n2,
-            (Literal(c1), Literal(c2)) => c1 == c2,
+            (Literal(c1), Literal(c2)) => *c1 == *c2,
             (NegatedExpr, NegatedExpr) => true,
             (BetweenExpr, BetweenExpr) => true,
             (InListExpr, InListExpr) => true,
@@ -206,10 +207,10 @@ impl Expr {
         }
     }
 
-    pub fn to_string(expr_id: ExprId, graph: &ExprGraph) -> String {
+    pub fn to_string(expr_id: ExprId, graph: &ExprGraph, do_escape: bool) -> String {
         let (expr, _, children) = graph.get3(expr_id);
-        match expr {
-            CID(colid) => format!("CID #{}", *colid),
+        let retval = match expr {
+            CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
             Column { prefix, colname, .. } => {
                 if let Some(prefix) = prefix {
                     format!("{}.{}", prefix, colname)
@@ -223,9 +224,9 @@ impl Expr {
                 let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
                 format!(
                     "{} {} {}",
-                    Self::to_string(lhs_id, graph),
+                    Self::to_string(lhs_id, graph, false),
                     op,
-                    Self::to_string(rhs_id, graph)
+                    Self::to_string(rhs_id, graph, false)
                 )
             }
             NegatedExpr => "-".to_string(),
@@ -233,18 +234,18 @@ impl Expr {
                 let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
                 format!(
                     "{} {} {}",
-                    Self::to_string(lhs_id, graph),
+                    Self::to_string(lhs_id, graph, false),
                     op,
-                    Self::to_string(rhs_id, graph)
+                    Self::to_string(rhs_id, graph, false)
                 )
             }
             LogExpr(op) => {
                 let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
                 format!(
                     "{} {} {}",
-                    Self::to_string(lhs_id, graph),
+                    Self::to_string(lhs_id, graph, false),
                     op,
-                    Self::to_string(rhs_id, graph)
+                    Self::to_string(rhs_id, graph, false)
                 )
             }
             BetweenExpr => format!("BETWEEEN"),
@@ -252,12 +253,21 @@ impl Expr {
             InSubqExpr => format!("IN_SUBQ"),
             ExistsExpr => format!("EXISTS"),
             Subquery(qblock) => format!("(subquery)"),
-            AggFunction(aggtype, is_distinct) => format!("{:?}", aggtype),
+            AggFunction(aggtype, is_distinct) => {
+                let child_id = children.unwrap()[0];
+                format!("{:?}({})", aggtype, Self::to_string(child_id, graph, false))
+            },
             ScalarFunction(name) => format!("{}()", name),
             _ => {
                 debug!("todo - {:?}", expr);
                 todo!()
             }
+        };
+        if do_escape {
+            let re = Regex::new(r"([><])").unwrap();
+            re.replace_all(&retval[..], "\\$1").to_string()
+        } else {
+            retval
         }
     }
 }

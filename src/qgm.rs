@@ -51,9 +51,13 @@ impl QGMMetadata {
         self.tabledescmap.insert(qunid, tabledesc);
     }
 
-    pub fn get_colname(&self, quncol: QunCol) -> &String {
-        let tabledesc = self.tabledescmap.get(&quncol.0).unwrap();
-        &tabledesc.columns()[quncol.1].name
+    pub fn get_colname(&self, quncol: QunCol) -> String {
+        if let Some(tabledesc) = self.tabledescmap.get(&quncol.0) {
+            debug!("COLS = {:?}, quncol = {:?}", tabledesc.columns(), quncol);
+            tabledesc.columns()[quncol.1].name.clone()
+        } else {
+            format!("CID({:?})", quncol.1)
+        }
     }
 }
 

@@ -117,6 +117,8 @@ impl QueryBlock {
 
     pub fn split_groupby(&mut self, env: &Env, graph: &mut ExprGraph) -> Result<(), String> {
         if self.group_by.is_some() {
+            let agg_qun_id = graph.next_id();
+
             //let select_list = replace(&mut self.select_list, vec![]);
             let group_by = replace(&mut self.group_by, None).unwrap();
             let group_by_expr_count = group_by.len();
@@ -131,7 +133,14 @@ impl QueryBlock {
 
             // Contruct outer select-list by replacing agg() references with inner columns
             for ne in self.select_list.iter_mut() {
-                Self::transform_groupby_expr(env, graph, &mut inner_select_list, group_by_expr_count, &mut ne.expr_id)?;
+                Self::transform_groupby_expr(
+                    env,
+                    graph,
+                    &mut inner_select_list,
+                    group_by_expr_count,
+                    agg_qun_id,
+                    &mut ne.expr_id,
+                )?;
             }
 
             // Fixup having clause -> outer qb filter
@@ -144,6 +153,7 @@ impl QueryBlock {
                         graph,
                         &mut inner_select_list,
                         group_by_expr_count,
+                        agg_qun_id,
                         &mut new_pred_id,
                     );
                     new_having_clause.push(new_pred_id);
@@ -168,7 +178,7 @@ impl QueryBlock {
                 None,
             );
             let inner_qb = Some(Rc::new(RefCell::new(inner_qb)));
-            let outer_qun = Quantifier::new(graph.next_id(), None, inner_qb, None);
+            let outer_qun = Quantifier::new(agg_qun_id, None, inner_qb, None);
             outer_qb.name = None;
             outer_qb.qbtype = QueryBlockType::GroupBy;
             outer_qb.quns = vec![outer_qun];
@@ -205,7 +215,7 @@ impl QueryBlock {
     // transform_groupby_expr: Traverse expression `expr_id` (which is part of aggregate qb select list) such that any subexpressions are replaced with
     // corresponding references to inner/select qb select-list using CID#
     pub fn transform_groupby_expr(
-        env: &Env, graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
+        env: &Env, graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId,
         expr_id: &mut ExprId,
     ) -> Result<(), String> {
         let node = graph.get(*expr_id);
@@ -215,18 +225,18 @@ impl QueryBlock {
             let cid = Self::append(graph, select_list, child_id);
             let new_child_id = if aggtype == AggType::AVG {
                 // AVG -> SUM / COUNT
-                let cid = graph.add_node(CID(cid), None);
+                let cid = graph.add_node(CID(qunid, cid), None);
                 let sum = graph.add_node(AggFunction(AggType::SUM, false), Some(vec![cid]));
                 let cnt = graph.add_node(AggFunction(AggType::COUNT, false), Some(vec![cid]));
                 graph.add_node(BinaryExpr(ArithOp::Div), Some(vec![sum, cnt]))
             } else {
-                graph.add_node(CID(cid), None)
+                graph.add_node(CID(qunid, cid), None)
             };
             let node = graph.get_mut(*expr_id);
             node.children = Some(vec![new_child_id]);
         } else if let Some(cid) = Self::find(&graph, &select_list, group_by_expr_count, *expr_id) {
             // Expression in GROUP-BY list, all good
-            let new_child_id = graph.add_node(CID(cid), None);
+            let new_child_id = graph.add_node(CID(qunid, cid), None);
             *expr_id = new_child_id;
         } else if let Column {
             prefix,
@@ -243,7 +253,7 @@ impl QueryBlock {
         } else if let Some(mut children) = node.children.clone() {
             let mut children2 = vec![];
             for child_id in children.iter_mut() {
-                Self::transform_groupby_expr(env, graph, select_list, group_by_expr_count, child_id)?;
+                Self::transform_groupby_expr(env, graph, select_list, group_by_expr_count, qunid, child_id)?;
                 children2.push(*child_id);
             }
             let node = graph.get_mut(*expr_id);
@@ -337,7 +347,7 @@ impl QueryBlock {
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
-            CID(_) => node.properties.datatype,
+            CID(_, _) => node.properties.datatype,
             RelExpr(relop) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
@@ -364,7 +374,8 @@ impl QueryBlock {
                 let (quncol, datatype, qtuple_ix) =
                     self.resolve_column(env, colid_dispenser, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
-                *colid = quncol.1; /// FIXME - No longer using qtuple!! *colid =  qtuple_ix;
+                *colid = quncol.1;
+                /// FIXME - No longer using qtuple!! *colid =  qtuple_ix;
                 //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
                 datatype
             }

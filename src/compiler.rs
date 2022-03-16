@@ -61,7 +61,7 @@ impl Expr {
     pub fn eval<'a>(graph: &ExprGraph, expr_id: ExprId, row: &'a Row) -> Datum {
         let (expr, _, children) = &graph.get3(expr_id);
         match expr {
-            CID(ix) => row.get_column(*ix).clone(),
+            CID(qunid, colid) => row.get_column(*colid).clone(),
             Column { prefix, colname, qunid, colid} => row.get_column(*colid).clone(),
             Literal(lit) => lit.clone(),
             RelExpr(op) => {

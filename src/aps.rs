@@ -104,7 +104,10 @@ impl APS {
             .for_each(|quncol| all_quncols_bitset.set(quncol));
         let select_list_quncol_bitset = all_quncols_bitset.clone(); // shallow copy
 
-        debug!("select_list_quncols: {:?}", Self::quncols_bitset_to_string(qgm, &select_list_quncol_bitset));
+        debug!(
+            "select_list_quncols: {:?}",
+            Self::quncols_bitset_to_string(qgm, &select_list_quncol_bitset)
+        );
 
         // Process predicates:
         // 1. Classify predicates: pred -> type
@@ -151,7 +154,7 @@ impl APS {
                 debug!(
                     "Predicate {:?}: {}, quns={:?}, type={:?}",
                     pred_id,
-                    Expr::to_string(pred_id, &graph),
+                    Expr::to_string(pred_id, &graph, false),
                     &quns,
                     pred_type
                 );
@@ -172,6 +175,12 @@ impl APS {
             qun.get_column_map()
                 .keys()
                 .for_each(|&colid| input_quncols_bitset.set(QunCol(qun.id, colid)));
+
+            debug!(
+                "input_quncols_bitset for qun = {}: {:?}",
+                qun.id,
+                Self::quncols_bitset_to_string(qgm, &input_quncols_bitset)
+            );
 
             // Set output cols + preds
             let mut unbound_quncols_bitset = select_list_quncol_bitset.clone();
@@ -309,12 +318,10 @@ impl APS {
     pub fn get_expr_quncols(graph: &ExprGraph, root_node_id: ExprId) -> HashSet<QunCol> {
         let qun_col_pairs: HashSet<QunCol> = graph
             .iter(root_node_id)
-            .filter_map(|nodeid| {
-                if let Column { qunid, colid, .. } = &graph.get(nodeid).contents {
-                    Some(QunCol(*qunid, *colid))
-                } else {
-                    None
-                }
+            .filter_map(|nodeid| match &graph.get(nodeid).contents {
+                Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
+                CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
+                _ => None,
             })
             .collect();
         qun_col_pairs
@@ -366,21 +373,21 @@ impl APS {
             .elements()
             .iter()
             .map(|&quncol| qgm.metadata.get_colname(quncol))
-            .collect::<Vec<&String>>();
+            .collect::<Vec<String>>();
         let mut colstring = String::from("");
         for col in cols {
-            colstring.push_str(col);
+            colstring.push_str(&col);
             colstring.push_str(" ");
         }
         colstring
     }
 
-    fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprId>) -> String {
+    fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprId>, do_escape: bool) -> String {
         let mut predstring = String::from("{");
         let preds = preds.elements();
         for (ix, &pred_id) in preds.iter().enumerate() {
             debug!("PRED: {:?}", &pred_id);
-            let predstr = Expr::to_string(pred_id, &qgm.graph);
+            let predstr = Expr::to_string(pred_id, &qgm.graph, do_escape);
             predstring.push_str(&predstr);
             if ix < preds.len() - 1 {
                 predstring.push_str("|")
@@ -404,7 +411,7 @@ impl APS {
             }
         }
         let colstring = Self::quncols_bitset_to_string(qgm, &props.cols);
-        let predstring = Self::preds_bitset_to_string(qgm, &props.preds);
+        let predstring = Self::preds_bitset_to_string(qgm, &props.preds, true);
 
         let (label, extrastr) = match &pop {
             POP::TableScan { input_cols } => {
