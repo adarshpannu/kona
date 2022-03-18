@@ -96,11 +96,7 @@ impl APS {
         mainqblock
             .select_list
             .iter()
-            .flat_map(|ne| {
-                Self::get_expr_quncols(&graph, ne.expr_id)
-                    .into_iter()
-                    .collect::<Vec<QunCol>>()
-            })
+            .flat_map(|ne| ne.expr_id.iter_quncols(&graph))
             .for_each(|quncol| all_quncols_bitset.set(quncol));
         let select_list_quncol_bitset = all_quncols_bitset.clone(); // shallow copy
 
@@ -116,23 +112,22 @@ impl APS {
         let mut pred_map: HashMap<ExprId, (PredicateType, Bitset<QunCol>, Bitset<QunId>)> = HashMap::new();
 
         if let Some(pred_list) = mainqblock.pred_list.as_ref() {
-            for (pred_ix, &pred_id) in pred_list.iter().enumerate() {
+            for &pred_id in pred_list.iter() {
                 let mut quncols_bitset = all_quncols_bitset.clone().clear();
-                let quncols = Self::get_expr_quncols(&graph, pred_id);
-                quncols.iter().for_each(|&quncol| {
+                let mut quns_bitset = all_quns_bitset.clone().clear();
+
+                for quncol in pred_id.iter_quncols(&graph) {
                     quncols_bitset.set(quncol);
                     all_quncols_bitset.set(quncol);
-                });
 
-                let mut quns_bitset = all_quns_bitset.clone().clear();
-                let quns: HashSet<QunId> = quncols.iter().map(|quncol| quncol.0).collect();
-                quns.iter().for_each(|&qun| quns_bitset.set(qun));
+                    quns_bitset.set(quncol.0);
+                }
 
                 let mut pred_type;
-                if quns.len() == 0 {
+                if quns_bitset.len() == 0 {
                     // Constant
                     pred_type = PredicateType::Constant
-                } else if quns.len() == 1 {
+                } else if quns_bitset.len() == 1 {
                     pred_type = PredicateType::Local
                 } else {
                     // Join
@@ -140,8 +135,8 @@ impl APS {
                     if let RelExpr(RelOp::Eq) = expr.contents {
                         let children = expr.children.as_ref().unwrap();
                         let (left_child_id, right_child_id) = (children[0], children[1]);
-                        let left_quns = Self::get_expr_quns(&graph, left_child_id);
-                        let right_quns = Self::get_expr_quns(&graph, right_child_id);
+                        let left_quns: HashSet<QunId> = left_child_id.iter_quns(&graph).collect();
+                        let right_quns: HashSet<QunId> = right_child_id.iter_quns(&graph).collect();
                         if left_quns.intersection(&right_quns).collect::<HashSet<_>>().len() == 0 {
                             pred_type = PredicateType::EquiJoin
                         } else {
@@ -155,7 +150,7 @@ impl APS {
                     "Predicate {:?}: {}, quns={:?}, type={:?}",
                     pred_id,
                     Expr::to_string(pred_id, &graph, false),
-                    &quns,
+                    &quns_bitset,
                     pred_type
                 );
                 pred_map.insert(pred_id, (pred_type, quncols_bitset, quns_bitset));
@@ -288,7 +283,7 @@ impl APS {
                         for (_, (_, pred_quncol_bitmap, _)) in pred_map.iter() {
                             colbitmap = colbitmap | pred_quncol_bitmap.bitmap;
                         }
-                        props.cols.bitmap = colbitmap;
+                        props.cols.bitmap = (props.cols.bitmap & colbitmap);
 
                         let join_node =
                             pop_graph.add_node_with_props(POP::HashJoin, props, Some(vec![plan1_id, plan2_id]));
@@ -314,22 +309,22 @@ impl APS {
         APS::write_plan_to_graphviz(qgm, &pop_graph, root_pop_id, &plan_filename);
         Ok(())
     }
+}
 
-    pub fn get_expr_quncols(graph: &ExprGraph, root_node_id: ExprId) -> HashSet<QunCol> {
-        let qun_col_pairs: HashSet<QunCol> = graph
-            .iter(root_node_id)
-            .filter_map(|nodeid| match &graph.get(nodeid).contents {
+impl ExprId {
+    pub fn iter_quncols<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
+        let it = graph
+            .iter(*self)
+            .filter_map(move |nodeid| match &graph.get(nodeid).contents {
                 Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
                 CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
                 _ => None,
-            })
-            .collect();
-        qun_col_pairs
+            });
+        Box::new(it)
     }
 
-    pub fn get_expr_quns(graph: &ExprGraph, root_node_id: ExprId) -> HashSet<QunId> {
-        let qun_col_pairs = Self::get_expr_quncols(graph, root_node_id);
-        qun_col_pairs.iter().map(|quncol| quncol.0).collect()
+    pub fn iter_quns<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunId> + 'g> {
+        Box::new(self.iter_quncols(graph).map(|quncol| quncol.0))
     }
 }
 

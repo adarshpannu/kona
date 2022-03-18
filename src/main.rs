@@ -1,6 +1,11 @@
 #![allow(warnings)]
 
+use std::collections::HashMap;
+use std::fs;
+use task::ThreadPool;
+
 use crate::includes::*;
+use clp::CLParser;
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -27,19 +32,13 @@ pub mod csv;
 pub mod flow;
 pub mod row;
 pub mod task;
-
-use clp::CLParser;
-
-use qgm::*;
-use flow::*;
-use metadata::*;
-use aps::*;
-
 pub mod scratch;
 
-use std::collections::HashMap;
-use std::fs;
-use task::ThreadPool;
+use qgm::*;
+use metadata::*;
+use compiler::*;
+use aps::*;
+use flow::*;
 
 pub struct Env {
     thread_pool: ThreadPool,
@@ -206,8 +205,8 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.fsql";
-    //let filename = "/Users/adarshrp/tmp/first.sql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
+    //let filename = "/Users/adarshrp/tmp/rst.sql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {

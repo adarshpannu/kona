@@ -7,6 +7,8 @@ DESCRIBE TABLE R;
 DESCRIBE TABLE S;
 DESCRIBE TABLE T;
 
+SET PARSE_ONLY = "TRUE";
+
 select r2 / r0, 88 * (r2 + t2), (t3 * 77) / s3
 from R, S, T
 where r0 = 10

@@ -36,6 +36,13 @@ pub enum AST {
     },
 }
 
+pub enum UIE {
+    Union,
+    UnionAll,
+    Intersect,
+    Except
+}
+
 pub struct QGMMetadata {
     tabledescmap: HashMap<QunId, Rc<dyn TableDesc>>,
 }
@@ -83,6 +90,11 @@ impl QGM {
             graph,
             metadata: QGMMetadata::new()
         }
+    }
+
+    pub fn populate_metadata(&mut self) {
+        let mut metadata = &self.metadata;
+
     }
 }
 
@@ -468,3 +480,29 @@ impl QGM {
         Ok(())
     }
 }
+
+/*
+pub struct QueryBlockIter<'a> {
+    queue: Vec<&'a QueryBlock>
+}
+
+impl<'a> Iterator for QueryBlockIter<'a> {
+    type Item = &'a QueryBlock;
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
+impl QGM {
+    pub fn iter_qblock(&self) -> QueryBlockIter {
+        let mut queue = vec![&self.main_qblock];
+        for cte in self.cte_list.iter() {
+            let qblock = &*cte.borrow();
+            queue.push(qblock);
+        }
+
+        QueryBlockIter { queue }
+    }
+}
+*/
+

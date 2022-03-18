@@ -66,10 +66,17 @@ where
 
     pub fn elements(&self) -> Vec<T> {
         let bitmap = self.bitmap.clone();
-        bitmap.into_iter().map(|ix| {
-            let rev_dict = (*self.rev_dict).borrow();
-            *rev_dict.get(&ix).unwrap()
-        }).collect()
+        bitmap
+            .into_iter()
+            .map(|ix| {
+                let rev_dict = (*self.rev_dict).borrow();
+                *rev_dict.get(&ix).unwrap()
+            })
+            .collect()
+    }
+
+    pub fn len(&self) -> usize {
+        self.bitmap.len()
     }
 }
 
@@ -86,3 +93,62 @@ where
         }
     }
 }
+
+use std::ops::BitOrAssign;
+use std::ops::BitAndAssign;
+use std::ops::BitAnd;
+use std::ops::BitOr;
+
+impl<'a, T> BitOrAssign<&'a Bitset<T>> for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    fn bitor_assign(&mut self, rhs: &'a Bitset<T>) {
+        self.bitmap |= rhs.bitmap;
+    }
+}
+
+impl<'a, T> BitAnd<&'a Bitset<T>> for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    type Output = Self;
+
+    // rhs is the "right-hand side" of the expression `a & b`
+    fn bitand(self, rhs: &'a Bitset<T>) -> Self::Output {
+        let mut other = self.clone();
+        other.bitmap &= rhs.bitmap;
+        other
+    }
+}
+
+impl<'a, T> BitOr<&'a Bitset<T>> for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    type Output = Self;
+
+    // rhs is the "right-hand side" of the expression `a & b`
+    fn bitor(self, rhs: &'a Bitset<T>) -> Self::Output {
+        let mut other = self.clone();
+        other.bitmap |= rhs.bitmap;
+        other
+    }
+}
+
+
+
+impl<'a, T> BitAnd<&'a Bitset<T>> for &'a Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    type Output = Bitset<T>;
+
+    // rhs is the "right-hand side" of the expression `a & b`
+    fn bitand(self, rhs: &'a Bitset<T>) -> Self::Output {
+        let mut other = self.clone();
+        other.bitmap &= rhs.bitmap;
+        other
+    }
+}
+
