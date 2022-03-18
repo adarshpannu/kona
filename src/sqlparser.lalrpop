@@ -6,7 +6,7 @@ use crate::includes::*;
 use crate::expr::{Expr::*, *};
 use crate::row::*;
 use crate::qgm::*;
-use crate::graph::{Graph, ExprId};
+use crate::graph::{Graph, ExprKey};
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::qgm::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
@@ -139,7 +139,7 @@ pub UIE: UIE = {
 
 pub SUIEQuery = {
     SimpleSelect,
-    
+
 }
 
 // -------------------- QUERY --------------------
@@ -208,7 +208,7 @@ HavingClause = "HAVING" <LogExpr>;
 
 OrderByClause = "ORDER" "BY" <CommaSeparatedList<OrderCol>>;
 
-OrderCol: (ExprId, Ordering) = <e:Expr> <o:OrderSort?> => (e, o.unwrap_or(Ordering::Asc));
+OrderCol: (ExprKey, Ordering) = <e:Expr> <o:OrderSort?> => (e, o.unwrap_or(Ordering::Asc));
 
 OrderSort: Ordering = {
     "ASC" => Ordering::Asc,
@@ -234,17 +234,17 @@ NamedExpr: NamedExpr = {
     <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr, &parser_state.graph)
 }
 
-pub LogExpr: ExprId = {
+pub LogExpr: ExprKey = {
     <LogExprFactor>,
     <l:LogExpr> "OR" <r:LogExprFactor> => parser_state.graph.add_node(LogExpr(LogOp::Or), Some(vec![l, r]))
 }
 
-LogExprFactor: ExprId = {
+LogExprFactor: ExprKey = {
     <l:LogExprFactor> "AND" <r:RelExpr> => parser_state.graph.add_node(LogExpr(LogOp::And), Some(vec![l, r])),
     RelExpr,
 }
 
-RelExpr: ExprId = {
+RelExpr: ExprKey = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => parser_state.graph.add_node(RelExpr(op), Some(vec![l, r])),
     <l:Expr> "IS" <not:"NOT"?> "NULL" => {
         let r = parser_state.graph.add_node(Literal(Datum::NULL), None);
@@ -288,7 +288,7 @@ RelExpr: ExprId = {
     "(" <LogExpr> ")",
 }
 
-RelExprRHS: ExprId = {
+RelExprRHS: ExprKey = {
     <rhs:Expr> => rhs,
     <prefix:SubqueryQuantifier> <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
 }
@@ -303,7 +303,7 @@ RelOp: RelOp = {
     "=" => RelOp::Eq,
 }
 
-InExprRHS: (bool, Vec<ExprId>) = {
+InExprRHS: (bool, Vec<ExprKey>) = {
     <subq:Subquery> => (true, vec![parser_state.graph.add_node(Subquery(subq), None)]),
     "(" <InList> ")" => (false, <>)
 }
@@ -315,19 +315,19 @@ SubqueryQuantifier = {
     "ANY",
 }
 
-pub Expr: ExprId = {
+pub Expr: ExprKey = {
     <l:Expr> "+" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Add), Some(vec!(l, r))),
     <l:Expr> "-" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Sub), Some(vec!(l, r))),
     Factor,
 }
 
-Factor: ExprId = {
+Factor: ExprKey = {
     <l:Factor> "*" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Mul), Some(vec!(l, r))),
     <l:Factor> "/" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Div), Some(vec!(l, r))),
     Term,
 }
 
-Term: ExprId = {
+Term: ExprKey = {
     <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1, qunid: 0, colid: 0 }, None),
     QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
     Number,
@@ -338,7 +338,7 @@ Term: ExprId = {
     <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
 }
 
-AggFunction: ExprId = {
+AggFunction: ExprKey = {
     <aggtype:AggName> "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
         parser_state.graph.add_node(AggFunction(aggtype, distinct.is_some()), Some(vec![arg]))
 
@@ -353,12 +353,12 @@ AggName: AggType = {
     "COUNT" => AggType::COUNT,
 }
 
-AggArg: ExprId = {
+AggArg: ExprKey = {
     <arg:Expr> => arg,
     "*" => parser_state.graph.add_node(Star, None)
 }
 
-ScalarFunction: ExprId = {
+ScalarFunction: ExprKey = {
     <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.graph.add_node(ScalarFunction(name), Some(args)),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
         let datatype = parser_state.graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
@@ -369,7 +369,7 @@ ScalarFunction: ExprId = {
 
 FunctionArgs = CommaSeparatedList<Expr>;
 
-Number: ExprId = {
+Number: ExprKey = {
     Integer =>? { isize::from_str(<>)
         .map(|i| parser_state.graph.add_node(Literal(Datum::INT(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 

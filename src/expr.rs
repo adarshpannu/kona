@@ -6,7 +6,7 @@ use regex::Regex;
 use Expr::*;
 use std::fmt;
 
-pub type ExprGraph = Graph<ExprId, Expr, ExprProp>;
+pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
@@ -158,7 +158,7 @@ impl Expr {
         }
     }
 
-    pub fn isomorphic(graph: &ExprGraph, expr_id1: ExprId, expr_id2: ExprId) -> bool {
+    pub fn isomorphic(graph: &ExprGraph, expr_id1: ExprKey, expr_id2: ExprKey) -> bool {
         let (expr1, _, children1) = graph.get3(expr_id1);
         let (expr2, _, children2) = graph.get3(expr_id2);
         let shallow_matched = match (expr1, expr2) {
@@ -207,7 +207,7 @@ impl Expr {
         }
     }
 
-    pub fn to_string(expr_id: ExprId, graph: &ExprGraph, do_escape: bool) -> String {
+    pub fn to_string(expr_id: ExprKey, graph: &ExprGraph, do_escape: bool) -> String {
         let (expr, _, children) = graph.get3(expr_id);
         let retval = match expr {
             CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),

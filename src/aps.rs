@@ -12,7 +12,7 @@ use crate::includes::*;
 use crate::qgm::*;
 use std::process::Command;
 
-type POPGraph = Graph<POPId, POP, POPProps>;
+type POPGraph = Graph<POPKey, POP, POPProps>;
 
 pub struct APS;
 
@@ -37,11 +37,11 @@ pub enum POP {
 pub struct POPProps {
     quns: Bitset<QunId>,
     cols: Bitset<QunCol>, // output cols
-    preds: Bitset<ExprId>,
+    preds: Bitset<ExprKey>,
 }
 
 impl POPProps {
-    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprId>) -> Self {
+    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>) -> Self {
         POPProps { quns, cols, preds }
     }
 
@@ -84,13 +84,13 @@ impl APS {
         let mut pop_graph: POPGraph = Graph::new();
 
         let mainqblock = &qgm.main_qblock;
-        let mut worklist: Vec<POPId> = vec![];
+        let mut worklist: Vec<POPKey> = vec![];
 
         assert!(qgm.cte_list.len() == 0);
 
         let mut all_quncols_bitset: Bitset<QunCol> = Bitset::new();
         let mut all_quns_bitset: Bitset<QunId> = Bitset::new();
-        let mut all_preds_bitset: Bitset<ExprId> = Bitset::new();
+        let mut all_preds_bitset: Bitset<ExprKey> = Bitset::new();
 
         // Process select-list: Collect all QunCols
         mainqblock
@@ -109,7 +109,7 @@ impl APS {
         // 1. Classify predicates: pred -> type
         // 2. Collect QunCols for each predicates: pred -> set(QunCol)
         // 3. Collect quns for each predicates: pred -> set(Qun)
-        let mut pred_map: HashMap<ExprId, (PredicateType, Bitset<QunCol>, Bitset<QunId>)> = HashMap::new();
+        let mut pred_map: HashMap<ExprKey, (PredicateType, Bitset<QunCol>, Bitset<QunId>)> = HashMap::new();
 
         if let Some(pred_list) = mainqblock.pred_list.as_ref() {
             for &pred_id in pred_list.iter() {
@@ -244,7 +244,7 @@ impl APS {
                     // P1.quns should be superset of LHS quns
                     // P2.quns should be superset of RHS quns
                     let mut found_equijoin = false;
-                    let join_preds: Vec<(ExprId, PredicateType)> = pred_map
+                    let join_preds: Vec<(ExprKey, PredicateType)> = pred_map
                         .iter()
                         .filter_map(|(pred_id, (pred_type, quncols_bitset, quns_bitset))| {
                             let pred_quns_bitmap = quns_bitset.bitmap;
@@ -311,7 +311,7 @@ impl APS {
     }
 }
 
-impl ExprId {
+impl ExprKey {
     pub fn iter_quncols<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
         let it = graph
             .iter(*self)
@@ -330,7 +330,7 @@ impl ExprId {
 
 impl APS {
     pub(crate) fn write_plan_to_graphviz(
-        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPId, filename: &str,
+        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPKey, filename: &str,
     ) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
@@ -359,7 +359,7 @@ impl APS {
         Ok(())
     }
 
-    fn nodeid_to_str(nodeid: &POPId) -> String {
+    fn nodeid_to_str(nodeid: &POPKey) -> String {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
@@ -377,7 +377,7 @@ impl APS {
         colstring
     }
 
-    fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprId>, do_escape: bool) -> String {
+    fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprKey>, do_escape: bool) -> String {
         let mut predstring = String::from("{");
         let preds = preds.elements();
         for (ix, &pred_id) in preds.iter().enumerate() {
@@ -393,7 +393,7 @@ impl APS {
     }
 
     pub(crate) fn write_pop_to_graphviz(
-        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPId, file: &mut File,
+        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPKey, file: &mut File,
     ) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&pop_id);
         let (pop, props, children) = pop_graph.get3(pop_id);

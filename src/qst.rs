@@ -1,7 +1,7 @@
 // QST: Query Semantic Transforms
 
 use crate::expr::{Expr::*, *};
-use crate::graph::{ExprId, Graph};
+use crate::graph::{ExprKey, Graph};
 use crate::qgm::*;
 use crate::row::{DataType, Datum};
 
@@ -188,7 +188,7 @@ impl QueryBlock {
     }
 
     fn find(
-        graph: &ExprGraph, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: ExprId,
+        graph: &ExprGraph, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_id: ExprKey,
     ) -> Option<usize> {
         // Does this expression already exist in the select_list[..until_index]?
         for (ix, ne) in select_list.iter().enumerate() {
@@ -201,7 +201,7 @@ impl QueryBlock {
         None
     }
 
-    fn append(graph: &ExprGraph, select_list: &mut Vec<NamedExpr>, expr_id: ExprId) -> usize {
+    fn append(graph: &ExprGraph, select_list: &mut Vec<NamedExpr>, expr_id: ExprKey) -> usize {
         // Does this expression already exist in the select_list?
         if let Some(ix) = Self::find(graph, select_list, select_list.len(), expr_id) {
             // ... yes, return its index
@@ -216,7 +216,7 @@ impl QueryBlock {
     // corresponding references to inner/select qb select-list using CID#
     pub fn transform_groupby_expr(
         env: &Env, graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId,
-        expr_id: &mut ExprId,
+        expr_id: &mut ExprKey,
     ) -> Result<(), String> {
         let node = graph.get(*expr_id);
         if let AggFunction(aggtype, _) = node.contents {
@@ -316,7 +316,7 @@ impl QueryBlock {
 
     pub fn resolve_expr(
         &self, env: &Env, graph: &mut ExprGraph, metadata: &mut QGMMetadata,
-        colid_dispenser: &mut QueryBlockColidDispenser, expr_id: ExprId, agg_fns_allowed: bool,
+        colid_dispenser: &mut QueryBlockColidDispenser, expr_id: ExprKey, agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = graph.get(expr_id).contents {
             // Nested aggregate functions not allowed
@@ -409,7 +409,7 @@ impl QueryBlock {
         Ok(datatype)
     }
 
-    pub fn get_boolean_factors(graph: &ExprGraph, pred_id: ExprId, boolean_factors: &mut Vec<ExprId>) {
+    pub fn get_boolean_factors(graph: &ExprGraph, pred_id: ExprKey, boolean_factors: &mut Vec<ExprKey>) {
         let (expr, _, children) = graph.get3(pred_id);
         if let LogExpr(crate::expr::LogOp::And) = expr {
             let children = children.unwrap();

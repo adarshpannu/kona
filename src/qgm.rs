@@ -101,11 +101,11 @@ impl QGM {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NamedExpr {
     pub alias: Option<String>,
-    pub expr_id: ExprId,
+    pub expr_id: ExprKey,
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_id: ExprId, graph: &ExprGraph) -> Self {
+    pub fn new(alias: Option<String>, expr_id: ExprKey, graph: &ExprGraph) -> Self {
         let expr = &graph.get(expr_id).contents;
         let mut alias = alias;
         if alias.is_none() {
@@ -132,7 +132,7 @@ pub enum QueryBlockType {
     GroupBy,
 }
 
-pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprId>);
+pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprKey>);
 
 #[derive(Serialize, Deserialize)]
 pub struct Quantifier {
@@ -140,7 +140,7 @@ pub struct Quantifier {
     pub tablename: Option<String>,
     pub qblock: Option<QueryBlockLink>,
     pub alias: Option<String>,
-    pub pred_list: Option<ExprId>,
+    pub pred_list: Option<ExprKey>,
 
     #[serde(skip)]
     pub tabledesc: Option<Rc<dyn TableDesc>>,
@@ -229,10 +229,10 @@ pub struct QueryBlock {
     pub qbtype: QueryBlockType,
     pub select_list: Vec<NamedExpr>,
     pub quns: Vec<Quantifier>,
-    pub pred_list: Option<Vec<ExprId>>,
-    pub group_by: Option<Vec<ExprId>>,
-    pub having_clause: Option<Vec<ExprId>>,
-    pub order_by: Option<Vec<(ExprId, Ordering)>>,
+    pub pred_list: Option<Vec<ExprKey>>,
+    pub group_by: Option<Vec<ExprKey>>,
+    pub having_clause: Option<Vec<ExprKey>>,
+    pub order_by: Option<Vec<(ExprKey, Ordering)>>,
     pub distinct: DistinctProperty,
     pub topN: Option<usize>,
 }
@@ -240,8 +240,8 @@ pub struct QueryBlock {
 impl QueryBlock {
     pub fn new(
         id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Option<Vec<ExprId>>, group_by: Option<Vec<ExprId>>, having_clause: Option<Vec<ExprId>>,
-        order_by: Option<Vec<(ExprId, Ordering)>>, distinct: DistinctProperty, topN: Option<usize>,
+        pred_list: Option<Vec<ExprKey>>, group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>,
+        order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty, topN: Option<usize>,
     ) -> Self {
         QueryBlock {
             id,
@@ -453,12 +453,12 @@ impl QGM {
         Ok(())
     }
 
-    fn nodeid_to_str(nodeid: &ExprId) -> String {
+    fn nodeid_to_str(nodeid: &ExprKey) -> String {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
     fn write_expr_to_graphvis(
-        qgm: &QGM, expr: ExprId, file: &mut File, order_ix: Option<usize>,
+        qgm: &QGM, expr: ExprKey, file: &mut File, order_ix: Option<usize>,
     ) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
         let (expr, _, children) = qgm.graph.get3(expr);

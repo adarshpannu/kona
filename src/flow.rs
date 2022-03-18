@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::io::Write;
 use std::rc::Rc;
 
-use crate::graph::{Graph, ExprId};
+use crate::graph::{Graph, ExprKey};
 
 use crate::graphviz::htmlify;
 use crate::metadata::CSVDesc;
@@ -45,7 +45,7 @@ impl FlowNode {
 
 /***************************************************************************************************/
 impl FlowNode {
-    pub fn emit<'a>(&self, arena: &'a NodeArena, select_list: Vec<ExprId>) -> &'a FlowNode {
+    pub fn emit<'a>(&self, arena: &'a NodeArena, select_list: Vec<ExprKey>) -> &'a FlowNode {
         let npartitions = self.npartitions;
         let retval = FlowNode::new(&arena, vec![self.id()], npartitions, EmitNode::new(select_list));
         retval
@@ -57,7 +57,7 @@ impl FlowNode {
         retval
     }
 
-    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_id: ExprId) -> &'a FlowNode {
+    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_id: ExprKey) -> &'a FlowNode {
         let npartitions = self.npartitions;
         let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr_id));
         retval
@@ -313,7 +313,7 @@ impl ProjectNode {}
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 struct FilterNode {
-    expr: ExprId,
+    expr: ExprKey,
 }
 
 impl FilterNode {
@@ -335,7 +335,7 @@ impl FilterNode {
 }
 
 impl FilterNode {
-    fn new(expr: ExprId) -> NodeInner {
+    fn new(expr: ExprKey) -> NodeInner {
         NodeInner::FilterNode(FilterNode { expr })
     }
 }
@@ -467,11 +467,11 @@ impl AggNode {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 struct EmitNode {
-    select_list: Vec<ExprId>,
+    select_list: Vec<ExprKey>,
 }
 
 impl EmitNode {
-    fn new(select_list: Vec<ExprId>) -> NodeInner {
+    fn new(select_list: Vec<ExprKey>) -> NodeInner {
         NodeInner::EmitNode(EmitNode { select_list })
     }
 

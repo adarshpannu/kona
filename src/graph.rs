@@ -1,8 +1,8 @@
 use crate::includes::*;
 use slotmap::{new_key_type, SlotMap};
 
-new_key_type! { pub struct ExprId; }
-new_key_type! { pub struct POPId; }
+new_key_type! { pub struct ExprKey; }
+new_key_type! { pub struct POPKey; }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node<K, T, P>
