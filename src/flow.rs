@@ -57,9 +57,9 @@ impl FlowNode {
         retval
     }
 
-    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_id: ExprKey) -> &'a FlowNode {
+    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_key: ExprKey) -> &'a FlowNode {
         let npartitions = self.npartitions;
-        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr_id));
+        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr_key));
         retval
     }
 
@@ -484,8 +484,8 @@ impl EmitNode {
             let row = supernode.child(flow, 0).next(flow, stage, task, false);
             if let Some(row) = row.as_ref() {
                 // Compute select-list
-                let projcols: Vec<Datum> = self.select_list.iter().map(|&expr_id| {
-                    Expr::eval(&flow.graph, expr_id, &task.task_row)
+                let projcols: Vec<Datum> = self.select_list.iter().map(|&expr_key| {
+                    Expr::eval(&flow.graph, expr_key, &task.task_row)
                 }).collect();
                 let row = Row::from(projcols);
                 debug!("emit: {}", row);

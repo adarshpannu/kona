@@ -128,12 +128,12 @@ impl QGM {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NamedExpr {
     pub alias: Option<String>,
-    pub expr_id: ExprKey,
+    pub expr_key: ExprKey,
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_id: ExprKey, graph: &ExprGraph) -> Self {
-        let expr = &graph.get(expr_id).value;
+    pub fn new(alias: Option<String>, expr_key: ExprKey, graph: &ExprGraph) -> Self {
+        let expr = &graph.get(expr_key).value;
         let mut alias = alias;
         if alias.is_none() {
             if let Expr::Column {
@@ -149,7 +149,7 @@ impl NamedExpr {
             }
         }
 
-        NamedExpr { alias, expr_id }
+        NamedExpr { alias, expr_key }
     }
 }
 
@@ -325,9 +325,9 @@ impl QueryBlock {
         // Write select_list
         fprint!(file, "  subgraph cluster_select_list{} {{\n", self.name());
         for (ix, nexpr) in self.select_list.iter().enumerate() {
-            let expr_id = nexpr.expr_id;
-            QGM::write_expr_to_graphvis(qgm, expr_id, file, Some(ix));
-            let childid_name = QGM::nodeid_to_str(&expr_id);
+            let expr_key = nexpr.expr_key;
+            QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix));
+            let childid_name = QGM::nodeid_to_str(&expr_key);
             fprint!(
                 file,
                 "    exprnode{} -> \"{}_selectlist\";\n",
@@ -356,10 +356,10 @@ impl QueryBlock {
         if let Some(pred_list) = self.pred_list.as_ref() {
             fprint!(file, "  subgraph cluster_pred_list{} {{\n", self.name());
 
-            for &expr_id in pred_list {
-                QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
-                let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, _, children) = qgm.expr_graph.get3(expr_id);
+            for &expr_key in pred_list {
+                QGM::write_expr_to_graphvis(qgm, expr_key, file, None);
+                let id = QGM::nodeid_to_str(&expr_key);
+                let (expr, _, children) = qgm.expr_graph.get3(expr_key);
                 fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
             }
             fprint!(
@@ -380,9 +380,9 @@ impl QueryBlock {
                 self.name()
             );
 
-            for (ix, &expr_id) in group_by.iter().enumerate() {
-                QGM::write_expr_to_graphvis(qgm, expr_id, file, Some(ix));
-                let childid_name = QGM::nodeid_to_str(&expr_id);
+            for (ix, &expr_key) in group_by.iter().enumerate() {
+                QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix));
+                let childid_name = QGM::nodeid_to_str(&expr_key);
                 fprint!(file, "    exprnode{} -> \"{}_group_by\";\n", childid_name, self.name());
             }
             fprint!(file, "}}\n");
@@ -392,11 +392,11 @@ impl QueryBlock {
         if let Some(having_clause) = self.having_clause.as_ref() {
             fprint!(file, "  subgraph cluster_having_clause{} {{\n", self.name());
 
-            for &expr_id in having_clause {
-                QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
+            for &expr_key in having_clause {
+                QGM::write_expr_to_graphvis(qgm, expr_key, file, None);
 
-                let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, _, children) = qgm.expr_graph.get3(expr_id);
+                let id = QGM::nodeid_to_str(&expr_key);
+                let (expr, _, children) = qgm.expr_graph.get3(expr_key);
                 fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
             }
             fprint!(

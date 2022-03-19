@@ -158,9 +158,9 @@ impl Expr {
         }
     }
 
-    pub fn isomorphic(graph: &ExprGraph, expr_id1: ExprKey, expr_id2: ExprKey) -> bool {
-        let (expr1, _, children1) = graph.get3(expr_id1);
-        let (expr2, _, children2) = graph.get3(expr_id2);
+    pub fn isomorphic(graph: &ExprGraph, expr_key1: ExprKey, expr_key2: ExprKey) -> bool {
+        let (expr1, _, children1) = graph.get3(expr_key1);
+        let (expr2, _, children2) = graph.get3(expr_key2);
         let shallow_matched = match (expr1, expr2) {
             (CID(qunid1, colid1), CID(qunid2, colid2)) => qunid1 == qunid2 && colid1 == colid2,
             (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
@@ -207,8 +207,8 @@ impl Expr {
         }
     }
 
-    pub fn to_string(expr_id: ExprKey, graph: &ExprGraph, do_escape: bool) -> String {
-        let (expr, _, children) = graph.get3(expr_id);
+    pub fn to_string(expr_key: ExprKey, graph: &ExprGraph, do_escape: bool) -> String {
+        let (expr, _, children) = graph.get3(expr_key);
         let retval = match expr {
             CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
             Column { prefix, colname, .. } => {

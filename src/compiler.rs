@@ -41,12 +41,12 @@ impl Compiler {
             .select_list
             .iter()
             .map(|ne| {
-                let expr_id = ne.expr_id;
-                let (expr, _, children) = graph.get3(expr_id);
+                let expr_key = ne.expr_key;
+                let (expr, _, children) = graph.get3(expr_key);
                 if let AggFunction(aggtype, is_distinct) = expr {
                     children.unwrap()[0]
                 } else {
-                    expr_id
+                    expr_key
                 }
             })
             .collect();
@@ -63,8 +63,8 @@ impl Compiler {
 
 /***************************************************************************************************/
 impl Expr {
-    pub fn eval<'a>(graph: &ExprGraph, expr_id: ExprKey, row: &'a Row) -> Datum {
-        let (expr, _, children) = &graph.get3(expr_id);
+    pub fn eval<'a>(graph: &ExprGraph, expr_key: ExprKey, row: &'a Row) -> Datum {
+        let (expr, _, children) = &graph.get3(expr_key);
         match expr {
             CID(qunid, colid) => row.get_column(*colid).clone(),
             Column { prefix, colname, qunid, colid} => row.get_column(*colid).clone(),

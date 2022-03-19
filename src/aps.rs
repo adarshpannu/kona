@@ -96,7 +96,7 @@ impl APS {
         mainqblock
             .select_list
             .iter()
-            .flat_map(|ne| ne.expr_id.iter_quncols(&graph))
+            .flat_map(|ne| ne.expr_key.iter_quncols(&graph))
             .for_each(|quncol| all_quncols_bitset.set(quncol));
         let select_list_quncol_bitset = all_quncols_bitset.clone(); // shallow copy
 
@@ -112,11 +112,11 @@ impl APS {
         let mut pred_map: HashMap<ExprKey, (PredicateType, Bitset<QunCol>, Bitset<QunId>)> = HashMap::new();
 
         if let Some(pred_list) = mainqblock.pred_list.as_ref() {
-            for &pred_id in pred_list.iter() {
+            for &pred_key in pred_list.iter() {
                 let mut quncols_bitset = all_quncols_bitset.clone().clear();
                 let mut quns_bitset = all_quns_bitset.clone().clear();
 
-                for quncol in pred_id.iter_quncols(&graph) {
+                for quncol in pred_key.iter_quncols(&graph) {
                     quncols_bitset.set(quncol);
                     all_quncols_bitset.set(quncol);
 
@@ -131,12 +131,12 @@ impl APS {
                     pred_type = PredicateType::Local
                 } else {
                     // Join
-                    let expr = graph.get(pred_id);
+                    let expr = graph.get(pred_key);
                     if let RelExpr(RelOp::Eq) = expr.value {
                         let children = expr.children.as_ref().unwrap();
-                        let (left_child_id, right_child_id) = (children[0], children[1]);
-                        let left_quns: HashSet<QunId> = left_child_id.iter_quns(&graph).collect();
-                        let right_quns: HashSet<QunId> = right_child_id.iter_quns(&graph).collect();
+                        let (left_child_key, right_child_key) = (children[0], children[1]);
+                        let left_quns: HashSet<QunId> = left_child_key.iter_quns(&graph).collect();
+                        let right_quns: HashSet<QunId> = right_child_key.iter_quns(&graph).collect();
                         if left_quns.intersection(&right_quns).collect::<HashSet<_>>().len() == 0 {
                             pred_type = PredicateType::EquiJoin
                         } else {
@@ -148,12 +148,12 @@ impl APS {
                 };
                 debug!(
                     "Predicate {:?}: {}, quns={:?}, type={:?}",
-                    pred_id,
-                    Expr::to_string(pred_id, &graph, false),
+                    pred_key,
+                    Expr::to_string(pred_key, &graph, false),
                     &quns_bitset,
                     pred_type
                 );
-                pred_map.insert(pred_id, (pred_type, quncols_bitset, quns_bitset));
+                pred_map.insert(pred_key, (pred_type, quncols_bitset, quns_bitset));
             }
         }
 
@@ -183,11 +183,11 @@ impl APS {
             let mut preds_bitset = all_preds_bitset.clone().clear();
             pred_map
                 .iter()
-                .for_each(|(&pred_id, (pred_type, quncols_bitset, quns_bitset))| {
+                .for_each(|(&pred_key, (pred_type, quncols_bitset, quns_bitset))| {
                     if quns_bitset.get(qun.id) {
                         if quns_bitset.bitmap.len() == 1 {
                             // Set preds: find local preds that refer to this qun
-                            preds_bitset.set(pred_id);
+                            preds_bitset.set(pred_key);
                         } else {
                             // Set output columns: Only project cols in the select-list + unbound join preds
                             unbound_quncols_bitset.bitmap = unbound_quncols_bitset.bitmap | quncols_bitset.bitmap;
@@ -198,8 +198,8 @@ impl APS {
             let mut output_quncols_bitset = select_list_quncol_bitset.clone();
             output_quncols_bitset.bitmap = unbound_quncols_bitset.bitmap & input_quncols_bitset.bitmap;
 
-            for pred_id in preds_bitset.elements().iter() {
-                pred_map.remove_entry(pred_id);
+            for pred_key in preds_bitset.elements().iter() {
+                pred_map.remove_entry(pred_key);
             }
 
             // Set props
@@ -227,16 +227,16 @@ impl APS {
             let mut join_status = None;
 
             // Make pairs of all plans in work-list
-            'outer: for (ix1, &plan1_id) in worklist.iter().enumerate() {
-                for (ix2, &plan2_id) in worklist.iter().enumerate() {
-                    if plan1_id == plan2_id {
+            'outer: for (ix1, &plan1_key) in worklist.iter().enumerate() {
+                for (ix2, &plan2_key) in worklist.iter().enumerate() {
+                    if plan1_key == plan2_key {
                         continue;
                     }
 
-                    //debug!("Evaluate join between {:?} and {:?}", plan1_id, plan2_id);
+                    //debug!("Evaluate join between {:?} and {:?}", plan1_key, plan2_key);
 
-                    let (plan1, props1, _) = pop_graph.get3(plan1_id);
-                    let (plan2, props2, _) = pop_graph.get3(plan2_id);
+                    let (plan1, props1, _) = pop_graph.get3(plan1_key);
+                    let (plan2, props2, _) = pop_graph.get3(plan2_key);
 
                     let join_quns_bitmap = props1.quns.bitmap | props2.quns.bitmap;
 
@@ -246,14 +246,14 @@ impl APS {
                     let mut found_equijoin = false;
                     let join_preds: Vec<(ExprKey, PredicateType)> = pred_map
                         .iter()
-                        .filter_map(|(pred_id, (pred_type, quncols_bitset, quns_bitset))| {
+                        .filter_map(|(pred_key, (pred_type, quncols_bitset, quns_bitset))| {
                             let pred_quns_bitmap = quns_bitset.bitmap;
                             let is_subset = (pred_quns_bitmap & join_quns_bitmap) == pred_quns_bitmap;
                             if is_subset {
                                 if *pred_type == PredicateType::EquiJoin {
                                     found_equijoin = true
                                 }
-                                Some((*pred_id, *pred_type))
+                                Some((*pred_key, *pred_type))
                             } else {
                                 None
                             }
@@ -269,10 +269,10 @@ impl APS {
                         );
 
                         let mut join_bitset = all_preds_bitset.clone().clear();
-                        for (pred_id, pred_type) in join_preds {
-                            join_bitset.set(pred_id);
-                            pred_map.remove_entry(&pred_id);
-                            debug!("Remove pred: {:?}", &pred_id);
+                        for (pred_key, pred_type) in join_preds {
+                            join_bitset.set(pred_key);
+                            pred_map.remove_entry(&pred_key);
+                            debug!("Remove pred: {:?}", &pred_key);
                         }
 
                         let mut props = props1.union(&props2);
@@ -286,16 +286,16 @@ impl APS {
                         props.cols.bitmap = (props.cols.bitmap & colbitmap);
 
                         let join_node =
-                            pop_graph.add_node_with_props(POP::HashJoin, props, Some(vec![plan1_id, plan2_id]));
-                        join_status = Some((plan1_id, plan2_id, join_node));
+                            pop_graph.add_node_with_props(POP::HashJoin, props, Some(vec![plan1_key, plan2_key]));
+                        join_status = Some((plan1_key, plan2_key, join_node));
 
                         break 'outer;
                     }
                 }
             }
 
-            if let Some((plan1_id, plan2_id, join_node)) = join_status {
-                worklist.retain(|&elem| (elem != plan1_id && elem != plan2_id));
+            if let Some((plan1_key, plan2_key, join_node)) = join_status {
+                worklist.retain(|&elem| (elem != plan1_key && elem != plan2_key));
                 worklist.push(join_node);
             } else {
                 panic!("No join found!!!")
@@ -303,10 +303,10 @@ impl APS {
         }
 
         assert!(worklist.len() == 1);
-        let root_pop_id = worklist[0];
+        let root_pop_key = worklist[0];
 
         let plan_filename = format!("{}/{}", GRAPHVIZDIR, "plan.dot");
-        APS::write_plan_to_graphviz(qgm, &pop_graph, root_pop_id, &plan_filename);
+        APS::write_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename);
         Ok(())
     }
 }
@@ -330,7 +330,7 @@ impl ExprKey {
 
 impl APS {
     pub(crate) fn write_plan_to_graphviz(
-        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPKey, filename: &str,
+        qgm: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str,
     ) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
@@ -339,7 +339,7 @@ impl APS {
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        Self::write_pop_to_graphviz(qgm, pop_graph, pop_id, &mut file);
+        Self::write_pop_to_graphviz(qgm, pop_graph, pop_key, &mut file);
 
         fprint!(file, "}}\n");
 
@@ -380,9 +380,9 @@ impl APS {
     fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprKey>, do_escape: bool) -> String {
         let mut predstring = String::from("{");
         let preds = preds.elements();
-        for (ix, &pred_id) in preds.iter().enumerate() {
-            debug!("PRED: {:?}", &pred_id);
-            let predstr = Expr::to_string(pred_id, &qgm.expr_graph, do_escape);
+        for (ix, &pred_key) in preds.iter().enumerate() {
+            debug!("PRED: {:?}", &pred_key);
+            let predstr = Expr::to_string(pred_key, &qgm.expr_graph, do_escape);
             predstring.push_str(&predstr);
             if ix < preds.len() - 1 {
                 predstring.push_str("|")
@@ -393,10 +393,10 @@ impl APS {
     }
 
     pub(crate) fn write_pop_to_graphviz(
-        qgm: &QGM, pop_graph: &POPGraph, pop_id: POPKey, file: &mut File,
+        qgm: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File,
     ) -> std::io::Result<()> {
-        let id = Self::nodeid_to_str(&pop_id);
-        let (pop, props, children) = pop_graph.get3(pop_id);
+        let id = Self::nodeid_to_str(&pop_key);
+        let (pop, props, children) = pop_graph.get3(pop_key);
 
         if let Some(children) = children {
             for &childid in children.iter().rev() {
