@@ -14,6 +14,37 @@ use std::rc::Rc;
 use std::fmt;
 use std::process::Command;
 
+pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlockNode, ()>;
+
+#[derive(Debug)]
+pub enum QueryBlockNode {
+    Unassigned,
+    Select(QueryBlock),
+    Union,
+    UnionAll,
+    Intersect,
+    Except
+}
+
+impl QueryBlockNode {
+    pub fn get_select_block(&self) -> &QueryBlock {
+        // todo: this is dangerous! get rid of this soon.
+        match self {
+            QueryBlockNode::Select(qblock) => qblock,
+            _ => panic!("QueryBlockNode:get_select_block() expecting a Select(QueryBlock)")
+        }
+    }
+
+    pub fn get_select_block_mut(&mut self) -> &mut QueryBlock {
+        // todo: this is dangerous! get rid of this soon.
+        match self {
+            QueryBlockNode::Select(ref mut qblock) => qblock,
+            _ => panic!("QueryBlockNode:get_select_block() expecting a Select(QueryBlock)")
+        }
+    }
+
+}
+
 macro_rules! fprint {
     ($file:expr, $($args:expr),*) => {{
         $file.write_all(format!($($args),*).as_bytes());
@@ -34,13 +65,6 @@ pub enum AST {
         name: String,
         value: String,
     },
-}
-
-pub enum UIE {
-    Union,
-    UnionAll,
-    Intersect,
-    Except
 }
 
 pub struct QGMMetadata {
@@ -76,18 +100,21 @@ impl fmt::Debug for QGMMetadata {
 
 #[derive(Debug)]
 pub struct QGM {
-    pub main_qblock: QueryBlock,
-    pub cte_list: Vec<QueryBlockLink>,
-    pub graph: ExprGraph,
+    pub main_qblock_key: QueryBlockKey,
+    pub cte_list: Vec<QueryBlockKey>,
+    pub qblock_graph: QueryBlockGraph,
+    pub expr_graph: ExprGraph,
+
     pub metadata: QGMMetadata,
 }
 
 impl QGM {
-    pub fn new(main_qblock: QueryBlock, cte_list: Vec<QueryBlockLink>, graph: ExprGraph) -> QGM {
+    pub fn new(main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph) -> QGM {
         QGM {
-            main_qblock,
+            main_qblock_key: main_qblock,
             cte_list,
-            graph,
+            qblock_graph,
+            expr_graph,
             metadata: QGMMetadata::new()
         }
     }
@@ -132,13 +159,11 @@ pub enum QueryBlockType {
     GroupBy,
 }
 
-pub type QueryBlock0 = (Vec<NamedExpr>, Vec<Quantifier>, Vec<ExprKey>);
-
 #[derive(Serialize, Deserialize)]
 pub struct Quantifier {
     pub id: QunId,
     pub tablename: Option<String>,
-    pub qblock: Option<QueryBlockLink>,
+    pub qblock: Option<QueryBlockKey>,
     pub alias: Option<String>,
     pub pred_list: Option<ExprKey>,
 
@@ -160,7 +185,7 @@ impl fmt::Debug for Quantifier {
 }
 
 impl Quantifier {
-    pub fn new(id: QunId, name: Option<String>, qblock: Option<QueryBlockLink>, alias: Option<String>) -> Self {
+    pub fn new(id: QunId, name: Option<String>, qblock: Option<QueryBlockKey>, alias: Option<String>) -> Self {
         // Either we have a named base table, or we have a queryblock (but not both)
         assert!((name.is_some() && qblock.is_none()) || (name.is_none() && qblock.is_some()));
 
@@ -186,8 +211,10 @@ impl Quantifier {
 
     pub fn display(&self) -> String {
         let qbname = if let Some(qblock) = self.qblock.as_ref() {
-            let qblock = qblock.borrow();
-            format!("{:?}", qblock.qbtype)
+            //let qblock = qblock.borrow();
+            //format!("{:?}", qblock.qbtype)
+            String::from("qb todo")
+
         } else {
             String::from("")
         };
@@ -318,8 +345,9 @@ impl QueryBlock {
                 qun.name(),
                 qun.display()
             );
-            if let Some(qblock) = &qun.qblock {
-                let qblock = &*qblock.borrow();
+            if let Some(qbkey) = qun.qblock {
+                //let qblock = &*qblock.borrow();
+                let qblock = qgm.qblock_graph.get1(qbkey).get_select_block();
                 //fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 //qblock.write_qblock_to_graphviz(qgm, file)?
             }
@@ -332,7 +360,7 @@ impl QueryBlock {
             for &expr_id in pred_list {
                 QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
                 let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, _, children) = qgm.graph.get3(expr_id);
+                let (expr, _, children) = qgm.expr_graph.get3(expr_id);
                 fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
             }
             fprint!(
@@ -369,7 +397,7 @@ impl QueryBlock {
                 QGM::write_expr_to_graphvis(qgm, expr_id, file, None);
 
                 let id = QGM::nodeid_to_str(&expr_id);
-                let (expr, _, children) = qgm.graph.get3(expr_id);
+                let (expr, _, children) = qgm.expr_graph.get3(expr_id);
                 fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
             }
             fprint!(
@@ -386,8 +414,8 @@ impl QueryBlock {
 
         // Write referenced query blocks
         for qun in self.quns.iter().rev() {
-            if let Some(qblock) = &qun.qblock {
-                let qblock = &*qblock.borrow();
+            if let Some(qbkey) = qun.qblock {
+                let qblock = qgm.qblock_graph.get1(qbkey).get_select_block();
                 fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 qblock.write_qblock_to_graphviz(qgm, file)?
             }
@@ -398,16 +426,23 @@ impl QueryBlock {
 }
 
 pub struct ParserState {
-    pub graph: ExprGraph,
+    pub qblock_graph: QueryBlockGraph,
+    pub expr_graph: ExprGraph,
 }
 
 impl ParserState {
     pub fn new() -> Self {
-        ParserState { graph: Graph::new() }
+        ParserState { qblock_graph: Graph::new(), expr_graph: Graph::new() }
     }
 }
 
 impl QGM {
+    pub fn main_qblock(&self) -> &QueryBlock {
+        let qbkey = self.main_qblock_key;
+        let qblock = self.qblock_graph.get1(qbkey).get_select_block();
+        qblock
+    }
+
     pub(crate) fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
@@ -421,11 +456,11 @@ impl QGM {
         //fprint!(file, "    color=lightgrey;\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
 
-        self.main_qblock.write_qblock_to_graphviz(self, &mut file);
+        self.main_qblock().write_qblock_to_graphviz(self, &mut file);
 
         // Write subqueries (CTEs)
-        for qblock in self.cte_list.iter() {
-            let qblock = &*qblock.borrow();
+        for qbkey in self.cte_list.iter() {
+            let qblock = self.qblock_graph.get1(*qbkey).get_select_block();
             qblock.write_qblock_to_graphviz(self, &mut file);
         }
 
@@ -461,7 +496,7 @@ impl QGM {
         qgm: &QGM, expr: ExprKey, file: &mut File, order_ix: Option<usize>,
     ) -> std::io::Result<()> {
         let id = Self::nodeid_to_str(&expr);
-        let (expr, _, children) = qgm.graph.get3(expr);
+        let (expr, _, children) = qgm.expr_graph.get3(expr);
         let ix_str = if let Some(ix) = order_ix {
             format!(": {}", ix)
         } else {

@@ -80,10 +80,10 @@ enum PredicateType {
 impl APS {
     pub fn find_best_plan(env: &Env, qgm: &mut QGM) -> Result<(), String> {
         //let graph = replace(&mut qgm.graph, Graph::new());
-        let graph = &qgm.graph;
+        let graph = &qgm.expr_graph;
         let mut pop_graph: POPGraph = Graph::new();
 
-        let mainqblock = &qgm.main_qblock;
+        let mainqblock = qgm.qblock_graph.get1(qgm.main_qblock_key).get_select_block();
         let mut worklist: Vec<POPKey> = vec![];
 
         assert!(qgm.cte_list.len() == 0);
@@ -382,7 +382,7 @@ impl APS {
         let preds = preds.elements();
         for (ix, &pred_id) in preds.iter().enumerate() {
             debug!("PRED: {:?}", &pred_id);
-            let predstr = Expr::to_string(pred_id, &qgm.graph, do_escape);
+            let predstr = Expr::to_string(pred_id, &qgm.expr_graph, do_escape);
             predstring.push_str(&predstr);
             if ix < preds.len() - 1 {
                 predstring.push_str("|")

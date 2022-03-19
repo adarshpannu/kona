@@ -29,6 +29,4 @@ pub use typed_arena::Arena;
 
 pub type NodeArena = Arena<crate::flow::FlowNode>;
 
-pub type QueryBlockLink = std::rc::Rc<std::cell::RefCell<crate::qgm::QueryBlock>>;
-
 pub use std::mem::replace;

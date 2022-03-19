@@ -15,8 +15,8 @@ impl Compiler {
     
     pub fn old_compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
         let arena: NodeArena = Arena::new();
-        let graph = replace(&mut qgm.graph, Graph::new());
-        let topqblock = &qgm.main_qblock;
+        let graph = replace(&mut qgm.expr_graph, Graph::new());
+        let topqblock = qgm.qblock_graph.get(qgm.main_qblock_key).contents.get_select_block();
 
         // Currently only single-table queries supported.
         assert!(topqblock.quns.len() == 1);

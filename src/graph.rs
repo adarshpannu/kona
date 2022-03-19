@@ -3,6 +3,7 @@ use slotmap::{new_key_type, SlotMap};
 
 new_key_type! { pub struct ExprKey; }
 new_key_type! { pub struct POPKey; }
+new_key_type! { pub struct QueryBlockKey; }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node<K, T, P>
@@ -72,8 +73,8 @@ where
         self.sm.len()
     }
 
-    pub fn get_children(&self, ix: K) -> Option<Vec<K>> {
-        let expr = self.sm.get(ix).unwrap();
+    pub fn get_children(&self, key: K) -> Option<Vec<K>> {
+        let expr = self.sm.get(key).unwrap();
         if let Some(children) = &expr.children {
             Some(children.clone()) // fixme
         } else {
@@ -81,44 +82,58 @@ where
         }
     }
     
-    pub fn get3(&self, ix: K) -> (&T, &P, Option<&Vec<K>>) {
-        let node = self.sm.get(ix).unwrap();
+    pub fn get1(&self, key: K) -> &T {
+        let node = self.sm.get(key).unwrap();
+        &node.contents
+    }
+
+    pub fn get1_mut(&mut self, key: K) -> &mut T {
+        let node = self.sm.get_mut(key).unwrap();
+        &mut node.contents
+    }
+
+    pub fn get1_disjoint_mut(&mut self, keys: [K; 2]) -> [&mut Node<K, T, P>; 2] {
+        self.sm.get_disjoint_mut(keys).unwrap()
+    }
+
+    pub fn get3(&self, key: K) -> (&T, &P, Option<&Vec<K>>) {
+        let node = self.sm.get(key).unwrap();
         (&node.contents, &node.properties, node.children.as_ref())
     }
 
-    pub fn get3_mut(&mut self, ix: K) -> (&mut T, &mut P, Option<&mut Vec<K>>) {
-        let mut node = self.sm.get_mut(ix).unwrap();
+    pub fn get3_mut(&mut self, key: K) -> (&mut T, &mut P, Option<&mut Vec<K>>) {
+        let mut node = self.sm.get_mut(key).unwrap();
         (&mut node.contents, &mut node.properties, node.children.as_mut())
     }
 
-    pub fn get(&self, ix: K) -> &Node<K, T, P> {
-        let node = self.sm.get(ix).unwrap();
+    pub fn get(&self, key: K) -> &Node<K, T, P> {
+        let node = self.sm.get(key).unwrap();
         node
     }
 
-    pub fn get_mut(&mut self, ix: K) -> &mut Node<K, T, P> {
-        let mut node = self.sm.get_mut(ix).unwrap();
+    pub fn get_mut(&mut self, key: K) -> &mut Node<K, T, P> {
+        let mut node = self.sm.get_mut(key).unwrap();
         node
     }
 
-    pub fn replace(&mut self, ix: K, t: T, p: P) {
-        let mut node = self.sm.get_mut(ix).unwrap();
+    pub fn replace(&mut self, key: K, t: T, p: P) {
+        let mut node = self.sm.get_mut(key).unwrap();
         let mut new_node = Node::new(t, p);
         *node = new_node;
     }
 
-    pub fn replace_many(&mut self, parent_ix: K, ix: K, mut children: Vec<K>) {
-        // Node#ix is deleted
+    pub fn replace_many(&mut self, parent_key: K, key: K, mut children: Vec<K>) {
+        // Node#key is deleted
         // children already present in graph although not connected
-        let mut node = self.sm.get_mut(parent_ix).unwrap();
+        let mut node = self.sm.get_mut(parent_key).unwrap();
         let mut new_children: Vec<K> = vec![];
         let seen_old_child = false;
 
-        for &child_ix in node.children.as_ref().unwrap() {
-            if child_ix == ix {
+        for &child_key in node.children.as_ref().unwrap() {
+            if child_key == key {
                 new_children.append(&mut children);
             } else {
-                new_children.push(child_ix)
+                new_children.push(child_key)
             }
         }
         node.children = Some(new_children);

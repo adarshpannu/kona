@@ -6,9 +6,8 @@ use crate::includes::*;
 use crate::expr::{Expr::*, *};
 use crate::row::*;
 use crate::qgm::*;
-use crate::graph::{Graph, ExprKey};
+use crate::graph::*;
 use std::rc::Rc;
-use std::cell::RefCell;
 use crate::qgm::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
 
 grammar(parser_state: &mut ParserState);
@@ -131,30 +130,36 @@ pub SetOption: AST = {
 }
 
 // -------------------- U/I/E QUERY --------------------
-pub UIE: UIE = {
-    "UNION" <all:"ALL"?> => { if all.is_some() { UIE::UnionAll } else { UIE::Union } },
-    "INTERSECT" => UIE::Intersect,
-    "EXCEPT" => UIE::Except
+pub UIEOperator: QueryBlockNode = {
+    "UNION" <all:"ALL"?> => { if all.is_some() { QueryBlockNode::UnionAll } else { QueryBlockNode::Union } },
+    "INTERSECT" => QueryBlockNode::Intersect,
+    "EXCEPT" => QueryBlockNode::Except,
 }
 
-pub SUIEQuery = {
-    SimpleSelect,
+// -------------------- FULL QUERY --------------------
 
-}
+pub Query: AST = <cte_list:WithClause?> <mut main_qblock_key:SUIEQuery> => {
+    //main_qblock_key.name = Some(String::from("main"));
+    //main_qblock_key.qbtype = QueryBlockType::Select;
 
-// -------------------- QUERY --------------------
+    let expr_graph = replace(&mut parser_state.expr_graph, Graph::new());
+    let qblock_graph = replace(&mut parser_state.qblock_graph, Graph::new());
 
-pub Query: AST = <cte_list:WithClause?> <mut main_qblock:SimpleSelect> => {
-    main_qblock.name = Some(String::from("main"));
-    main_qblock.qbtype = QueryBlockType::Select;
-
-    let graph = replace(&mut parser_state.graph, Graph::new());
-
-    let qgm = QGM::new(main_qblock, cte_list.unwrap_or(vec![]), graph);
+    let qgm = QGM::new(main_qblock_key, cte_list.unwrap_or(vec![]), qblock_graph, expr_graph);
     AST::QGM(qgm)
 };
 
-pub SimpleSelect: QueryBlock = {
+// -------------------- SELECT/UNION/INTERSECT/EXCEPT SUIE QUERY --------------------
+
+pub SUIEQuery: QueryBlockKey = {
+    QueryBlock,
+    Subquery,
+    <left:SUIEQuery> <qblocknode:UIEOperator> <right:QueryBlock> => {
+        parser_state.qblock_graph.add_node(qblocknode, Some(vec![left, right]))
+    }
+}
+
+pub QueryBlock: QueryBlockKey = {
     "SELECT" TopN? <distinct:AllOrDistinct?> 
     <select_list: SelectList> 
     "FROM" <mut quns: FromList> 
@@ -164,18 +169,23 @@ pub SimpleSelect: QueryBlock = {
     <order_by:OrderByClause?> => {
         let pred_list = pred_list.map(|pred| vec![pred]);
         let having_clause = having_clause.map(|pred| vec![pred]);
-        QueryBlock::new(parser_state.graph.next_id(), None, QueryBlockType::Select, 
-            select_list, quns, 
+        let qblock = QueryBlock::new(parser_state.qblock_graph.next_id(), 
+            None, 
+            QueryBlockType::Select, 
+            select_list, 
+            quns, 
             pred_list,
             group_by, 
             having_clause, 
-            order_by, distinct.unwrap_or(DistinctProperty::All), None)
+            order_by, 
+            distinct.unwrap_or(DistinctProperty::All), 
+            None);
+        parser_state.qblock_graph.add_node(QueryBlockNode::Select(qblock), None)
     }
 };
 
-Subquery: QueryBlockLink = "(" <qblock:SimpleSelect> ")" => {
-    let subq = Rc::new(RefCell::new(qblock));
-    subq
+Subquery: QueryBlockKey = "(" <qblock:QueryBlock> ")" => {
+    qblock
 };
 
 TopN = "TOP" <Integer>;
@@ -189,11 +199,12 @@ WithClause = "WITH" <CTEList>;
 
 CTEList = CommaSeparatedList<CTE>;
 
-CTE: QueryBlockLink = <name:Identifier> "AS" <mut subqlink:Subquery> => {
-    let mut subq = &mut *subqlink.borrow_mut();
-    subq.name = Some(name);
-    subq.qbtype = QueryBlockType::Select;
-    subqlink.clone()
+CTE: QueryBlockKey = <name:Identifier> "AS" <mut subqkey:Subquery> => {
+    // TODO
+    //let subq = parser_state.qblock_graph.get1(subqkey).get_select_block();
+    //subq.name = Some(name);
+    //subq.qbtype = QueryBlockType::Select;
+    subqkey
 };
 
 SelectList = CommaSeparatedList<NamedExpr>;
@@ -217,10 +228,10 @@ OrderSort: Ordering = {
 
 Quantifier: Quantifier = {
     <schemaname:(Identifier ".")?> <name:Identifier> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.graph.next_id(), Some(name), None, alias)
+        Quantifier::new(parser_state.expr_graph.next_id(), Some(name), None, alias)
     },
     <subq:Subquery> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.graph.next_id(), None, Some(subq), alias)
+        Quantifier::new(parser_state.expr_graph.next_id(), None, Some(subq), alias)
     }
 }
 
@@ -228,69 +239,69 @@ correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = {
     "*" => {
-        let star = parser_state.graph.add_node(Star, None);
-        NamedExpr::new(None, star, &parser_state.graph)
+        let star = parser_state.expr_graph.add_node(Star, None);
+        NamedExpr::new(None, star, &parser_state.expr_graph)
     },
-    <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr, &parser_state.graph)
+    <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr, &parser_state.expr_graph)
 }
 
 pub LogExpr: ExprKey = {
     <LogExprFactor>,
-    <l:LogExpr> "OR" <r:LogExprFactor> => parser_state.graph.add_node(LogExpr(LogOp::Or), Some(vec![l, r]))
+    <l:LogExpr> "OR" <r:LogExprFactor> => parser_state.expr_graph.add_node(LogExpr(LogOp::Or), Some(vec![l, r]))
 }
 
 LogExprFactor: ExprKey = {
-    <l:LogExprFactor> "AND" <r:RelExpr> => parser_state.graph.add_node(LogExpr(LogOp::And), Some(vec![l, r])),
+    <l:LogExprFactor> "AND" <r:RelExpr> => parser_state.expr_graph.add_node(LogExpr(LogOp::And), Some(vec![l, r])),
     RelExpr,
 }
 
 RelExpr: ExprKey = {
-    <l:Expr> <op:RelOp> <r:RelExprRHS> => parser_state.graph.add_node(RelExpr(op), Some(vec![l, r])),
+    <l:Expr> <op:RelOp> <r:RelExprRHS> => parser_state.expr_graph.add_node(RelExpr(op), Some(vec![l, r])),
     <l:Expr> "IS" <not:"NOT"?> "NULL" => {
-        let r = parser_state.graph.add_node(Literal(Datum::NULL), None);
-        let expr = parser_state.graph.add_node(RelExpr(RelOp::Is), Some(vec![l, r]));
+        let r = parser_state.expr_graph.add_node(Literal(Datum::NULL), None);
+        let expr = parser_state.expr_graph.add_node(RelExpr(RelOp::Is), Some(vec![l, r]));
         if not.is_some() {
-            parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
+            parser_state.expr_graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
         } else {
             expr
         }
     },
     <l:Expr> <not:"NOT"?> "LIKE" <r:RelExprRHS> => {
-        let expr = parser_state.graph.add_node(RelExpr(RelOp::Like), Some(vec!(l, r)));
+        let expr = parser_state.expr_graph.add_node(RelExpr(RelOp::Like), Some(vec!(l, r)));
         if not.is_some() {
-            parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
+            parser_state.expr_graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
         } else {
             expr
         }
     },
-    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => parser_state.graph.add_node(BetweenExpr, Some(vec![e, l, r])),
+    <e:Expr> "BETWEEN" <l:Expr> "AND" <r:Expr> => parser_state.expr_graph.add_node(BetweenExpr, Some(vec![e, l, r])),
     <e:Expr> <not:"NOT"?> "IN" <mut inexpr:InExprRHS> => {
         let expr = if inexpr.0 {
             let subq = inexpr.1.pop().unwrap();
-            parser_state.graph.add_node(InSubqExpr, Some(vec![e, subq]))
+            parser_state.expr_graph.add_node(InSubqExpr, Some(vec![e, subq]))
         } else {
             let mut args = inexpr.1;
             let mut children = vec![e];
             children.append(&mut args);
-            parser_state.graph.add_node(InListExpr, Some(children))
+            parser_state.expr_graph.add_node(InListExpr, Some(children))
         };
         if not.is_some() {
-            parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
+            parser_state.expr_graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
         } else {
             expr
         }
     },
     "EXISTS" <subq:Subquery> => { 
-        let subq = parser_state.graph.add_node(Subquery(subq), None);
-        parser_state.graph.add_node(ExistsExpr, Some(vec![subq]))
+        let subq = parser_state.expr_graph.add_node(Subquery(subq), None);
+        parser_state.expr_graph.add_node(ExistsExpr, Some(vec![subq]))
     },
-    "NOT" <expr:RelExpr> => parser_state.graph.add_node(LogExpr(LogOp::Not), Some(vec![expr])),
+    "NOT" <expr:RelExpr> => parser_state.expr_graph.add_node(LogExpr(LogOp::Not), Some(vec![expr])),
     "(" <LogExpr> ")",
 }
 
 RelExprRHS: ExprKey = {
     <rhs:Expr> => rhs,
-    <prefix:SubqueryQuantifier> <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
+    <prefix:SubqueryQuantifier> <subq:Subquery> => parser_state.expr_graph.add_node(Subquery(subq), None)
 }
 
 RelOp: RelOp = {
@@ -304,7 +315,7 @@ RelOp: RelOp = {
 }
 
 InExprRHS: (bool, Vec<ExprKey>) = {
-    <subq:Subquery> => (true, vec![parser_state.graph.add_node(Subquery(subq), None)]),
+    <subq:Subquery> => (true, vec![parser_state.expr_graph.add_node(Subquery(subq), None)]),
     "(" <InList> ")" => (false, <>)
 }
 
@@ -316,31 +327,31 @@ SubqueryQuantifier = {
 }
 
 pub Expr: ExprKey = {
-    <l:Expr> "+" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Add), Some(vec!(l, r))),
-    <l:Expr> "-" <r:Factor> => parser_state.graph.add_node(BinaryExpr(ArithOp::Sub), Some(vec!(l, r))),
+    <l:Expr> "+" <r:Factor> => parser_state.expr_graph.add_node(BinaryExpr(ArithOp::Add), Some(vec!(l, r))),
+    <l:Expr> "-" <r:Factor> => parser_state.expr_graph.add_node(BinaryExpr(ArithOp::Sub), Some(vec!(l, r))),
     Factor,
 }
 
 Factor: ExprKey = {
-    <l:Factor> "*" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Mul), Some(vec!(l, r))),
-    <l:Factor> "/" <r:Term> => parser_state.graph.add_node(BinaryExpr(ArithOp::Div), Some(vec!(l, r))),
+    <l:Factor> "*" <r:Term> => parser_state.expr_graph.add_node(BinaryExpr(ArithOp::Mul), Some(vec!(l, r))),
+    <l:Factor> "/" <r:Term> => parser_state.expr_graph.add_node(BinaryExpr(ArithOp::Div), Some(vec!(l, r))),
     Term,
 }
 
 Term: ExprKey = {
-    <cr:ColumnReference> => parser_state.graph.add_node(Column { prefix: cr.0, colname: cr.1, qunid: 0, colid: 0 }, None),
-    QuotedString => parser_state.graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
+    <cr:ColumnReference> => parser_state.expr_graph.add_node(Column { prefix: cr.0, colname: cr.1, qunid: 0, colid: 0 }, None),
+    QuotedString => parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
     Number,
     ScalarFunction,
     AggFunction,
-    "-" <Term> => parser_state.graph.add_node(NegatedExpr, Some(vec![<>])),
+    "-" <Term> => parser_state.expr_graph.add_node(NegatedExpr, Some(vec![<>])),
     "(" <Expr> ")",
-    <subq:Subquery> => parser_state.graph.add_node(Subquery(subq), None)
+    <subq:Subquery> => parser_state.expr_graph.add_node(Subquery(subq), None)
 }
 
 AggFunction: ExprKey = {
     <aggtype:AggName> "(" <distinct:"DISTINCT"?> <arg:AggArg> ")" => {
-        parser_state.graph.add_node(AggFunction(aggtype, distinct.is_some()), Some(vec![arg]))
+        parser_state.expr_graph.add_node(AggFunction(aggtype, distinct.is_some()), Some(vec![arg]))
 
     }
 }
@@ -355,15 +366,15 @@ AggName: AggType = {
 
 AggArg: ExprKey = {
     <arg:Expr> => arg,
-    "*" => parser_state.graph.add_node(Star, None)
+    "*" => parser_state.expr_graph.add_node(Star, None)
 }
 
 ScalarFunction: ExprKey = {
-    <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.graph.add_node(ScalarFunction(name), Some(args)),
+    <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.expr_graph.add_node(ScalarFunction(name), Some(args)),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
-        let datatype = parser_state.graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
+        let datatype = parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
         let args = vec![arg, datatype];
-        parser_state.graph.add_node(ScalarFunction(String::from("CAST")), Some(args))
+        parser_state.expr_graph.add_node(ScalarFunction(String::from("CAST")), Some(args))
     }
 }
 
@@ -371,11 +382,11 @@ FunctionArgs = CommaSeparatedList<Expr>;
 
 Number: ExprKey = {
     Integer =>? { isize::from_str(<>)
-        .map(|i| parser_state.graph.add_node(Literal(Datum::INT(i)), None))
+        .map(|i| parser_state.expr_graph.add_node(Literal(Datum::INT(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
     Double =>? { f64::from_str(<>)
-        .map(|d| parser_state.graph.add_node(Literal(Datum::DOUBLE(111, 222)), None))
+        .map(|d| parser_state.expr_graph.add_node(Literal(Datum::DOUBLE(111, 222)), None))
         .map_err(|_| ParseError::User { error: "Invalid double" }) 
     },
 }

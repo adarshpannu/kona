@@ -121,7 +121,7 @@ pub enum Expr {
     InSubqExpr,
     ExistsExpr,
     LogExpr(LogOp),
-    Subquery(QueryBlockLink),
+    Subquery(QueryBlockKey),
     AggFunction(AggType, bool),
     ScalarFunction(String),
 }
