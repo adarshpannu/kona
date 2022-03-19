@@ -83,7 +83,7 @@ impl APS {
         let graph = &qgm.expr_graph;
         let mut pop_graph: POPGraph = Graph::new();
 
-        let mainqblock = qgm.qblock_graph.get1(qgm.main_qblock_key).get_select_block();
+        let mainqblock = qgm.qblock_graph.get(qgm.main_qblock_key).value.get_select_block();
         let mut worklist: Vec<POPKey> = vec![];
 
         assert!(qgm.cte_list.len() == 0);
@@ -132,7 +132,7 @@ impl APS {
                 } else {
                     // Join
                     let expr = graph.get(pred_id);
-                    if let RelExpr(RelOp::Eq) = expr.contents {
+                    if let RelExpr(RelOp::Eq) = expr.value {
                         let children = expr.children.as_ref().unwrap();
                         let (left_child_id, right_child_id) = (children[0], children[1]);
                         let left_quns: HashSet<QunId> = left_child_id.iter_quns(&graph).collect();
@@ -315,7 +315,7 @@ impl ExprKey {
     pub fn iter_quncols<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
         let it = graph
             .iter(*self)
-            .filter_map(move |nodeid| match &graph.get(nodeid).contents {
+            .filter_map(move |nodeid| match &graph.get(nodeid).value {
                 Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
                 CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
                 _ => None,

@@ -6,22 +6,22 @@ new_key_type! { pub struct POPKey; }
 new_key_type! { pub struct QueryBlockKey; }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Node<K, T, P>
+pub struct Node<K, V, P>
 where
     P: std::default::Default,
 {
-    pub contents: T,
+    pub value: V,
     pub properties: P,
     pub children: Option<Vec<K>>,
 }
 
-impl<K, T, P> Node<K, T, P>
+impl<K, V, P> Node<K, V, P>
 where
     P: std::default::Default,
 {
-    pub fn new(t: T, properties: P) -> Self {
+    pub fn new(v: V, properties: P) -> Self {
         Node {
-            contents: t,
+            value: v,
             properties,
             children: None,
         }
@@ -29,16 +29,16 @@ where
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Graph<K, T, P>
+pub struct Graph<K, V, P>
 where
     P: std::default::Default,
     K: slotmap::Key
 {
-    pub sm: SlotMap<K, Node<K, T, P>>,
+    pub sm: SlotMap<K, Node<K, V, P>>,
     next_id: usize,
 }
 
-impl<K, T, P> Graph<K, T, P>
+impl<K, V, P> Graph<K, V, P>
 where
     P: std::default::Default,
     K: slotmap::Key
@@ -56,15 +56,15 @@ where
         retval
     }
 
-    pub fn add_node(&mut self, t: T, children: Option<Vec<K>>) -> K {
+    pub fn add_node(&mut self, v: V, children: Option<Vec<K>>) -> K {
         let properties = P::default();
-        let mut node = Node::new(t, properties);
+        let mut node = Node::new(v, properties);
         node.children = children;
         self.sm.insert(node)
     }
 
-    pub fn add_node_with_props(&mut self, t: T, properties: P, children: Option<Vec<K>>) -> K {
-        let mut node = Node::new(t, properties);
+    pub fn add_node_with_props(&mut self, v: V, properties: P, children: Option<Vec<K>>) -> K {
+        let mut node = Node::new(v, properties);
         node.children = children;
         self.sm.insert(node)
     }
@@ -72,53 +72,29 @@ where
     pub fn len(&self) -> usize {
         self.sm.len()
     }
-
-    pub fn get_children(&self, key: K) -> Option<Vec<K>> {
-        let expr = self.sm.get(key).unwrap();
-        if let Some(children) = &expr.children {
-            Some(children.clone()) // fixme
-        } else {
-            None
-        }
-    }
     
-    pub fn get1(&self, key: K) -> &T {
+    pub fn get3(&self, key: K) -> (&V, &P, Option<&Vec<K>>) {
         let node = self.sm.get(key).unwrap();
-        &node.contents
+        (&node.value, &node.properties, node.children.as_ref())
     }
 
-    pub fn get1_mut(&mut self, key: K) -> &mut T {
-        let node = self.sm.get_mut(key).unwrap();
-        &mut node.contents
+    pub fn get(&self, key: K) -> &Node<K, V, P> {
+        let node = self.sm.get(key).unwrap();
+        node
     }
 
-    pub fn get1_disjoint_mut(&mut self, keys: [K; 2]) -> [&mut Node<K, T, P>; 2] {
+    pub fn get_mut(&mut self, key: K) -> &mut Node<K, V, P> {
+        let mut node = self.sm.get_mut(key).unwrap();
+        node
+    }
+
+    pub fn get_disjoint_mut(&mut self, keys: [K; 2]) -> [&mut Node<K, V, P>; 2] {
         self.sm.get_disjoint_mut(keys).unwrap()
     }
 
-    pub fn get3(&self, key: K) -> (&T, &P, Option<&Vec<K>>) {
-        let node = self.sm.get(key).unwrap();
-        (&node.contents, &node.properties, node.children.as_ref())
-    }
-
-    pub fn get3_mut(&mut self, key: K) -> (&mut T, &mut P, Option<&mut Vec<K>>) {
+    pub fn replace(&mut self, key: K, v: V, p: P) {
         let mut node = self.sm.get_mut(key).unwrap();
-        (&mut node.contents, &mut node.properties, node.children.as_mut())
-    }
-
-    pub fn get(&self, key: K) -> &Node<K, T, P> {
-        let node = self.sm.get(key).unwrap();
-        node
-    }
-
-    pub fn get_mut(&mut self, key: K) -> &mut Node<K, T, P> {
-        let mut node = self.sm.get_mut(key).unwrap();
-        node
-    }
-
-    pub fn replace(&mut self, key: K, t: T, p: P) {
-        let mut node = self.sm.get_mut(key).unwrap();
-        let mut new_node = Node::new(t, p);
+        let mut new_node = Node::new(v, p);
         *node = new_node;
     }
 
@@ -139,7 +115,7 @@ where
         node.children = Some(new_children);
     }
 
-    pub fn iter<'a>(&'a self, root: K) -> GraphIterator<'a, K, T, P> {
+    pub fn iter<'a>(&'a self, root: K) -> GraphIterator<'a, K, V, P> {
         GraphIterator {
             graph: self,
             queue: vec![root],
@@ -147,17 +123,17 @@ where
     }
 }
 
-pub struct GraphIterator<'a, K, T, P>
+pub struct GraphIterator<'a, K, V, P>
 where
     P: std::default::Default,
     K: slotmap::Key
 {
-    graph: &'a Graph<K, T, P>,
+    graph: &'a Graph<K, V, P>,
     queue: Vec<K>,
 }
 
 // Breadth-first iterator
-impl<'a, K, T, P> Iterator for GraphIterator<'a, K, T, P>
+impl<'a, K, V, P> Iterator for GraphIterator<'a, K, V, P>
 where
     P: std::default::Default,
     K: slotmap::Key

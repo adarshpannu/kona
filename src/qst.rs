@@ -61,7 +61,7 @@ impl QueryBlock {
         qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
         metadata: &mut QGMMetadata,
     ) -> Result<(), String> {
-        let mut qblock = qblock_graph.get1_mut(qbkey).get_select_block_mut();
+        let mut qblock = qblock_graph.get_mut(qbkey).value.get_select_block_mut();
         let mut qbkey_children = vec![];
 
         debug!("Resolve query block: {}", qblock.id);
@@ -76,7 +76,7 @@ impl QueryBlock {
             Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata);
         }
 
-        let mut qblock = qblock_graph.get1_mut(qbkey).get_select_block_mut();
+        let mut qblock = qblock_graph.get_mut(qbkey).value.get_select_block_mut();
 
         let mut colid_dispenser = QueryBlockColidDispenser::new();
 
@@ -143,9 +143,9 @@ impl QueryBlock {
         qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
     ) -> Result<(), String> {
         let inner_qb_key = qblock_graph.add_node(QueryBlockNode::Unassigned, None);
-        let [outer_qb_node, inner_qb_node] = qblock_graph.get1_disjoint_mut([qbkey, inner_qb_key]);
+        let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
 
-        let mut qblock = outer_qb_node.contents.get_select_block_mut();
+        let mut qblock = outer_qb_node.value.get_select_block_mut();
 
         let agg_qun_id = expr_graph.next_id();
 
@@ -208,7 +208,7 @@ impl QueryBlock {
             None,
         );
 
-        inner_qb_node.contents = QueryBlockNode::Select(inner_qb);
+        inner_qb_node.value = QueryBlockNode::Select(inner_qb);
         let outer_qun = Quantifier::new(agg_qun_id, None, Some(inner_qb_key), None);
         outer_qb.name = None;
         outer_qb.qbtype = QueryBlockType::GroupBy;
@@ -250,7 +250,7 @@ impl QueryBlock {
         qunid: QunId, expr_id: &mut ExprKey,
     ) -> Result<(), String> {
         let node = expr_graph.get(*expr_id);
-        if let AggFunction(aggtype, _) = node.contents {
+        if let AggFunction(aggtype, _) = node.value {
             // Aggregate-function: replace argument with CID reference to inner query-block
             let child_id = node.children.as_ref().unwrap()[0];
             let cid = Self::append(expr_graph, select_list, child_id);
@@ -274,7 +274,7 @@ impl QueryBlock {
             colname,
             qunid,
             colid,
-        } = &node.contents
+        } = &node.value
         {
             // User error: Unaggregated expression in select-list not in group-by clause
             return Err(format!(
@@ -349,14 +349,16 @@ impl QueryBlock {
         &self, env: &Env, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata,
         colid_dispenser: &mut QueryBlockColidDispenser, expr_id: ExprKey, agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
-        let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_id).contents {
+        let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_id).value {
             // Nested aggregate functions not allowed
             false
         } else {
             agg_fns_allowed
         };
 
-        let children = expr_graph.get_children(expr_id);
+        //let children = expr_graph.get_children(expr_id);
+        let children = expr_graph.get(expr_id).children.clone();
+
         let mut children_datatypes = vec![];
 
         if let Some(children) = children {
@@ -374,7 +376,7 @@ impl QueryBlock {
         }
 
         let mut node = expr_graph.get_mut(expr_id);
-        let mut expr = &mut node.contents;
+        let mut expr = &mut node.value;
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {

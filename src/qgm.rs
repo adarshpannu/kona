@@ -133,7 +133,7 @@ pub struct NamedExpr {
 
 impl NamedExpr {
     pub fn new(alias: Option<String>, expr_id: ExprKey, graph: &ExprGraph) -> Self {
-        let expr = &graph.get(expr_id).contents;
+        let expr = &graph.get(expr_id).value;
         let mut alias = alias;
         if alias.is_none() {
             if let Expr::Column {
@@ -346,8 +346,7 @@ impl QueryBlock {
                 qun.display()
             );
             if let Some(qbkey) = qun.qblock {
-                //let qblock = &*qblock.borrow();
-                let qblock = qgm.qblock_graph.get1(qbkey).get_select_block();
+                let qblock = qgm.qblock_graph.get(qbkey).value.get_select_block();
                 //fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 //qblock.write_qblock_to_graphviz(qgm, file)?
             }
@@ -415,7 +414,7 @@ impl QueryBlock {
         // Write referenced query blocks
         for qun in self.quns.iter().rev() {
             if let Some(qbkey) = qun.qblock {
-                let qblock = qgm.qblock_graph.get1(qbkey).get_select_block();
+                let qblock = qgm.qblock_graph.get(qbkey).value.get_select_block();
                 fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 qblock.write_qblock_to_graphviz(qgm, file)?
             }
@@ -439,7 +438,7 @@ impl ParserState {
 impl QGM {
     pub fn main_qblock(&self) -> &QueryBlock {
         let qbkey = self.main_qblock_key;
-        let qblock = self.qblock_graph.get1(qbkey).get_select_block();
+        let qblock = self.qblock_graph.get(qbkey).value.get_select_block();
         qblock
     }
 
@@ -459,8 +458,8 @@ impl QGM {
         self.main_qblock().write_qblock_to_graphviz(self, &mut file);
 
         // Write subqueries (CTEs)
-        for qbkey in self.cte_list.iter() {
-            let qblock = self.qblock_graph.get1(*qbkey).get_select_block();
+        for &qbkey in self.cte_list.iter() {
+            let qblock = self.qblock_graph.get(qbkey).value.get_select_block();
             qblock.write_qblock_to_graphviz(self, &mut file);
         }
 
