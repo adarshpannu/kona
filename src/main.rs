@@ -18,6 +18,7 @@ pub mod graph;
 pub mod bitset;
 pub mod ast;
 pub mod qgm;
+pub mod qgmiter;
 pub mod expr;
 
 pub mod qst;
@@ -172,6 +173,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 env.set_option(name, value);
             }
             AST::QGM(mut qgm) => {
+                qgm.scratch();
                 qgm.write_qgm_to_graphviz(&qgm_raw_filename, false);
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
@@ -205,7 +207,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/aggregates.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/union.fsql";
     //let filename = "/Users/adarshrp/tmp/rst.sql";
 
     let jobres = run_job(&mut env, filename);

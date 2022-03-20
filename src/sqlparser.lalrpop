@@ -130,10 +130,10 @@ pub SetOption: AST = {
 }
 
 // -------------------- U/I/E QUERY --------------------
-pub UIEOperator: QueryBlockNode = {
-    "UNION" <all:"ALL"?> => { if all.is_some() { QueryBlockNode::UnionAll } else { QueryBlockNode::Union } },
-    "INTERSECT" => QueryBlockNode::Intersect,
-    "EXCEPT" => QueryBlockNode::Except,
+pub UIEOperator: QueryBlockSetop = {
+    "UNION" <all:"ALL"?> => { if all.is_some() { QueryBlockSetop::UnionAll } else { QueryBlockSetop::Union } },
+    "INTERSECT" => QueryBlockSetop::Intersect,
+    "EXCEPT" => QueryBlockSetop::Except,
 }
 
 // -------------------- FULL QUERY --------------------
@@ -180,7 +180,7 @@ pub QueryBlock: QueryBlockKey = {
             order_by, 
             distinct.unwrap_or(DistinctProperty::All), 
             None);
-        parser_state.qblock_graph.add_node(QueryBlockNode::Select(qblock), None)
+        parser_state.qblock_graph.add_node(QueryBlockSetop::Select(qblock), None)
     }
 };
 

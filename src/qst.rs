@@ -62,16 +62,11 @@ impl QueryBlock {
         metadata: &mut QGMMetadata,
     ) -> Result<(), String> {
         let mut qblock = qblock_graph.get_mut(qbkey).value.get_select_block_mut();
-        let mut qbkey_children = vec![];
 
         debug!("Resolve query block: {}", qblock.id);
 
-        for qun in qblock.quns.iter_mut() {
-            if let Some(qbkey) = qun.qblock.as_ref() {
-                qbkey_children.push(*qbkey);
-            }
-        }
-
+        // Resolve nested query blocks first
+        let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.qblock).collect();
         for qbkey in qbkey_children {
             Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata);
         }
@@ -80,7 +75,7 @@ impl QueryBlock {
 
         let mut colid_dispenser = QueryBlockColidDispenser::new();
 
-        // Resolve QUNs first (base tables and any nested subqueries)
+        // Resolve base table QUNs next
         for qun in qblock.quns.iter_mut() {
             if let Some(tablename) = qun.tablename.as_ref() {
                 let tbdesc = env.metadata.get_tabledesc(tablename);
@@ -104,7 +99,7 @@ impl QueryBlock {
             let mut boolean_factors = vec![];
             for &expr_key in pred_list {
                 qblock.resolve_expr(env, expr_graph, metadata, &mut colid_dispenser, expr_key, false)?;
-                Self::get_boolean_factors(&expr_graph, expr_key, &mut boolean_factors)
+                expr_key.get_boolean_factors(&expr_graph, &mut boolean_factors)
             }
             qblock.pred_list = Some(boolean_factors);
         }
@@ -121,7 +116,7 @@ impl QueryBlock {
             let mut boolean_factors = vec![];
             for &expr_key in having_clause {
                 qblock.resolve_expr(env, expr_graph, metadata, &mut colid_dispenser, expr_key, true)?;
-                Self::get_boolean_factors(&expr_graph, expr_key, &mut boolean_factors)
+                expr_key.get_boolean_factors(&expr_graph, &mut boolean_factors)
             }
             qblock.having_clause = Some(boolean_factors);
         }
@@ -142,7 +137,7 @@ impl QueryBlock {
     pub fn split_groupby(
         qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
     ) -> Result<(), String> {
-        let inner_qb_key = qblock_graph.add_node(QueryBlockNode::Unassigned, None);
+        let inner_qb_key = qblock_graph.add_node(QueryBlockSetop::Unassigned, None);
         let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
 
         let mut qblock = outer_qb_node.value.get_select_block_mut();
@@ -208,7 +203,7 @@ impl QueryBlock {
             None,
         );
 
-        inner_qb_node.value = QueryBlockNode::Select(inner_qb);
+        inner_qb_node.value = QueryBlockSetop::Select(inner_qb);
         let outer_qun = Quantifier::new(agg_qun_id, None, Some(inner_qb_key), None);
         outer_qb.name = None;
         outer_qb.qbtype = QueryBlockType::GroupBy;
@@ -356,7 +351,6 @@ impl QueryBlock {
             agg_fns_allowed
         };
 
-        //let children = expr_graph.get_children(expr_key);
         let children = expr_graph.get(expr_key).children.clone();
 
         let mut children_datatypes = vec![];
@@ -373,6 +367,7 @@ impl QueryBlock {
                 )?;
                 children_datatypes.push(datatype);
             }
+
         }
 
         let mut node = expr_graph.get_mut(expr_key);
@@ -440,18 +435,5 @@ impl QueryBlock {
         };
         node.properties.datatype = datatype;
         Ok(datatype)
-    }
-
-    pub fn get_boolean_factors(expr_graph: &ExprGraph, pred_key: ExprKey, boolean_factors: &mut Vec<ExprKey>) {
-        let (expr, _, children) = expr_graph.get3(pred_key);
-        if let LogExpr(crate::expr::LogOp::And) = expr {
-            let children = children.unwrap();
-            let lhs = children[0];
-            let rhs = children[1];
-            Self::get_boolean_factors(expr_graph, lhs, boolean_factors);
-            Self::get_boolean_factors(expr_graph, rhs, boolean_factors);
-        } else {
-            boolean_factors.push(pred_key)
-        }
     }
 }

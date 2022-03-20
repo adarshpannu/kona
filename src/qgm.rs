@@ -14,10 +14,10 @@ use std::rc::Rc;
 use std::fmt;
 use std::process::Command;
 
-pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlockNode, ()>;
+pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlockSetop, ()>;
 
 #[derive(Debug)]
-pub enum QueryBlockNode {
+pub enum QueryBlockSetop {
     Unassigned,
     Select(QueryBlock),
     Union,
@@ -26,11 +26,11 @@ pub enum QueryBlockNode {
     Except
 }
 
-impl QueryBlockNode {
+impl QueryBlockSetop {
     pub fn get_select_block(&self) -> &QueryBlock {
         // todo: this is dangerous! get rid of this soon.
         match self {
-            QueryBlockNode::Select(qblock) => qblock,
+            QueryBlockSetop::Select(qblock) => qblock,
             _ => panic!("QueryBlockNode:get_select_block() expecting a Select(QueryBlock)")
         }
     }
@@ -38,7 +38,7 @@ impl QueryBlockNode {
     pub fn get_select_block_mut(&mut self) -> &mut QueryBlock {
         // todo: this is dangerous! get rid of this soon.
         match self {
-            QueryBlockNode::Select(ref mut qblock) => qblock,
+            QueryBlockSetop::Select(ref mut qblock) => qblock,
             _ => panic!("QueryBlockNode:get_select_block() expecting a Select(QueryBlock)")
         }
     }
@@ -514,29 +514,3 @@ impl QGM {
         Ok(())
     }
 }
-
-/*
-pub struct QueryBlockIter<'a> {
-    queue: Vec<&'a QueryBlock>
-}
-
-impl<'a> Iterator for QueryBlockIter<'a> {
-    type Item = &'a QueryBlock;
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}
-
-impl QGM {
-    pub fn iter_qblock(&self) -> QueryBlockIter {
-        let mut queue = vec![&self.main_qblock];
-        for cte in self.cte_list.iter() {
-            let qblock = &*cte.borrow();
-            queue.push(qblock);
-        }
-
-        QueryBlockIter { queue }
-    }
-}
-*/
-

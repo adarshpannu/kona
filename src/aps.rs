@@ -309,26 +309,7 @@ impl APS {
         APS::write_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename);
         Ok(())
     }
-}
 
-impl ExprKey {
-    pub fn iter_quncols<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
-        let it = graph
-            .iter(*self)
-            .filter_map(move |nodeid| match &graph.get(nodeid).value {
-                Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
-                CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
-                _ => None,
-            });
-        Box::new(it)
-    }
-
-    pub fn iter_quns<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunId> + 'g> {
-        Box::new(self.iter_quncols(graph).map(|quncol| quncol.0))
-    }
-}
-
-impl APS {
     pub(crate) fn write_plan_to_graphviz(
         qgm: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str,
     ) -> std::io::Result<()> {

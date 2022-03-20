@@ -97,7 +97,7 @@ pub struct ExprProp {
 impl std::default::Default for ExprProp {
     fn default() -> Self {
         ExprProp {
-            datatype: DataType::UNKNOWN,
+            datatype: DataType::UNASSIGNED,
         }
     }
 }
@@ -268,6 +268,36 @@ impl Expr {
             re.replace_all(&retval[..], "\\$1").to_string()
         } else {
             retval
+        }
+    }
+}
+
+impl ExprKey {
+    pub fn iter_quncols<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
+        let it = graph
+            .iter(*self)
+            .filter_map(move |nodeid| match &graph.get(nodeid).value {
+                Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
+                CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
+                _ => None,
+            });
+        Box::new(it)
+    }
+
+    pub fn iter_quns<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunId> + 'g> {
+        Box::new(self.iter_quncols(graph).map(|quncol| quncol.0))
+    }
+
+    pub fn get_boolean_factors(self, expr_graph: &ExprGraph, boolean_factors: &mut Vec<ExprKey>) {
+        let (expr, _, children) = expr_graph.get3(self);
+        if let LogExpr(crate::expr::LogOp::And) = expr {
+            let children = children.unwrap();
+            let lhs = children[0];
+            let rhs = children[1];
+            lhs.get_boolean_factors(expr_graph, boolean_factors);
+            rhs.get_boolean_factors(expr_graph, boolean_factors);
+        } else {
+            boolean_factors.push(self)
         }
     }
 }
