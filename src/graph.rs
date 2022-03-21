@@ -2,7 +2,7 @@ use crate::includes::*;
 use slotmap::{new_key_type, SlotMap};
 
 new_key_type! { pub struct ExprKey; }
-new_key_type! { pub struct POPKey; }
+new_key_type! { pub struct LOPKey; }
 new_key_type! { pub struct QueryBlockKey; }
 
 #[derive(Debug, Serialize, Deserialize)]

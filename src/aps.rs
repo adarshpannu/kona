@@ -12,7 +12,7 @@ use crate::includes::*;
 use crate::qgm::*;
 use std::process::Command;
 
-type POPGraph = Graph<POPKey, POP, POPProps>;
+type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
 
 pub struct APS;
 
@@ -25,7 +25,7 @@ macro_rules! fprint {
 }
 
 #[derive(Debug)]
-pub enum POP {
+pub enum LOP {
     TableScan { input_cols: Bitset<QunCol> },
     HashJoin,
     NLJoin,
@@ -34,15 +34,15 @@ pub enum POP {
 }
 
 #[derive(Debug)]
-pub struct POPProps {
+pub struct LOPProps {
     quns: Bitset<QunId>,
     cols: Bitset<QunCol>, // output cols
     preds: Bitset<ExprKey>,
 }
 
-impl POPProps {
+impl LOPProps {
     fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>) -> Self {
-        POPProps { quns, cols, preds }
+        LOPProps { quns, cols, preds }
     }
 
     fn union(&self, other: &Self) -> Self {
@@ -59,9 +59,9 @@ impl POPProps {
     }
 }
 
-impl std::default::Default for POPProps {
+impl std::default::Default for LOPProps {
     fn default() -> Self {
-        POPProps {
+        LOPProps {
             quns: Bitset::new(),
             preds: Bitset::new(),
             cols: Bitset::new(),
@@ -81,10 +81,10 @@ impl APS {
     pub fn find_best_plan(env: &Env, qgm: &mut QGM) -> Result<(), String> {
         //let graph = replace(&mut qgm.graph, Graph::new());
         let graph = &qgm.expr_graph;
-        let mut pop_graph: POPGraph = Graph::new();
+        let mut lop_graph: LOPGraph = Graph::new();
 
         let mainqblock = &qgm.qblock_graph.get(qgm.main_qblock_key).value;
-        let mut worklist: Vec<POPKey> = vec![];
+        let mut worklist: Vec<LOPKey> = vec![];
 
         assert!(qgm.cte_list.len() == 0);
 
@@ -203,23 +203,23 @@ impl APS {
             }
 
             // Set props
-            let props = POPProps::new(quns_bitset, output_quncols_bitset, preds_bitset);
+            let props = LOPProps::new(quns_bitset, output_quncols_bitset, preds_bitset);
             debug!(
-                "POPNODE quns={:?}, cols={:?}, preds={:?}",
+                "LOP quns={:?}, cols={:?}, preds={:?}",
                 &props.quns.elements(),
                 &props.cols.elements(),
                 &props.preds.elements()
             );
 
-            let popnode = pop_graph.add_node_with_props(
-                POP::TableScan {
+            let lopkey = lop_graph.add_node_with_props(
+                LOP::TableScan {
                     input_cols: input_quncols_bitset,
                 },
                 props,
                 None,
             );
 
-            worklist.push(popnode);
+            worklist.push(lopkey);
         }
 
         let n = mainqblock.quns.len();
@@ -235,8 +235,8 @@ impl APS {
 
                     //debug!("Evaluate join between {:?} and {:?}", plan1_key, plan2_key);
 
-                    let (plan1, props1, _) = pop_graph.get3(plan1_key);
-                    let (plan2, props2, _) = pop_graph.get3(plan2_key);
+                    let (plan1, props1, _) = lop_graph.get3(plan1_key);
+                    let (plan2, props2, _) = lop_graph.get3(plan2_key);
 
                     let join_quns_bitmap = props1.quns.bitmap | props2.quns.bitmap;
 
@@ -286,7 +286,7 @@ impl APS {
                         props.cols.bitmap = (props.cols.bitmap & colbitmap);
 
                         let join_node =
-                            pop_graph.add_node_with_props(POP::HashJoin, props, Some(vec![plan1_key, plan2_key]));
+                            lop_graph.add_node_with_props(LOP::HashJoin, props, Some(vec![plan1_key, plan2_key]));
                         join_status = Some((plan1_key, plan2_key, join_node));
 
                         break 'outer;
@@ -303,15 +303,15 @@ impl APS {
         }
 
         assert!(worklist.len() == 1);
-        let root_pop_key = worklist[0];
+        let root_lop_key = worklist[0];
 
         let plan_filename = format!("{}/{}", GRAPHVIZDIR, "plan.dot");
-        APS::write_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename);
+        APS::write_plan_to_graphviz(qgm, &lop_graph, root_lop_key, &plan_filename);
         Ok(())
     }
 
     pub(crate) fn write_plan_to_graphviz(
-        qgm: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str,
+        qgm: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str,
     ) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
@@ -320,7 +320,7 @@ impl APS {
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        Self::write_pop_to_graphviz(qgm, pop_graph, pop_key, &mut file);
+        Self::write_lop_to_graphviz(qgm, lop_graph, lop_key, &mut file);
 
         fprint!(file, "}}\n");
 
@@ -340,7 +340,7 @@ impl APS {
         Ok(())
     }
 
-    fn nodeid_to_str(nodeid: &POPKey) -> String {
+    fn nodeid_to_str(nodeid: &LOPKey) -> String {
         format!("{:?}", nodeid).replace("(", "").replace(")", "")
     }
 
@@ -373,33 +373,33 @@ impl APS {
         predstring
     }
 
-    pub(crate) fn write_pop_to_graphviz(
-        qgm: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File,
+    pub(crate) fn write_lop_to_graphviz(
+        qgm: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File,
     ) -> std::io::Result<()> {
-        let id = Self::nodeid_to_str(&pop_key);
-        let (pop, props, children) = pop_graph.get3(pop_key);
+        let id = Self::nodeid_to_str(&lop_key);
+        let (lop, props, children) = lop_graph.get3(lop_key);
 
         if let Some(children) = children {
             for &childid in children.iter().rev() {
                 let childid_name = Self::nodeid_to_str(&childid);
-                fprint!(file, "    popnode{} -> popnode{};\n", childid_name, id);
-                Self::write_pop_to_graphviz(qgm, pop_graph, childid, file)?;
+                fprint!(file, "    lopkey{} -> lopkey{};\n", childid_name, id);
+                Self::write_lop_to_graphviz(qgm, lop_graph, childid, file)?;
             }
         }
         let colstring = Self::quncols_bitset_to_string(qgm, &props.cols);
         let predstring = Self::preds_bitset_to_string(qgm, &props.preds, true);
 
-        let (label, extrastr) = match &pop {
-            POP::TableScan { input_cols } => {
+        let (label, extrastr) = match &lop {
+            LOP::TableScan { input_cols } => {
                 let input_cols = Self::quncols_bitset_to_string(qgm, &input_cols);
                 (String::from("TableScan"), input_cols)
             }
-            _ => (format!("{:?}", &pop), String::from("")),
+            _ => (format!("{:?}", &lop), String::from("")),
         };
 
         fprint!(
             file,
-            "    popnode{}[label=\"{}|{:?}|{}|{}|(input = {})\"];\n",
+            "    lopkey{}[label=\"{}|{:?}|{}|{}|(input = {})\"];\n",
             id,
             label,
             props.quns.elements(),
