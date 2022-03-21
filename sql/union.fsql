@@ -6,7 +6,7 @@ DESCRIBE TABLE emp;
 SELECT name from EMP
 where dept_id <= 4
 union
-SELECT name from (select * from EMP)
+SELECT name from (select name, age from EMP)
 where dept_id > 4
 ;
 

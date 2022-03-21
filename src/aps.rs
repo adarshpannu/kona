@@ -83,7 +83,7 @@ impl APS {
         let graph = &qgm.expr_graph;
         let mut pop_graph: POPGraph = Graph::new();
 
-        let mainqblock = qgm.qblock_graph.get(qgm.main_qblock_key).value.get_select_block();
+        let mainqblock = &qgm.qblock_graph.get(qgm.main_qblock_key).value;
         let mut worklist: Vec<POPKey> = vec![];
 
         assert!(qgm.cte_list.len() == 0);

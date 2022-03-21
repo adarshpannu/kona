@@ -130,10 +130,10 @@ pub SetOption: AST = {
 }
 
 // -------------------- U/I/E QUERY --------------------
-pub UIEOperator: QueryBlockSetop = {
-    "UNION" <all:"ALL"?> => { if all.is_some() { QueryBlockSetop::UnionAll } else { QueryBlockSetop::Union } },
-    "INTERSECT" => QueryBlockSetop::Intersect,
-    "EXCEPT" => QueryBlockSetop::Except,
+pub UIEOperator: QueryBlockType = {
+    "UNION" <all:"ALL"?> => { if all.is_some() { QueryBlockType::UnionAll } else { QueryBlockType::Union } },
+    "INTERSECT" => QueryBlockType::Intersect,
+    "EXCEPT" => QueryBlockType::Except,
 }
 
 // -------------------- FULL QUERY --------------------
@@ -149,13 +149,26 @@ pub Query: AST = <cte_list:WithClause?> <mut main_qblock_key:SUIEQuery> => {
     AST::QGM(qgm)
 };
 
-// -------------------- SELECT/UNION/INTERSECT/EXCEPT SUIE QUERY --------------------
-
+// -------------------- SUIE (SELECT/UNION/INTERSECT/EXCEPT) QUERY  --------------------
 pub SUIEQuery: QueryBlockKey = {
     QueryBlock,
     Subquery,
-    <left:SUIEQuery> <qblocknode:UIEOperator> <right:QueryBlock> => {
-        parser_state.qblock_graph.add_node(qblocknode, Some(vec![left, right]))
+    <qb1:SUIEQuery> <qblocktype:UIEOperator> <qb2:QueryBlock> => {
+        let qun1 = Quantifier::new(parser_state.expr_graph.next_id(), None, Some(qb1), None);
+        let qun2 = Quantifier::new(parser_state.expr_graph.next_id(), None, Some(qb2), None);
+        let qblock = QueryBlock::new(
+            parser_state.qblock_graph.next_id(), 
+            None, 
+            qblocktype, 
+            vec![], 
+            vec![qun1, qun2], 
+            None,
+            None, 
+            None, 
+            None, 
+            DistinctProperty::All,
+            None);
+        parser_state.qblock_graph.add_node(qblock, None)
     }
 }
 
@@ -180,7 +193,7 @@ pub QueryBlock: QueryBlockKey = {
             order_by, 
             distinct.unwrap_or(DistinctProperty::All), 
             None);
-        parser_state.qblock_graph.add_node(QueryBlockSetop::Select(qblock), None)
+        parser_state.qblock_graph.add_node(qblock, None)
     }
 };
 
@@ -200,10 +213,9 @@ WithClause = "WITH" <CTEList>;
 CTEList = CommaSeparatedList<CTE>;
 
 CTE: QueryBlockKey = <name:Identifier> "AS" <mut subqkey:Subquery> => {
-    // TODO
-    //let subq = parser_state.qblock_graph.get1(subqkey).get_select_block();
-    //subq.name = Some(name);
-    //subq.qbtype = QueryBlockType::Select;
+    let subq = &mut parser_state.qblock_graph.get_mut(subqkey).value;
+    subq.name = Some(name);
+    subq.qbtype = QueryBlockType::Select;
     subqkey
 };
 

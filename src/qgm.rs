@@ -14,36 +14,7 @@ use std::rc::Rc;
 use std::fmt;
 use std::process::Command;
 
-pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlockSetop, ()>;
-
-#[derive(Debug)]
-pub enum QueryBlockSetop {
-    Unassigned,
-    Select(QueryBlock),
-    Union,
-    UnionAll,
-    Intersect,
-    Except
-}
-
-impl QueryBlockSetop {
-    pub fn get_select_block(&self) -> &QueryBlock {
-        // todo: this is dangerous! get rid of this soon.
-        match self {
-            QueryBlockSetop::Select(qblock) => qblock,
-            _ => panic!("QueryBlockNode:get_select_block() expecting a Select(QueryBlock)")
-        }
-    }
-
-    pub fn get_select_block_mut(&mut self) -> &mut QueryBlock {
-        // todo: this is dangerous! get rid of this soon.
-        match self {
-            QueryBlockSetop::Select(ref mut qblock) => qblock,
-            _ => panic!("QueryBlockNode:get_select_block() expecting a Select(QueryBlock)")
-        }
-    }
-
-}
+pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlock, ()>;
 
 macro_rules! fprint {
     ($file:expr, $($args:expr),*) => {{
@@ -109,19 +80,20 @@ pub struct QGM {
 }
 
 impl QGM {
-    pub fn new(main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph) -> QGM {
+    pub fn new(
+        main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph,
+    ) -> QGM {
         QGM {
             main_qblock_key: main_qblock,
             cte_list,
             qblock_graph,
             expr_graph,
-            metadata: QGMMetadata::new()
+            metadata: QGMMetadata::new(),
         }
     }
 
     pub fn populate_metadata(&mut self) {
         let mut metadata = &self.metadata;
-
     }
 }
 
@@ -157,6 +129,10 @@ impl NamedExpr {
 pub enum QueryBlockType {
     Select,
     GroupBy,
+    Union,
+    UnionAll,
+    Intersect,
+    Except,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -210,21 +186,11 @@ impl Quantifier {
     }
 
     pub fn display(&self) -> String {
-        let qbname = if let Some(qblock) = self.qblock.as_ref() {
-            //let qblock = qblock.borrow();
-            //format!("{:?}", qblock.qbtype)
-            String::from("qb todo")
-
-        } else {
-            String::from("")
-        };
-
         format!(
-            "{}/{} {} #{}",
+            "QUN_{} {}/{}",
+            self.id,
             self.tablename.as_ref().unwrap_or(&"".to_string()),
             self.alias.as_ref().unwrap_or(&"".to_string()),
-            qbname,
-            self.id
         )
     }
 
@@ -282,6 +248,22 @@ impl QueryBlock {
             order_by,
             distinct,
             topN,
+        }
+    }
+
+    pub fn new0(id: QBId, qbtype: QueryBlockType) -> Self {
+        QueryBlock {
+            id,
+            name: None,
+            qbtype,
+            select_list: vec![],
+            quns: vec![],
+            pred_list: None,
+            group_by: None,
+            having_clause: None,
+            order_by: None,
+            distinct: DistinctProperty::All,
+            topN: None,
         }
     }
 
@@ -346,7 +328,7 @@ impl QueryBlock {
                 qun.display()
             );
             if let Some(qbkey) = qun.qblock {
-                let qblock = qgm.qblock_graph.get(qbkey).value.get_select_block();
+                let qblock = &qgm.qblock_graph.get(qbkey).value;
                 //fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 //qblock.write_qblock_to_graphviz(qgm, file)?
             }
@@ -414,7 +396,7 @@ impl QueryBlock {
         // Write referenced query blocks
         for qun in self.quns.iter().rev() {
             if let Some(qbkey) = qun.qblock {
-                let qblock = qgm.qblock_graph.get(qbkey).value.get_select_block();
+                let qblock = &qgm.qblock_graph.get(qbkey).value;
                 fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 qblock.write_qblock_to_graphviz(qgm, file)?
             }
@@ -431,14 +413,17 @@ pub struct ParserState {
 
 impl ParserState {
     pub fn new() -> Self {
-        ParserState { qblock_graph: Graph::new(), expr_graph: Graph::new() }
+        ParserState {
+            qblock_graph: Graph::new(),
+            expr_graph: Graph::new(),
+        }
     }
 }
 
 impl QGM {
     pub fn main_qblock(&self) -> &QueryBlock {
         let qbkey = self.main_qblock_key;
-        let qblock = self.qblock_graph.get(qbkey).value.get_select_block();
+        let qblock = &self.qblock_graph.get(qbkey).value;
         qblock
     }
 
@@ -459,7 +444,7 @@ impl QGM {
 
         // Write subqueries (CTEs)
         for &qbkey in self.cte_list.iter() {
-            let qblock = self.qblock_graph.get(qbkey).value.get_select_block();
+            let qblock = &self.qblock_graph.get(qbkey).value;
             qblock.write_qblock_to_graphviz(self, &mut file);
         }
 

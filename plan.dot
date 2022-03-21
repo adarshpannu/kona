@@ -3,5 +3,5 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
-    popnodePOPKey1v1[label="TableScan|[1]||{SUM(CID(1,3)) \> 100|CID(1,0) \> 10}|(input = )"];
+    popnodePOPKey1v1[label="TableScan|[0]|NAME |{DEPT_ID = 4}|(input = NAME DEPT_ID )"];
 }

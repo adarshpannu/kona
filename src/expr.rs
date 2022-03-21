@@ -273,21 +273,6 @@ impl Expr {
 }
 
 impl ExprKey {
-    pub fn iter_quncols<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
-        let it = graph
-            .iter(*self)
-            .filter_map(move |nodeid| match &graph.get(nodeid).value {
-                Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
-                CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
-                _ => None,
-            });
-        Box::new(it)
-    }
-
-    pub fn iter_quns<'g>(&self, graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunId> + 'g> {
-        Box::new(self.iter_quncols(graph).map(|quncol| quncol.0))
-    }
-
     pub fn get_boolean_factors(self, expr_graph: &ExprGraph, boolean_factors: &mut Vec<ExprKey>) {
         let (expr, _, children) = expr_graph.get3(self);
         if let LogExpr(crate::expr::LogOp::And) = expr {

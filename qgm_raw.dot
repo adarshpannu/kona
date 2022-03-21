@@ -2,3 +2,22 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
+  subgraph cluster_QB_0 {
+    "QB_0_selectlist"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_0 {
+    exprnodeExprKey1v1[label="NAME (0.0): 0"];
+    exprnodeExprKey1v1 -> "QB_0_selectlist";
+}
+    "QUN_0"[label="QUN_0 EMP/", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_pred_listQB_0 {
+    exprnodeExprKey4v1[label="="];
+    exprnodeExprKey2v1 -> exprnodeExprKey4v1;
+    exprnodeExprKey2v1[label="DEPT_ID (0.0)"];
+    exprnodeExprKey3v1 -> exprnodeExprKey4v1;
+    exprnodeExprKey3v1[label="4"];
+    exprnodeExprKey4v1 -> QB_0_pred_list;
+    "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
+}
+    label = "QB_0 type=Select";
+}
+}

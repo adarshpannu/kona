@@ -61,7 +61,7 @@ impl QueryBlock {
         qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
         metadata: &mut QGMMetadata,
     ) -> Result<(), String> {
-        let mut qblock = qblock_graph.get_mut(qbkey).value.get_select_block_mut();
+        let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
 
         debug!("Resolve query block: {}", qblock.id);
 
@@ -71,7 +71,7 @@ impl QueryBlock {
             Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata);
         }
 
-        let mut qblock = qblock_graph.get_mut(qbkey).value.get_select_block_mut();
+        let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
 
         let mut colid_dispenser = QueryBlockColidDispenser::new();
 
@@ -137,10 +137,10 @@ impl QueryBlock {
     pub fn split_groupby(
         qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
     ) -> Result<(), String> {
-        let inner_qb_key = qblock_graph.add_node(QueryBlockSetop::Unassigned, None);
+        let inner_qb_key = qblock_graph.add_node(QueryBlock::new0(expr_graph.next_id(), QueryBlockType::Select), None);
         let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
 
-        let mut qblock = outer_qb_node.value.get_select_block_mut();
+        let mut qblock = &mut outer_qb_node.value;
 
         let agg_qun_id = expr_graph.next_id();
 
@@ -203,7 +203,7 @@ impl QueryBlock {
             None,
         );
 
-        inner_qb_node.value = QueryBlockSetop::Select(inner_qb);
+        inner_qb_node.value = inner_qb;
         let outer_qun = Quantifier::new(agg_qun_id, None, Some(inner_qb_key), None);
         outer_qb.name = None;
         outer_qb.qbtype = QueryBlockType::GroupBy;

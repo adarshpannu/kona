@@ -5,96 +5,19 @@ digraph example1 {
   subgraph cluster_QB_0 {
     "QB_0_selectlist"[label="select_list",shape=box,style=filled];
   subgraph cluster_select_listQB_0 {
-    exprnodeExprKey11v1[label="/: 0"];
-    exprnodeExprKey6v1 -> exprnodeExprKey11v1;
-    exprnodeExprKey6v1[label="*"];
-    exprnodeExprKey4v1 -> exprnodeExprKey6v1;
-    exprnodeExprKey4v1[label="SUM"];
-    exprnodeExprKey37v1 -> exprnodeExprKey4v1;
-    exprnodeExprKey37v1[label="CID(1,1)"];
-    exprnodeExprKey5v1 -> exprnodeExprKey6v1;
-    exprnodeExprKey5v1[label="99"];
-    exprnodeExprKey10v1 -> exprnodeExprKey11v1;
-    exprnodeExprKey10v1[label="COUNT"];
-    exprnodeExprKey38v1 -> exprnodeExprKey10v1;
-    exprnodeExprKey38v1[label="CID(1,2)"];
-    exprnodeExprKey11v1 -> "QB_0_selectlist";
-    exprnodeExprKey39v1[label="CID(1,0): 1"];
-    exprnodeExprKey39v1 -> "QB_0_selectlist";
-    exprnodeExprKey16v1[label="AVG: 2"];
-    exprnodeExprKey43v1 -> exprnodeExprKey16v1;
-    exprnodeExprKey43v1[label="/"];
-    exprnodeExprKey41v1 -> exprnodeExprKey43v1;
-    exprnodeExprKey41v1[label="SUM"];
-    exprnodeExprKey40v1 -> exprnodeExprKey41v1;
-    exprnodeExprKey40v1[label="CID(1,3)"];
-    exprnodeExprKey42v1 -> exprnodeExprKey43v1;
-    exprnodeExprKey42v1[label="COUNT"];
-    exprnodeExprKey40v1 -> exprnodeExprKey42v1;
-    exprnodeExprKey40v1[label="CID(1,3)"];
-    exprnodeExprKey16v1 -> "QB_0_selectlist";
+    exprnodeExprKey1v1[label="NAME (0.0): 0"];
+    exprnodeExprKey1v1 -> "QB_0_selectlist";
 }
-    "QUN_1"[label="/ qb todo #1", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_0"[label="QUN_0 EMP/", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_0 {
-    exprnodeExprKey30v1[label=">"];
-    exprnodeExprKey28v1 -> exprnodeExprKey30v1;
-    exprnodeExprKey28v1[label="SUM"];
-    exprnodeExprKey44v1 -> exprnodeExprKey28v1;
-    exprnodeExprKey44v1[label="CID(1,3)"];
-    exprnodeExprKey29v1 -> exprnodeExprKey30v1;
-    exprnodeExprKey29v1[label="100"];
-    exprnodeExprKey30v1 -> QB_0_pred_list;
-    exprnodeExprKey35v1[label=">"];
-    exprnodeExprKey45v1 -> exprnodeExprKey35v1;
-    exprnodeExprKey45v1[label="CID(1,0)"];
-    exprnodeExprKey34v1 -> exprnodeExprKey35v1;
-    exprnodeExprKey34v1[label="10"];
-    exprnodeExprKey35v1 -> QB_0_pred_list;
+    exprnodeExprKey4v1[label="="];
+    exprnodeExprKey2v1 -> exprnodeExprKey4v1;
+    exprnodeExprKey2v1[label="DEPT_ID (0.2)"];
+    exprnodeExprKey3v1 -> exprnodeExprKey4v1;
+    exprnodeExprKey3v1[label="4"];
+    exprnodeExprKey4v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
 }
-    label = "QB_0 type=GroupBy";
-}
-    "QUN_1" -> "QB_2_selectlist";
-  subgraph cluster_QB_2 {
-    "QB_2_selectlist"[label="select_list",shape=box,style=filled];
-  subgraph cluster_select_listQB_2 {
-    exprnodeExprKey26v1[label="+: 0"];
-    exprnodeExprKey24v1 -> exprnodeExprKey26v1;
-    exprnodeExprKey24v1[label="DEPT_ID (0.2)"];
-    exprnodeExprKey25v1 -> exprnodeExprKey26v1;
-    exprnodeExprKey25v1[label="55"];
-    exprnodeExprKey26v1 -> "QB_2_selectlist";
-    exprnodeExprKey3v1[label="+: 1"];
-    exprnodeExprKey1v1 -> exprnodeExprKey3v1;
-    exprnodeExprKey1v1[label="AGE (0.1)"];
-    exprnodeExprKey2v1 -> exprnodeExprKey3v1;
-    exprnodeExprKey2v1[label="10"];
-    exprnodeExprKey3v1 -> "QB_2_selectlist";
-    exprnodeExprKey9v1[label="+: 2"];
-    exprnodeExprKey7v1 -> exprnodeExprKey9v1;
-    exprnodeExprKey7v1[label="AGE (0.1)"];
-    exprnodeExprKey8v1 -> exprnodeExprKey9v1;
-    exprnodeExprKey8v1[label="50"];
-    exprnodeExprKey9v1 -> "QB_2_selectlist";
-    exprnodeExprKey15v1[label="AGE (0.1): 3"];
-    exprnodeExprKey15v1 -> "QB_2_selectlist";
-}
-    "QUN_0"[label="EMP/  #0", fillcolor=black, fontcolor=white, style=filled]
-  subgraph cluster_pred_listQB_2 {
-    exprnodeExprKey19v1[label=">"];
-    exprnodeExprKey17v1 -> exprnodeExprKey19v1;
-    exprnodeExprKey17v1[label="AGE (0.1)"];
-    exprnodeExprKey18v1 -> exprnodeExprKey19v1;
-    exprnodeExprKey18v1[label="50"];
-    exprnodeExprKey19v1 -> QB_2_pred_list;
-    exprnodeExprKey22v1[label="<"];
-    exprnodeExprKey20v1 -> exprnodeExprKey22v1;
-    exprnodeExprKey20v1[label="DEPT_ID (0.2)"];
-    exprnodeExprKey21v1 -> exprnodeExprKey22v1;
-    exprnodeExprKey21v1[label="99"];
-    exprnodeExprKey22v1 -> QB_2_pred_list;
-    "QB_2_pred_list"[label="pred_list",shape=box,style=filled];
-}
-    label = "QB_2 type=Select";
+    label = "QB_0 type=Select";
 }
 }
