@@ -309,7 +309,7 @@ impl QueryBlock {
         for (ix, nexpr) in self.select_list.iter().enumerate() {
             let expr_key = nexpr.expr_key;
             QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix));
-            let childid_name = QGM::nodeid_to_str(&expr_key);
+            let childid_name = expr_key.to_string();
             fprint!(
                 file,
                 "    exprnode{} -> \"{}_selectlist\";\n",
@@ -340,7 +340,7 @@ impl QueryBlock {
 
             for &expr_key in pred_list {
                 QGM::write_expr_to_graphvis(qgm, expr_key, file, None);
-                let id = QGM::nodeid_to_str(&expr_key);
+                let id = expr_key.to_string();
                 let (expr, _, children) = qgm.expr_graph.get3(expr_key);
                 fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
             }
@@ -364,7 +364,7 @@ impl QueryBlock {
 
             for (ix, &expr_key) in group_by.iter().enumerate() {
                 QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix));
-                let childid_name = QGM::nodeid_to_str(&expr_key);
+                let childid_name = expr_key.to_string();
                 fprint!(file, "    exprnode{} -> \"{}_group_by\";\n", childid_name, self.name());
             }
             fprint!(file, "}}\n");
@@ -377,7 +377,7 @@ impl QueryBlock {
             for &expr_key in having_clause {
                 QGM::write_expr_to_graphvis(qgm, expr_key, file, None);
 
-                let id = QGM::nodeid_to_str(&expr_key);
+                let id = expr_key.to_string();
                 let (expr, _, children) = qgm.expr_graph.get3(expr_key);
                 fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
             }
@@ -472,15 +472,11 @@ impl QGM {
         Ok(())
     }
 
-    fn nodeid_to_str(nodeid: &ExprKey) -> String {
-        format!("{:?}", nodeid).replace("(", "").replace(")", "")
-    }
-
     fn write_expr_to_graphvis(
-        qgm: &QGM, expr: ExprKey, file: &mut File, order_ix: Option<usize>,
+        qgm: &QGM, expr_key: ExprKey, file: &mut File, order_ix: Option<usize>,
     ) -> std::io::Result<()> {
-        let id = Self::nodeid_to_str(&expr);
-        let (expr, _, children) = qgm.expr_graph.get3(expr);
+        let id = expr_key.to_string();
+        let (expr, _, children) = qgm.expr_graph.get3(expr_key);
         let ix_str = if let Some(ix) = order_ix {
             format!(": {}", ix)
         } else {
@@ -490,7 +486,7 @@ impl QGM {
         fprint!(file, "    exprnode{}[label=\"{}{}\"];\n", id, expr.name(), ix_str);
         if let Some(children) = children {
             for &childid in children {
-                let childid_name = Self::nodeid_to_str(&childid);
+                let childid_name = childid.to_string();
 
                 fprint!(file, "    exprnode{} -> exprnode{};\n", childid_name, id);
                 Self::write_expr_to_graphvis(qgm, childid, file, None)?;

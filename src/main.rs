@@ -173,11 +173,12 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 env.set_option(name, value);
             }
             AST::QGM(mut qgm) => {
-                qgm.scratch();
                 qgm.write_qgm_to_graphviz(&qgm_raw_filename, false);
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
-                APS::find_best_plan(env, &mut qgm);
+                qgm.scratch();
+
+                QGM::build_logical_plan(&mut qgm);
 
                 if ! env.get_boolean_option("PARSE_ONLY") {
                     //let flow = Compiler::compile(env, &mut qgm).unwrap();
@@ -207,7 +208,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/simple.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
     //let filename = "/Users/adarshrp/tmp/rst.sql";
 
     let jobres = run_job(&mut env, filename);

@@ -14,14 +14,18 @@ use std::process::Command;
 
 type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
 
-pub struct APS;
-
 const BITMAPLEN: usize = 256;
 
 macro_rules! fprint {
     ($file:expr, $($args:expr),*) => {{
         $file.write_all(format!($($args),*).as_bytes());
     }};
+}
+
+impl LOPKey {
+    fn to_string(&self) -> String {
+        format!("{:?}", *self).replace("(", "").replace(")", "")
+    }
 }
 
 #[derive(Debug)]
@@ -77,33 +81,69 @@ enum PredicateType {
     Other,    // r.col1 > s.col1
 }
 
-impl APS {
-    pub fn find_best_plan(env: &Env, qgm: &mut QGM) -> Result<(), String> {
-        //let graph = replace(&mut qgm.graph, Graph::new());
-        let graph = &qgm.expr_graph;
+pub struct APSContext {
+    all_quncols_bitset: Bitset<QunCol>,
+    all_quns_bitset: Bitset<QunId>,
+    all_preds_bitset: Bitset<ExprKey>,
+}
+
+impl APSContext {
+    fn new(qgm: &QGM) -> Self {
+        let mut all_quncols_bitset = Bitset::new();
+        let mut all_quns_bitset = Bitset::new();
+        let mut all_preds_bitset = Bitset::new();
+
+        for quncol in qgm.iter_quncols() {
+            all_quncols_bitset.set(quncol);
+            all_quns_bitset.set(quncol.0);
+        }
+        for expr_key in qgm.iter_preds() {
+            all_preds_bitset.set(expr_key);
+        }
+
+        APSContext {
+            all_quncols_bitset,
+            all_quns_bitset,
+            all_preds_bitset,
+        }
+    }
+}
+impl QGM {
+    pub fn build_logical_plan(self: &mut QGM) -> Result<(), String> {
+        // Construct bitmaps
+        let mut aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
-        let mainqblock = &qgm.qblock_graph.get(qgm.main_qblock_key).value;
+        self.build_qblock_logical_plan(self.main_qblock_key, &aps_context, &mut lop_graph);
+
+        Ok(())
+    }
+
+    pub fn build_qblock_logical_plan(
+        self: &mut QGM, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph,
+    ) -> Result<LOPKey, String> {
+        //let graph = replace(&mut qgm.graph, Graph::new());
+        let graph = &self.expr_graph;
+
+        let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
 
-        assert!(qgm.cte_list.len() == 0);
+        assert!(self.cte_list.len() == 0);
 
-        let mut all_quncols_bitset: Bitset<QunCol> = Bitset::new();
-        let mut all_quns_bitset: Bitset<QunId> = Bitset::new();
-        let mut all_preds_bitset: Bitset<ExprKey> = Bitset::new();
+        let all_quncols_bitset = &aps_context.all_quncols_bitset;
+        let all_quns_bitset = &aps_context.all_quns_bitset;
+        let all_preds_bitset = &aps_context.all_preds_bitset;
+
+        let mut select_list_quncol_bitset = all_quncols_bitset.clone().clear(); // shallow copy
 
         // Process select-list: Collect all QunCols
-        mainqblock
+        qblock
             .select_list
             .iter()
             .flat_map(|ne| ne.expr_key.iter_quncols(&graph))
-            .for_each(|quncol| all_quncols_bitset.set(quncol));
-        let select_list_quncol_bitset = all_quncols_bitset.clone(); // shallow copy
+            .for_each(|quncol| select_list_quncol_bitset.set(quncol));
 
-        debug!(
-            "select_list_quncols: {:?}",
-            Self::quncols_bitset_to_string(qgm, &select_list_quncol_bitset)
-        );
+        debug!("select_list_quncols: {:?}", select_list_quncol_bitset.to_string(self));
 
         // Process predicates:
         // 1. Classify predicates: pred -> type
@@ -111,15 +151,13 @@ impl APS {
         // 3. Collect quns for each predicates: pred -> set(Qun)
         let mut pred_map: HashMap<ExprKey, (PredicateType, Bitset<QunCol>, Bitset<QunId>)> = HashMap::new();
 
-        if let Some(pred_list) = mainqblock.pred_list.as_ref() {
+        if let Some(pred_list) = qblock.pred_list.as_ref() {
             for &pred_key in pred_list.iter() {
                 let mut quncols_bitset = all_quncols_bitset.clone().clear();
                 let mut quns_bitset = all_quns_bitset.clone().clear();
 
                 for quncol in pred_key.iter_quncols(&graph) {
                     quncols_bitset.set(quncol);
-                    all_quncols_bitset.set(quncol);
-
                     quns_bitset.set(quncol.0);
                 }
 
@@ -158,7 +196,7 @@ impl APS {
         }
 
         // Build tablescan POPs first
-        for qun in mainqblock.quns.iter() {
+        for qun in qblock.quns.iter() {
             debug!("Build TableScan: {:?} id={}", qun.display(), qun.id);
 
             // Set quns
@@ -174,7 +212,7 @@ impl APS {
             debug!(
                 "input_quncols_bitset for qun = {}: {:?}",
                 qun.id,
-                Self::quncols_bitset_to_string(qgm, &input_quncols_bitset)
+                input_quncols_bitset.to_string(self)
             );
 
             // Set output cols + preds
@@ -222,7 +260,8 @@ impl APS {
             worklist.push(lopkey);
         }
 
-        let n = mainqblock.quns.len();
+        // Run greedy join enumeration
+        let n = qblock.quns.len();
         for ix in (2..=n).rev() {
             let mut join_status = None;
 
@@ -232,8 +271,6 @@ impl APS {
                     if plan1_key == plan2_key {
                         continue;
                     }
-
-                    //debug!("Evaluate join between {:?} and {:?}", plan1_key, plan2_key);
 
                     let (plan1, props1, _) = lop_graph.get3(plan1_key);
                     let (plan2, props2, _) = lop_graph.get3(plan2_key);
@@ -302,16 +339,19 @@ impl APS {
             }
         }
 
-        assert!(worklist.len() == 1);
-        let root_lop_key = worklist[0];
+        if worklist.len() == 1 {
+            let root_lop_key = worklist[0];
 
-        let plan_filename = format!("{}/{}", GRAPHVIZDIR, "plan.dot");
-        APS::write_plan_to_graphviz(qgm, &lop_graph, root_lop_key, &plan_filename);
-        Ok(())
+            let plan_filename = format!("{}/{}", GRAPHVIZDIR, "plan.dot");
+            self.write_logical_plan_to_graphviz(&lop_graph, root_lop_key, &plan_filename);
+            Ok(root_lop_key)
+        } else {
+            Err("Cannot find plan for qblock".to_string())
+        }
     }
 
-    pub(crate) fn write_plan_to_graphviz(
-        qgm: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str,
+    pub(crate) fn write_logical_plan_to_graphviz(
+        self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str,
     ) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
@@ -320,7 +360,7 @@ impl APS {
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        Self::write_lop_to_graphviz(qgm, lop_graph, lop_key, &mut file);
+        self.write_lop_to_graphviz(lop_graph, lop_key, &mut file);
 
         fprint!(file, "}}\n");
 
@@ -340,58 +380,25 @@ impl APS {
         Ok(())
     }
 
-    fn nodeid_to_str(nodeid: &LOPKey) -> String {
-        format!("{:?}", nodeid).replace("(", "").replace(")", "")
-    }
-
-    fn quncols_bitset_to_string(qgm: &QGM, quncols: &Bitset<QunCol>) -> String {
-        let cols = quncols
-            .elements()
-            .iter()
-            .map(|&quncol| qgm.metadata.get_colname(quncol))
-            .collect::<Vec<String>>();
-        let mut colstring = String::from("");
-        for col in cols {
-            colstring.push_str(&col);
-            colstring.push_str(" ");
-        }
-        colstring
-    }
-
-    fn preds_bitset_to_string(qgm: &QGM, preds: &Bitset<ExprKey>, do_escape: bool) -> String {
-        let mut predstring = String::from("{");
-        let preds = preds.elements();
-        for (ix, &pred_key) in preds.iter().enumerate() {
-            debug!("PRED: {:?}", &pred_key);
-            let predstr = Expr::to_string(pred_key, &qgm.expr_graph, do_escape);
-            predstring.push_str(&predstr);
-            if ix < preds.len() - 1 {
-                predstring.push_str("|")
-            }
-        }
-        predstring.push_str("}");
-        predstring
-    }
-
     pub(crate) fn write_lop_to_graphviz(
-        qgm: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File,
+        self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File,
     ) -> std::io::Result<()> {
-        let id = Self::nodeid_to_str(&lop_key);
+        let id = lop_key.to_string();
         let (lop, props, children) = lop_graph.get3(lop_key);
 
         if let Some(children) = children {
-            for &childid in children.iter().rev() {
-                let childid_name = Self::nodeid_to_str(&childid);
-                fprint!(file, "    lopkey{} -> lopkey{};\n", childid_name, id);
-                Self::write_lop_to_graphviz(qgm, lop_graph, childid, file)?;
+            for &child_key in children.iter().rev() {
+                let child_name = child_key.to_string();
+                fprint!(file, "    lopkey{} -> lopkey{};\n", child_name, id);
+                self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let colstring = Self::quncols_bitset_to_string(qgm, &props.cols);
-        let predstring = Self::preds_bitset_to_string(qgm, &props.preds, true);
+        let colstring = props.cols.to_string(self);
+        let predstring = props.preds.to_string(self, true);
 
         let (label, extrastr) = match &lop {
             LOP::TableScan { input_cols } => {
-                let input_cols = Self::quncols_bitset_to_string(qgm, &input_cols);
+                let input_cols = input_cols.to_string(self);
                 (String::from("TableScan"), input_cols)
             }
             _ => (format!("{:?}", &lop), String::from("")),
@@ -409,5 +416,38 @@ impl APS {
         );
 
         Ok(())
+    }
+}
+
+impl Bitset<QunCol> {
+    fn to_string(&self, qgm: &QGM) -> String {
+        let cols = self
+            .elements()
+            .iter()
+            .map(|&quncol| qgm.metadata.get_colname(quncol))
+            .collect::<Vec<String>>();
+        let mut colstring = String::from("");
+        for col in cols {
+            colstring.push_str(&col);
+            colstring.push_str(" ");
+        }
+        colstring
+    }
+}
+
+impl Bitset<ExprKey> {
+    fn to_string(&self, qgm: &QGM, do_escape: bool) -> String {
+        let mut predstring = String::from("{");
+        let preds = self.elements();
+        for (ix, &pred_key) in preds.iter().enumerate() {
+            debug!("PRED: {:?}", &pred_key);
+            let predstr = Expr::to_string(pred_key, &qgm.expr_graph, do_escape);
+            predstring.push_str(&predstr);
+            if ix < preds.len() - 1 {
+                predstring.push_str("|")
+            }
+        }
+        predstring.push_str("}");
+        predstring
     }
 }

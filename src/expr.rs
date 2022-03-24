@@ -285,4 +285,8 @@ impl ExprKey {
             boolean_factors.push(self)
         }
     }
+
+    pub fn to_string(self: &ExprKey) -> String {
+        format!("{:?}", *self).replace("(", "").replace(")", "")
+    }
 }

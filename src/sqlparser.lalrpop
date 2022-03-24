@@ -79,12 +79,9 @@ match {
 }
 
 CommaSeparatedList<T>: Vec<T> = {
-    <mut v:(<T> ",")*> <e:T?> => match e {
-        None => v,
-        Some(e) => {
-            v.push(e);
-            v
-        }
+    <mut v:(<T> ",")*> <e:T> => {
+        v.push(e);
+        v
     }
 };
 
@@ -382,7 +379,7 @@ AggArg: ExprKey = {
 }
 
 ScalarFunction: ExprKey = {
-    <name:Identifier> "(" <args:FunctionArgs> ")" => parser_state.expr_graph.add_node(ScalarFunction(name), Some(args)),
+    <name:Identifier> "(" <args:FunctionArgs?> ")" => parser_state.expr_graph.add_node(ScalarFunction(name), args),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
         let datatype = parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
         let args = vec![arg, datatype];
