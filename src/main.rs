@@ -14,44 +14,50 @@ lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
 pub mod includes;
 
-pub mod graph;
-pub mod bitset;
 pub mod ast;
+pub mod bitset;
+pub mod expr;
+pub mod graph;
 pub mod qgm;
 pub mod qgmiter;
-pub mod expr;
 
-pub mod qst;
-pub mod aps;
 pub mod compiler;
+pub mod lop;
+pub mod qst;
 
-pub mod logging;
 pub mod graphviz;
+pub mod logging;
 
-pub mod metadata;
 pub mod csv;
+pub mod metadata;
+pub mod pop;
 pub mod flow;
 pub mod row;
-pub mod task;
 pub mod scratch;
+pub mod task;
 
-use qgm::*;
-use metadata::*;
 use compiler::*;
-use aps::*;
+use lop::*;
+use metadata::*;
+use pop::*;
 use flow::*;
+use qgm::*;
 
 pub struct Env {
     thread_pool: ThreadPool,
     metadata: Metadata,
-    options: HashMap<String, String>
+    options: HashMap<String, String>,
 }
 
 impl Env {
     fn new(nthreads: usize) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
-        Env { thread_pool, metadata, options: HashMap::new() }
+        Env {
+            thread_pool,
+            metadata,
+            options: HashMap::new(),
+        }
     }
 
     fn set_option(&mut self, name: String, value: String) {
@@ -63,89 +69,25 @@ impl Env {
         if let Some(opt) = self.options.get(name) {
             return match opt.as_str() {
                 "TRUE" | "YES" => true,
-                _ => false
-            }
+                _ => false,
+            };
         } else {
-            return false
+            return false;
         }
     }
 }
 
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) {
-
-    let gvfilename = format!("{}/{}", GRAPHVIZDIR, "flow.dot");
-
-    graphviz::write_flow_to_graphviz(&flow, &gvfilename, false).expect("Cannot write to .dot file.");
-
-    let node = &flow.nodes[flow.nodes.len() - 1];
-
-    let dirname = format!("{}/flow-{}", TEMPDIR, flow.id);
+    // Clear output directories
+    let dirname = format!("{}/flow", TEMPDIR);
     std::fs::remove_dir_all(dirname);
 
     // Run the flow
     flow.run(&env);
 
     env.thread_pool.close_all();
-
     env.thread_pool.join();
-}
-
-/*
-pub fn make_simple_flow(env: &Env) -> Flow {
-    let arena: NodeArena = Arena::new();
-
-    let mut qgm: Graph<Expr, ExprProps> = Graph::new();
-
-    // Expression: $column-1 < 25
-    let lhs = qgm.add_node(CID(0), None);
-    let rhs = qgm.add_node(Literal(Datum::INT(25)), None);
-    let expr = qgm.add_node(RelExpr(RelOp::Le), Some(vec![lhs, rhs]));
-    //let expr = qgm.get_node(expr);
-
-    let use_dir = false;
-
-    let csvnode = if use_dir == false {
-        let csvnode = CSVNode::new(env, &arena, "emp".to_string(), 4, HashMap::new());
-        csvnode
-    } else {
-        let csvnode = CSVDirNode::new(
-            &arena,
-            format!("{}/{}", DATADIR, "empdir/partition"),
-            vec![],
-            vec![DataType::STR, DataType::INT, DataType::INT],
-            3,
-        );
-        csvnode
-    };
-
-    // name,age,dept_id
-    csvnode
-        //.filter(&arena, expr) // age > ?
-        .project(&arena, vec![2, 1, 0]) // dept_id, age, name
-        .agg(
-            &arena,
-            vec![(0, DataType::INT)], // dept_id
-            vec![
-                (AggType::COUNT, 0, DataType::INT), // count(dept_id)
-                (AggType::SUM, 1, DataType::INT),   // sum(age)
-                (AggType::MIN, 2, DataType::STR),   // min(name)
-                (AggType::MAX, 2, DataType::STR),   // max(name)
-            ],
-            3,
-        )
-        .emit(&arena, vec![]);
-
-    Flow {
-        id: 99,
-        nodes: arena.into_vec(),
-        graph: qgm
-    }
-}
-*/
-
-fn stringify<E: std::fmt::Debug>(e: E) -> String {
-    format!("xerror: {:?}", e)
 }
 
 /*
@@ -176,13 +118,10 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_raw_filename, false);
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
-                qgm.scratch();
 
-                QGM::build_logical_plan(&mut qgm);
-
-                if ! env.get_boolean_option("PARSE_ONLY") {
-                    //let flow = Compiler::compile(env, &mut qgm).unwrap();
-                    //run_flow(env, &flow);
+                if !env.get_boolean_option("PARSE_ONLY") {
+                    let flow = Flow::compile(env, &mut qgm).unwrap();
+                    run_flow(env, &flow);
                 }
             }
             _ => unimplemented!(),
@@ -209,7 +148,6 @@ fn main() -> Result<(), String> {
     let mut env = Env::new(1);
 
     let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
-    //let filename = "/Users/adarshrp/tmp/rst.sql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {

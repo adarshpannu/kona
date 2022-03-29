@@ -4,15 +4,15 @@ use bitmaps::Bitmap;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
+use std::process::Command;
 
 use crate::bitset::*;
 use crate::expr::{Expr::*, *};
 use crate::graph::*;
 use crate::includes::*;
 use crate::qgm::*;
-use std::process::Command;
 
-type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
+pub type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
 
 const BITMAPLEN: usize = 256;
 
@@ -23,15 +23,20 @@ macro_rules! fprint {
 }
 
 impl LOPKey {
-    fn to_string(&self) -> String {
+    pub fn printable_key(&self) -> String {
         format!("{:?}", *self).replace("(", "").replace(")", "")
+    }
+
+    pub fn printable(&self, lop_graph: &LOPGraph) -> String {
+        let lop = &lop_graph.get(*self).value;
+        format!("{:?}-{:?}", *lop, *self)
     }
 }
 
 #[derive(Debug)]
 pub enum LOP {
     TableScan { input_cols: Bitset<QunCol> },
-    HashJoin,
+    HashJoin { join_pred: ExprKey },
     NLJoin,
     Sort,
     GroupBy,
@@ -39,9 +44,9 @@ pub enum LOP {
 
 #[derive(Debug)]
 pub struct LOPProps {
-    quns: Bitset<QunId>,
-    cols: Bitset<QunCol>, // output cols
-    preds: Bitset<ExprKey>,
+    pub quns: Bitset<QunId>,
+    pub cols: Bitset<QunCol>, // output cols
+    pub preds: Bitset<ExprKey>,
 }
 
 impl LOPProps {
@@ -85,6 +90,7 @@ pub struct APSContext {
     all_quncols_bitset: Bitset<QunCol>,
     all_quns_bitset: Bitset<QunId>,
     all_preds_bitset: Bitset<ExprKey>,
+    all_quncols: HashSet<QunCol>,
 }
 
 impl APSContext {
@@ -92,10 +98,12 @@ impl APSContext {
         let mut all_quncols_bitset = Bitset::new();
         let mut all_quns_bitset = Bitset::new();
         let mut all_preds_bitset = Bitset::new();
+        let mut all_quncols = HashSet::new();
 
         for quncol in qgm.iter_quncols() {
             all_quncols_bitset.set(quncol);
             all_quns_bitset.set(quncol.0);
+            all_quncols.insert(quncol);
         }
         for expr_key in qgm.iter_preds() {
             all_preds_bitset.set(expr_key);
@@ -105,18 +113,23 @@ impl APSContext {
             all_quncols_bitset,
             all_quns_bitset,
             all_preds_bitset,
+            all_quncols,
         }
     }
 }
+
 impl QGM {
-    pub fn build_logical_plan(self: &mut QGM) -> Result<(), String> {
+    pub fn build_logical_plan(self: &mut QGM) -> Result<(LOPGraph, LOPKey), String> {
         // Construct bitmaps
         let mut aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
-        self.build_qblock_logical_plan(self.main_qblock_key, &aps_context, &mut lop_graph);
-
-        Ok(())
+        let lop_key = self.build_qblock_logical_plan(self.main_qblock_key, &aps_context, &mut lop_graph);
+        if let Ok(lop_key) = lop_key {
+            Ok((lop_graph, lop_key))
+        } else {
+            Err("Something bad happened lol".to_string())
+        }
     }
 
     pub fn build_qblock_logical_plan(
@@ -143,7 +156,7 @@ impl QGM {
             .flat_map(|ne| ne.expr_key.iter_quncols(&graph))
             .for_each(|quncol| select_list_quncol_bitset.set(quncol));
 
-        debug!("select_list_quncols: {:?}", select_list_quncol_bitset.to_string(self));
+        //debug!("select_list_quncols: {:?}", select_list_quncol_bitset.printable(self));
 
         // Process predicates:
         // 1. Classify predicates: pred -> type
@@ -184,20 +197,22 @@ impl QGM {
                         pred_type = PredicateType::Other
                     }
                 };
+                /*
                 debug!(
                     "Predicate {:?}: {}, quns={:?}, type={:?}",
                     pred_key,
-                    Expr::to_string(pred_key, &graph, false),
+                    pred_key.printable(&graph, false),
                     &quns_bitset,
                     pred_type
                 );
+                */
                 pred_map.insert(pred_key, (pred_type, quncols_bitset, quns_bitset));
             }
         }
 
-        // Build tablescan POPs first
+        // Build unary POPs first
         for qun in qblock.quns.iter() {
-            debug!("Build TableScan: {:?} id={}", qun.display(), qun.id);
+            //debug!("Build TableScan: {:?} id={}", qun.display(), qun.id);
 
             // Set quns
             let mut quns_bitset = all_quns_bitset.clone().clear();
@@ -205,15 +220,19 @@ impl QGM {
 
             // Set input cols: find all column references for this qun
             let mut input_quncols_bitset = all_quncols_bitset.clone().clear();
-            qun.get_column_map()
-                .keys()
-                .for_each(|&colid| input_quncols_bitset.set(QunCol(qun.id, colid)));
+            aps_context
+                .all_quncols
+                .iter()
+                .filter(|&quncol| quncol.0 == qun.id)
+                .for_each(|&quncol| input_quncols_bitset.set(quncol));
 
+            /*
             debug!(
                 "input_quncols_bitset for qun = {}: {:?}",
                 qun.id,
-                input_quncols_bitset.to_string(self)
+                input_quncols_bitset.printable(self)
             );
+            */
 
             // Set output cols + preds
             let mut unbound_quncols_bitset = select_list_quncol_bitset.clone();
@@ -242,12 +261,14 @@ impl QGM {
 
             // Set props
             let props = LOPProps::new(quns_bitset, output_quncols_bitset, preds_bitset);
+            /*
             debug!(
                 "LOP quns={:?}, cols={:?}, preds={:?}",
                 &props.quns.elements(),
                 &props.cols.elements(),
                 &props.preds.elements()
             );
+            */
 
             let lopkey = lop_graph.add_node_with_props(
                 LOP::TableScan {
@@ -298,18 +319,24 @@ impl QGM {
                         .collect();
 
                     if join_preds.len() > 0 && found_equijoin {
-                        debug!(
-                            "Equijoin between {:?} and {:?}, preds: {:?}",
-                            props1.quns.elements(),
-                            props2.quns.elements(),
-                            &join_preds
-                        );
-
                         let mut join_bitset = all_preds_bitset.clone().clear();
+
+                        // Pick any one of the join predicates to use for the actual join
+                        let mut join_pred = join_preds
+                            .iter()
+                            .filter_map(|(pred_key, pred_type)| {
+                                if *pred_type == PredicateType::EquiJoin {
+                                    Some(*pred_key)
+                                } else {
+                                    None
+                                }
+                            })
+                            .next()
+                            .unwrap();
+
                         for (pred_key, pred_type) in join_preds {
                             join_bitset.set(pred_key);
                             pred_map.remove_entry(&pred_key);
-                            debug!("Remove pred: {:?}", &pred_key);
                         }
 
                         let mut props = props1.union(&props2);
@@ -322,10 +349,14 @@ impl QGM {
                         }
                         props.cols.bitmap = (props.cols.bitmap & colbitmap);
 
-                        let join_node =
-                            lop_graph.add_node_with_props(LOP::HashJoin, props, Some(vec![plan1_key, plan2_key]));
+                        let join_node = lop_graph.add_node_with_props(
+                            LOP::HashJoin { join_pred },
+                            props,
+                            Some(vec![plan1_key, plan2_key]),
+                        );
                         join_status = Some((plan1_key, plan2_key, join_node));
 
+                        // For now, go with the first equi-join
                         break 'outer;
                     }
                 }
@@ -342,7 +373,7 @@ impl QGM {
         if worklist.len() == 1 {
             let root_lop_key = worklist[0];
 
-            let plan_filename = format!("{}/{}", GRAPHVIZDIR, "plan.dot");
+            let plan_filename = format!("{}/{}", GRAPHVIZDIR, "lop.dot");
             self.write_logical_plan_to_graphviz(&lop_graph, root_lop_key, &plan_filename);
             Ok(root_lop_key)
         } else {
@@ -350,7 +381,7 @@ impl QGM {
         }
     }
 
-    pub(crate) fn write_logical_plan_to_graphviz(
+    pub fn write_logical_plan_to_graphviz(
         self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str,
     ) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
@@ -380,33 +411,39 @@ impl QGM {
         Ok(())
     }
 
-    pub(crate) fn write_lop_to_graphviz(
+    pub fn write_lop_to_graphviz(
         self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File,
     ) -> std::io::Result<()> {
-        let id = lop_key.to_string();
+        let id = lop_key.printable_key();
         let (lop, props, children) = lop_graph.get3(lop_key);
 
         if let Some(children) = children {
             for &child_key in children.iter().rev() {
-                let child_name = child_key.to_string();
+                let child_name = child_key.printable_key();
                 fprint!(file, "    lopkey{} -> lopkey{};\n", child_name, id);
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let colstring = props.cols.to_string(self);
-        let predstring = props.preds.to_string(self, true);
+        let colstring = props.cols.printable(self);
+        let predstring = props.preds.printable(self, true);
 
         let (label, extrastr) = match &lop {
             LOP::TableScan { input_cols } => {
-                let input_cols = input_cols.to_string(self);
+                let input_cols = input_cols.printable(self);
+                let input_cols = format!("(input = {})", input_cols);
                 (String::from("TableScan"), input_cols)
+            }
+            LOP::HashJoin { join_pred } => {
+                let join_pred = join_pred.printable(&self.expr_graph, true);
+                let join_pred = format!("(joinpred = {})", join_pred);
+                (String::from("HashJoin"), join_pred)
             }
             _ => (format!("{:?}", &lop), String::from("")),
         };
 
         fprint!(
             file,
-            "    lopkey{}[label=\"{}|{:?}|{}|{}|(input = {})\"];\n",
+            "    lopkey{}[label=\"{}|{:?}|{}|{}|{}\"];\n",
             id,
             label,
             props.quns.elements(),
@@ -420,7 +457,7 @@ impl QGM {
 }
 
 impl Bitset<QunCol> {
-    fn to_string(&self, qgm: &QGM) -> String {
+    fn printable(&self, qgm: &QGM) -> String {
         let cols = self
             .elements()
             .iter()
@@ -436,12 +473,11 @@ impl Bitset<QunCol> {
 }
 
 impl Bitset<ExprKey> {
-    fn to_string(&self, qgm: &QGM, do_escape: bool) -> String {
+    fn printable(&self, qgm: &QGM, do_escape: bool) -> String {
         let mut predstring = String::from("{");
         let preds = self.elements();
         for (ix, &pred_key) in preds.iter().enumerate() {
-            debug!("PRED: {:?}", &pred_key);
-            let predstr = Expr::to_string(pred_key, &qgm.expr_graph, do_escape);
+            let predstr = pred_key.printable(&qgm.expr_graph, do_escape);
             predstring.push_str(&predstr);
             if ix < preds.len() - 1 {
                 predstring.push_str("|")

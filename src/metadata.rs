@@ -1,4 +1,4 @@
-use crate::{expr::Expr::*, qgm::*, csv::*, includes::*, row::*};
+use crate::{csv::*, expr::Expr::*, includes::*, qgm::*, row::*};
 
 use crate::includes::*;
 use std::collections::HashMap;
@@ -7,12 +7,41 @@ use std::io::{self, BufRead, Write};
 use std::path::Path;
 use std::rc::Rc;
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
+#[derive(Debug)]
+pub enum PartType {
+    RAW,
+    HASH(Vec<ColId>),
+}
+
+#[derive(Debug)]
+pub struct PartDesc {
+    pub npartitions: usize,
+    pub part_type: PartType,
+}
+
+pub trait TableDesc {
+    fn filename(&self) -> &String;
+    fn columns(&self) -> &Vec<ColDesc>;
+    fn header(&self) -> bool;
+    fn separator(&self) -> char;
+    fn describe(&self) -> String {
+        String::from("")
+    }
+    fn get_part_desc(&self) -> &PartDesc;
+    fn get_column(&self, colname: &String) -> Option<&ColDesc>;
+}
+
+#[derive(Debug)]
+pub struct ColDesc {
+    pub colid: ColId,
+    pub name: String,
+    pub datatype: DataType,
+}
+
+impl ColDesc {
+    pub fn new(colid: ColId, name: String, datatype: DataType) -> ColDesc {
+        ColDesc { colid, name, datatype }
+    }
 }
 
 #[derive(Debug)]
@@ -21,16 +50,18 @@ pub struct CSVDesc {
     header: bool,
     separator: char,
     columns: Vec<ColDesc>,
+    part_desc: PartDesc,
 }
 
 impl CSVDesc {
-    pub fn new(filename: String, separator: char, header: bool) -> Self {
+    pub fn new(filename: String, separator: char, header: bool, part_desc: PartDesc) -> Self {
         let columns = Self::infer_metadata(&filename, separator, header);
         CSVDesc {
             filename,
             header,
             separator,
             columns,
+            part_desc,
         }
     }
 
@@ -82,32 +113,12 @@ impl CSVDesc {
             .into_iter()
             .zip(coltypes)
             .enumerate()
-            .map(|(id, (name, datatype))| ColDesc { colid: id, name, datatype })
+            .map(|(id, (name, datatype))| ColDesc {
+                colid: id,
+                name,
+                datatype,
+            })
             .collect()
-    }
-}
-
-pub trait TableDesc {
-    fn filename(&self) -> &String;
-    fn columns(&self) -> &Vec<ColDesc>;
-    fn header(&self) -> bool;
-    fn separator(&self) -> char;
-    fn describe(&self) -> String {
-        String::from("")
-    }
-    fn get_column(&self, colname: &String) -> Option<&ColDesc>;
-}
-
-#[derive(Debug)]
-pub struct ColDesc {
-    pub colid: ColId,
-    pub name: String,
-    pub datatype: DataType,
-}
-
-impl ColDesc {
-    pub fn new(colid: ColId, name: String, datatype: DataType) -> ColDesc {
-        ColDesc { colid, name, datatype }
     }
 }
 
@@ -126,6 +137,10 @@ impl TableDesc for CSVDesc {
 
     fn get_column(&self, colname: &String) -> Option<&ColDesc> {
         self.columns.iter().find(|&cd| cd.name == *colname)
+    }
+
+    fn get_part_desc(&self) -> &PartDesc {
+        &self.part_desc
     }
 
     fn header(&self) -> bool {
@@ -170,7 +185,20 @@ impl Metadata {
                     }
                     _ => ',',
                 };
-                let csvdesc = Rc::new(CSVDesc::new(path, separator, header));
+                let npartitions = if let Some(npartitions) = hm.get("PARTITIONS") {
+                    let npartitions = npartitions.parse::<usize>();
+                    let a = npartitions.map_err(stringify)?;
+                    a
+                } else {
+                    1usize
+                };
+
+                let part_desc = PartDesc {
+                    npartitions,
+                    part_type: PartType::RAW,
+                };
+
+                let csvdesc = Rc::new(CSVDesc::new(path, separator, header, part_desc));
                 self.tables.insert(name.to_string(), csvdesc);
                 info!("Cataloged table {}", &name);
             }
@@ -192,6 +220,7 @@ impl Metadata {
         info!("  FILENAME = \"{}\"", tbldesc.filename());
         info!("  HEADER = {}", tbldesc.header());
         info!("  SEPARATOR = '{}'", tbldesc.separator());
+        info!("  PARTITIONS = {:?}", tbldesc.get_part_desc());
         info!("  {} COLUMNS", tbldesc.columns().len());
         for cd in tbldesc.columns() {
             info!("      {} {:?}", cd.name, cd.datatype);
@@ -205,7 +234,10 @@ impl Metadata {
     }
 }
 
-#[test]
-fn test() {
-    println!("Hello");
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
 }

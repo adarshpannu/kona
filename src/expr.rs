@@ -207,69 +207,6 @@ impl Expr {
         }
     }
 
-    pub fn to_string(expr_key: ExprKey, graph: &ExprGraph, do_escape: bool) -> String {
-        let (expr, _, children) = graph.get3(expr_key);
-        let retval = match expr {
-            CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
-            Column { prefix, colname, .. } => {
-                if let Some(prefix) = prefix {
-                    format!("{}.{}", prefix, colname)
-                } else {
-                    format!("{}", colname)
-                }
-            }
-            Star => format!("*"),
-            Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
-            BinaryExpr(op) => {
-                let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
-                format!(
-                    "{} {} {}",
-                    Self::to_string(lhs_id, graph, false),
-                    op,
-                    Self::to_string(rhs_id, graph, false)
-                )
-            }
-            NegatedExpr => "-".to_string(),
-            RelExpr(op) => {
-                let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
-                format!(
-                    "{} {} {}",
-                    Self::to_string(lhs_id, graph, false),
-                    op,
-                    Self::to_string(rhs_id, graph, false)
-                )
-            }
-            LogExpr(op) => {
-                let (lhs_id, rhs_id) = (children.unwrap()[0], children.unwrap()[1]);
-                format!(
-                    "{} {} {}",
-                    Self::to_string(lhs_id, graph, false),
-                    op,
-                    Self::to_string(rhs_id, graph, false)
-                )
-            }
-            BetweenExpr => format!("BETWEEEN"),
-            InListExpr => format!("IN"),
-            InSubqExpr => format!("IN_SUBQ"),
-            ExistsExpr => format!("EXISTS"),
-            Subquery(qblock) => format!("(subquery)"),
-            AggFunction(aggtype, is_distinct) => {
-                let child_id = children.unwrap()[0];
-                format!("{:?}({})", aggtype, Self::to_string(child_id, graph, false))
-            },
-            ScalarFunction(name) => format!("{}()", name),
-            _ => {
-                debug!("todo - {:?}", expr);
-                todo!()
-            }
-        };
-        if do_escape {
-            let re = Regex::new(r"([><])").unwrap();
-            re.replace_all(&retval[..], "\\$1").to_string()
-        } else {
-            retval
-        }
-    }
 }
 
 impl ExprKey {
@@ -289,4 +226,69 @@ impl ExprKey {
     pub fn to_string(self: &ExprKey) -> String {
         format!("{:?}", *self).replace("(", "").replace(")", "")
     }
+
+    pub fn printable(&self, graph: &ExprGraph, do_escape: bool) -> String {
+        let (expr, _, children) = graph.get3(*self);
+        let retval = match expr {
+            CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
+            Column { prefix, colname, .. } => {
+                if let Some(prefix) = prefix {
+                    format!("{}.{}", prefix, colname)
+                } else {
+                    format!("{}", colname)
+                }
+            }
+            Star => format!("*"),
+            Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
+            BinaryExpr(op) => {
+                let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
+                format!(
+                    "{} {} {}",
+                    lhs_key.printable(graph, false),
+                    op,
+                    rhs_key.printable(graph, false),
+                )
+            }
+            NegatedExpr => "-".to_string(),
+            RelExpr(op) => {
+                let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
+                format!(
+                    "{} {} {}",
+                    lhs_key.printable(graph, false),
+                    op,
+                    rhs_key.printable(graph, false),
+                )
+            }
+            LogExpr(op) => {
+                let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
+                format!(
+                    "{} {} {}",
+                    lhs_key.printable(graph, false),
+                    op,
+                    rhs_key.printable(graph, false),
+                )
+            }
+            BetweenExpr => format!("BETWEEEN"),
+            InListExpr => format!("IN"),
+            InSubqExpr => format!("IN_SUBQ"),
+            ExistsExpr => format!("EXISTS"),
+            Subquery(qblock) => format!("(subquery)"),
+            AggFunction(aggtype, is_distinct) => {
+                let child_id = children.unwrap()[0];
+                format!("{:?}({})", aggtype, child_id.printable(graph, false))
+            },
+            ScalarFunction(name) => format!("{}()", name),
+            _ => {
+                debug!("todo - {:?}", expr);
+                todo!()
+            }
+        };
+        if do_escape {
+            let re = Regex::new(r"([><])").unwrap();
+            re.replace_all(&retval[..], "\\$1").to_string()
+        } else {
+            retval
+        }
+    }
+
 }

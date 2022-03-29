@@ -86,6 +86,12 @@ digraph example1 {
     exprnodeExprKey40v1 -> exprnodeExprKey41v1;
     exprnodeExprKey40v1[label="T2 (2.2)"];
     exprnodeExprKey41v1 -> QB_0_pred_list;
+    exprnodeExprKey45v1[label="="];
+    exprnodeExprKey43v1 -> exprnodeExprKey45v1;
+    exprnodeExprKey43v1[label="R4 (0.4)"];
+    exprnodeExprKey44v1 -> exprnodeExprKey45v1;
+    exprnodeExprKey44v1[label="20"];
+    exprnodeExprKey45v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_0 type=Select";

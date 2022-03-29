@@ -7,7 +7,7 @@ use std::thread;
 
 use crate::includes::*;
 
-pub(crate) fn init() {
+pub fn init() {
     let mut builder = env_logger::Builder::from_env(
         Env::default().default_filter_or("debug"),
     );

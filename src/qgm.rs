@@ -55,11 +55,14 @@ impl QGMMetadata {
 
     pub fn get_colname(&self, quncol: QunCol) -> String {
         if let Some(tabledesc) = self.tabledescmap.get(&quncol.0) {
-            debug!("COLS = {:?}, quncol = {:?}", tabledesc.columns(), quncol);
             tabledesc.columns()[quncol.1].name.clone()
         } else {
             format!("CID({:?})", quncol.1)
         }
+    }
+
+    pub fn get_tabledesc(&self, qunid: QunId) -> Option<&Rc<dyn TableDesc>> {
+        self.tabledescmap.get(&qunid)
     }
 }
 
@@ -145,9 +148,6 @@ pub struct Quantifier {
 
     #[serde(skip)]
     pub tabledesc: Option<Rc<dyn TableDesc>>,
-
-    #[serde(skip)]
-    pub column_read_map: RefCell<HashMap<ColId, ColId>>, // ColID in source tuple -> ColID in target tuple.
 }
 
 impl fmt::Debug for Quantifier {
@@ -172,7 +172,6 @@ impl Quantifier {
             alias,
             pred_list: None,
             tabledesc: None,
-            column_read_map: RefCell::new(HashMap::new()),
         }
     }
 
@@ -196,10 +195,6 @@ impl Quantifier {
 
     pub fn name(&self) -> String {
         format!("QUN_{}", self.id)
-    }
-
-    pub fn get_column_map(&self) -> HashMap<ColId, ColId> {
-        self.column_read_map.borrow().clone()
     }
 }
 
@@ -286,7 +281,7 @@ impl QueryBlock {
 }
 
 impl QueryBlock {
-    pub(crate) fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
+    pub fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
         // Write current query block first
         let s = "".to_string();
         let select_names: Vec<&String> = self
@@ -427,7 +422,7 @@ impl QGM {
         qblock
     }
 
-    pub(crate) fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
+    pub fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
         //fprint!(file, "    node [style=filled,color=white];\n");

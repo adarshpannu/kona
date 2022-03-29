@@ -1,5 +1,7 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", 
+                    "HEADER" = "YES", "SEPARATOR" = ",", "PARTITIONS" = "10");
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", 
+                    "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;

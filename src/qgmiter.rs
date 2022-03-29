@@ -99,18 +99,3 @@ impl QueryBlockKey {
         Box::new(iter)
     }
 }
-
-impl QGM {
-    pub fn scratch(&self) {
-        let qblock_iter = self.iter_qblocks();
-        for qbkey in qblock_iter {
-            debug!("qgm iter_qblock: {:?}", qbkey);
-        }
-        for quncol in self.iter_quncols() {
-            debug!("iter_quncols {:?}", quncol);
-        }
-        for expr_key in self.iter_preds() {
-            debug!("qblock iter_pred: {:?}", expr_key);
-        }
-    }
-}

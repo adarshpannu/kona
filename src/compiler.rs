@@ -1,65 +1,11 @@
 use crate::expr::{Expr::*, *};
-use crate::qgm::*;
-use crate::flow::*;
+use crate::pop::*;
 use crate::graph::*;
 use crate::includes::*;
+use crate::qgm::*;
+use crate::lop::*;
 use crate::row::*;
-
-pub struct Compiler;
-
-impl Compiler {
-    pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
-
-        todo!()
-    }
-    
-    pub fn old_compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
-        let arena: NodeArena = Arena::new();
-        let graph = replace(&mut qgm.expr_graph, Graph::new());
-        let topqblock = &qgm.qblock_graph.get(qgm.main_qblock_key).value;
-
-        // Currently only single-table queries supported.
-        assert!(topqblock.quns.len() == 1);
-
-        let qun = &topqblock.quns[0];
-        assert!(qun.tablename.is_some() && qun.qblock.is_none());
-
-        // Turn QUN -> CSV, pred_list -> Filter
-        let mut topnode;
-
-        let name = qun.tablename.as_ref().unwrap();
-        let colmap = qun.column_read_map.borrow().clone();
-        topnode = CSVNode::new(env, &arena, name.clone(), 4, colmap);
-        if let Some(pred_list) = topqblock.pred_list.as_ref() {
-            for &pred_id in pred_list {
-                topnode = topnode.filter(&arena, pred_id);
-            }
-        }
-
-        // Compile selectlist, temporarily stripping agg functions
-        let select_list: Vec<ExprKey> = topqblock
-            .select_list
-            .iter()
-            .map(|ne| {
-                let expr_key = ne.expr_key;
-                let (expr, _, children) = graph.get3(expr_key);
-                if let AggFunction(aggtype, is_distinct) = expr {
-                    children.unwrap()[0]
-                } else {
-                    expr_key
-                }
-            })
-            .collect();
-        let topnode = topnode.emit(&arena, select_list);
-
-        let flow = Flow {
-            id: 99,
-            nodes: arena.into_vec(),
-            graph,
-        };
-        Ok(flow)
-    }
-}
+use crate::pop::*;
 
 /***************************************************************************************************/
 impl Expr {
@@ -67,7 +13,12 @@ impl Expr {
         let (expr, _, children) = &graph.get3(expr_key);
         match expr {
             CID(qunid, colid) => row.get_column(*colid).clone(),
-            Column { prefix, colname, qunid, colid} => row.get_column(*colid).clone(),
+            Column {
+                prefix,
+                colname,
+                qunid,
+                colid,
+            } => row.get_column(*colid).clone(),
             Literal(lit) => lit.clone(),
             RelExpr(op) => {
                 let children = children.unwrap();

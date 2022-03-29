@@ -3,6 +3,8 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
+SET parse_only = "true";
+
 WITH CTE(nm) AS (
 SELECT name from EMP
 where dept_id = 4

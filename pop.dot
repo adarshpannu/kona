@@ -1,0 +1,15 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+    popkeyPOPKey4v1 -> popkeyPOPKey5v1;
+    popkeyPOPKey3v1 -> popkeyPOPKey4v1;
+    popkeyPOPKey3v1[label="CSVPOP(CSVPOP  filename: /Users/adarshrp/Projects/flare/data/S.csv, header: true, separator: ',', partitions: [] )"];
+    popkeyPOPKey2v1 -> popkeyPOPKey4v1;
+    popkeyPOPKey2v1[label="CSVPOP(CSVPOP  filename: /Users/adarshrp/Projects/flare/data/R.csv, header: true, separator: ',', partitions: [] )"];
+    popkeyPOPKey4v1[label="HashJoinPOP"];
+    popkeyPOPKey1v1 -> popkeyPOPKey5v1;
+    popkeyPOPKey1v1[label="CSVPOP(CSVPOP  filename: /Users/adarshrp/Projects/flare/data/T.csv, header: true, separator: ',', partitions: [] )"];
+    popkeyPOPKey5v1[label="HashJoinPOP"];
+}
