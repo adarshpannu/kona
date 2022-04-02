@@ -7,19 +7,13 @@ new_key_type! { pub struct POPKey; }
 new_key_type! { pub struct QueryBlockKey; }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Node<K, V, P>
-where
-    P: std::default::Default,
-{
+pub struct Node<K, V, P> {
     pub value: V,
     pub properties: P,
     pub children: Option<Vec<K>>,
 }
 
-impl<K, V, P> Node<K, V, P>
-where
-    P: std::default::Default,
-{
+impl<K, V, P> Node<K, V, P> {
     pub fn new(v: V, properties: P) -> Self {
         Node {
             value: v,
@@ -32,8 +26,7 @@ where
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<K, V, P>
 where
-    P: std::default::Default,
-    K: slotmap::Key
+    K: slotmap::Key,
 {
     pub sm: SlotMap<K, Node<K, V, P>>,
     next_id: usize,
@@ -42,7 +35,19 @@ where
 impl<K, V, P> Graph<K, V, P>
 where
     P: std::default::Default,
-    K: slotmap::Key
+    K: slotmap::Key,
+{
+    pub fn add_node(&mut self, v: V, children: Option<Vec<K>>) -> K {
+        let properties = P::default();
+        let mut node = Node::new(v, properties);
+        node.children = children;
+        self.sm.insert(node)
+    }
+}
+
+impl<K, V, P> Graph<K, V, P>
+where
+    K: slotmap::Key,
 {
     pub fn new() -> Self {
         Graph {
@@ -57,13 +62,6 @@ where
         retval
     }
 
-    pub fn add_node(&mut self, v: V, children: Option<Vec<K>>) -> K {
-        let properties = P::default();
-        let mut node = Node::new(v, properties);
-        node.children = children;
-        self.sm.insert(node)
-    }
-
     pub fn add_node_with_props(&mut self, v: V, properties: P, children: Option<Vec<K>>) -> K {
         let mut node = Node::new(v, properties);
         node.children = children;
@@ -73,7 +71,7 @@ where
     pub fn len(&self) -> usize {
         self.sm.len()
     }
-    
+
     pub fn get3(&self, key: K) -> (&V, &P, Option<&Vec<K>>) {
         let node = self.sm.get(key).unwrap();
         (&node.value, &node.properties, node.children.as_ref())
@@ -126,8 +124,7 @@ where
 
 pub struct GraphIterator<'a, K, V, P>
 where
-    P: std::default::Default,
-    K: slotmap::Key
+    K: slotmap::Key,
 {
     graph: &'a Graph<K, V, P>,
     queue: Vec<K>,
@@ -136,8 +133,7 @@ where
 // Breadth-first iterator
 impl<'a, K, V, P> Iterator for GraphIterator<'a, K, V, P>
 where
-    P: std::default::Default,
-    K: slotmap::Key
+    K: slotmap::Key,
 {
     type Item = K;
     fn next(&mut self) -> Option<Self::Item> {

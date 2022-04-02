@@ -1,6 +1,7 @@
 // Use bitmaps on arbitrary bitmaps
 
 use bitmaps::Bitmap;
+use log::debug;
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -29,6 +30,10 @@ where
             rev_dict: Rc::new(RefCell::new(HashMap::new())),
             next_id: Rc::new(RefCell::new(0)),
         }
+    }
+
+    pub fn are_clones(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.dict, &other.dict) && Rc::ptr_eq(&self.rev_dict, &other.rev_dict)
     }
 
     pub fn set(&mut self, elem: T) {
@@ -78,6 +83,23 @@ where
     pub fn len(&self) -> usize {
         self.bitmap.len()
     }
+
+    // todo: for some reason, this method doesn't drain iterators
+    pub fn init(mut self, mut it: impl Iterator<Item = T>) -> Self where T: std::fmt::Debug {
+        for t in it.next() {
+            debug!("init set: {:?}", t);
+            self.set(t)
+        }
+        self
+    }
+
+    pub fn is_subset_of(&self, other: &Self) -> bool {
+        (self.bitmap & other.bitmap) == self.bitmap
+    }
+
+    pub fn is_disjoint(&self, other: &Self) -> bool {
+        (self.bitmap & other.bitmap).len() == 0
+    }
 }
 
 impl<T> Clone for Bitset<T>
@@ -94,10 +116,10 @@ where
     }
 }
 
-use std::ops::BitOrAssign;
-use std::ops::BitAndAssign;
 use std::ops::BitAnd;
+use std::ops::BitAndAssign;
 use std::ops::BitOr;
+use std::ops::BitOrAssign;
 
 impl<'a, T> BitOrAssign<&'a Bitset<T>> for Bitset<T>
 where
@@ -136,8 +158,6 @@ where
     }
 }
 
-
-
 impl<'a, T> BitAnd<&'a Bitset<T>> for &'a Bitset<T>
 where
     T: Hash + PartialEq + Eq + Copy,
@@ -151,4 +171,3 @@ where
         other
     }
 }
-

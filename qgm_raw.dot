@@ -36,6 +36,10 @@ digraph example1 {
     "QUN_1"[label="QUN_1 S/", fillcolor=black, fontcolor=white, style=filled]
     "QUN_0"[label="QUN_0 R/", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_0 {
+    exprnodeExprKey60v1[label="And"];
+    exprnodeExprKey54v1 -> exprnodeExprKey60v1;
+    exprnodeExprKey54v1[label="And"];
+    exprnodeExprKey46v1 -> exprnodeExprKey54v1;
     exprnodeExprKey46v1[label="And"];
     exprnodeExprKey42v1 -> exprnodeExprKey46v1;
     exprnodeExprKey42v1[label="And"];
@@ -101,7 +105,31 @@ digraph example1 {
     exprnodeExprKey43v1[label="R4 (0.0)"];
     exprnodeExprKey44v1 -> exprnodeExprKey45v1;
     exprnodeExprKey44v1[label="20"];
-    exprnodeExprKey46v1 -> QB_0_pred_list;
+    exprnodeExprKey53v1 -> exprnodeExprKey54v1;
+    exprnodeExprKey53v1[label="="];
+    exprnodeExprKey49v1 -> exprnodeExprKey53v1;
+    exprnodeExprKey49v1[label="*"];
+    exprnodeExprKey47v1 -> exprnodeExprKey49v1;
+    exprnodeExprKey47v1[label="R1 (0.0)"];
+    exprnodeExprKey48v1 -> exprnodeExprKey49v1;
+    exprnodeExprKey48v1[label="30"];
+    exprnodeExprKey52v1 -> exprnodeExprKey53v1;
+    exprnodeExprKey52v1[label="*"];
+    exprnodeExprKey50v1 -> exprnodeExprKey52v1;
+    exprnodeExprKey50v1[label="S2 (0.0)"];
+    exprnodeExprKey51v1 -> exprnodeExprKey52v1;
+    exprnodeExprKey51v1[label="20"];
+    exprnodeExprKey59v1 -> exprnodeExprKey60v1;
+    exprnodeExprKey59v1[label="="];
+    exprnodeExprKey57v1 -> exprnodeExprKey59v1;
+    exprnodeExprKey57v1[label="+"];
+    exprnodeExprKey55v1 -> exprnodeExprKey57v1;
+    exprnodeExprKey55v1[label="R1 (0.0)"];
+    exprnodeExprKey56v1 -> exprnodeExprKey57v1;
+    exprnodeExprKey56v1[label="S1 (0.0)"];
+    exprnodeExprKey58v1 -> exprnodeExprKey59v1;
+    exprnodeExprKey58v1[label="100"];
+    exprnodeExprKey60v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_0 type=Select";

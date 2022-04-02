@@ -1,4 +1,4 @@
-use crate::{csv::*, expr::Expr::*, includes::*, qgm::*, row::*};
+use crate::{csv::*, expr::Expr::*, expr::*, graph::*, includes::*, qgm::*, row::*};
 
 use crate::includes::*;
 use std::collections::HashMap;
@@ -10,13 +10,25 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub enum PartType {
     RAW,
-    HASH(Vec<ColId>),
+    HASHCOL(Vec<ColId>),
+    HASHEXPR(Vec<ExprKey>),
 }
 
 #[derive(Debug)]
 pub struct PartDesc {
     pub npartitions: usize,
     pub part_type: PartType,
+}
+
+impl PartDesc {
+    pub fn printable(&self, expr_graph: &ExprGraph) -> String {
+        let part_type_str = match &self.part_type {
+            PartType::RAW => format!("{}", "RAW"),
+            PartType::HASHCOL(cols) => format!("{} {:?})", "HASHCOL", cols),
+            PartType::HASHEXPR(exprs) => format!("{} {:?})", "HASHEXPR", exprs),
+        };
+        format!("p={}, {}", self.npartitions, part_type_str)
+    }
 }
 
 pub trait TableDesc {

@@ -1,4 +1,4 @@
-CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/R.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/R.csv", "HEADER" = "YES", "SEPARATOR" = ",", "PARTITIONS" = "10");
 CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/S.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/T.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
@@ -17,5 +17,7 @@ and r2 + s2 = t3 + 3
 and r2 + t2 = t3
 and r2 != t2
 and r4 = 20
+and r1 * 30 = s2 * 20
+and r1 + s1 = 100
 ;
 

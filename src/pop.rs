@@ -112,7 +112,7 @@ impl Flow {
                 };
                 pop_graph.add_node(POP::CSVPOP(pop), None)
             }
-            LOP::HashJoin { join_pred } => pop_graph.add_node(POP::HashJoinPOP, Some(pop_children)),
+            LOP::HashJoin { equi_join_preds } => pop_graph.add_node(POP::HashJoinPOP, Some(pop_children)),
             _ => todo!(),
         };
         Ok(pop_key)
