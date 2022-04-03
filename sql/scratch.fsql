@@ -12,6 +12,7 @@ DESCRIBE TABLE T;
 select r1
 from R, S, T
 where 
- r1 + s1 = 100
+ r1 + 1 = s1 + 2
+and r1 + 1 = t2
 ;
 

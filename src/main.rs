@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fs;
 use task::ThreadPool;
+use std::rc::Rc;
 
 use crate::includes::*;
 use clp::CLParser;
@@ -147,7 +148,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/scratch.fsql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {
