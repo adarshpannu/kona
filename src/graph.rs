@@ -134,19 +134,20 @@ where
 impl<'a, K, V, P> Iterator for GraphIterator<'a, K, V, P>
 where
     K: slotmap::Key,
+    V: std::fmt::Debug
 {
     type Item = K;
     fn next(&mut self) -> Option<Self::Item> {
         if self.queue.len() == 0 {
             return None;
         }
-        let cur_id = self.queue.pop();
-        if let Some(cur_id) = cur_id {
-            let (_, _, children) = self.graph.get3(cur_id);
+        let cur_key = self.queue.pop();
+        if let Some(cur_key) = cur_key {
+            let (value, _, children) = self.graph.get3(cur_key);
             if let Some(children) = children {
                 self.queue.extend(children.iter());
             }
         }
-        cur_id
+        cur_key
     }
 }

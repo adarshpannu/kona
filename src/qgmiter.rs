@@ -2,7 +2,7 @@
 
 use bitmaps::Iter;
 
-use crate::expr::{Expr::*, *};
+use crate::expr::{self, Expr::*, *};
 use crate::graph::*;
 use crate::includes::*;
 use crate::qgm::*;
@@ -51,21 +51,21 @@ impl QGM {
 
     pub fn iter_preds(&self) -> Box<dyn Iterator<Item = ExprKey> + '_> {
         let qblock_iter = self.iter_qblocks();
-        let iter =
-            qblock_iter.flat_map(move |qblock_key| qblock_key.iter_preds(&self.qblock_graph));
+        let iter = qblock_iter.flat_map(move |qblock_key| qblock_key.iter_preds(&self.qblock_graph));
         Box::new(iter)
     }
 }
 
 impl ExprKey {
     pub fn iter_quncols<'g>(&self, expr_graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
-        let it = expr_graph
-            .iter(*self)
-            .filter_map(move |nodeid| match &expr_graph.get(nodeid).value {
+        let it = expr_graph.iter(*self).filter_map(move |nodeid| {
+            let expr = &expr_graph.get(nodeid).value;
+            match expr {
                 Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),
                 CID(qunid, cid) => Some(QunCol(*qunid, *cid)),
                 _ => None,
-            });
+            }
+        });
         Box::new(it)
     }
 

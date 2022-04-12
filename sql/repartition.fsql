@@ -9,15 +9,9 @@ DESCRIBE TABLE T;
 
 //SET PARSE_ONLY = "TRUE";
 
-select r2 / r0, 88 * (r2 + t2), (t3 * 77) / s3
+select r1, s1, t1
 from R, S, T
-where r0 = 10
-and r1 + 1 = s2 + 2
-and r2 + s2 = t3 + 3
-and r2 + t2 = t3
-and r2 != t2
-and r4 = 20
-and r1 * 30 = s2 * 20
-and r1 + s1 = 100
+where r1 + 1 = s1 + 1
+and r1 + 1 = t1 + 1
 ;
 

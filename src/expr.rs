@@ -1,10 +1,10 @@
-use crate::includes::*;
 use crate::graph::*;
+use crate::includes::*;
 use crate::row::*;
 use regex::Regex;
 
-use Expr::*;
 use std::fmt;
+use Expr::*;
 
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 
@@ -129,7 +129,7 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
+            CID(qunid, colid) => format!("${}.{}", *qunid, *colid),
             Column {
                 prefix,
                 colname,
@@ -137,9 +137,9 @@ impl Expr {
                 colid,
             } => {
                 if let Some(prefix) = prefix {
-                    format!("{}.{} ({}.{})", prefix, colname, *qunid, *colid)
+                    format!("{}.{} (${}.{})", prefix, colname, *qunid, *colid)
                 } else {
-                    format!("{} ({}.{})", colname, *qunid, *colid)
+                    format!("{} (${}.{})", colname, *qunid, *colid)
                 }
             }
             Star => format!("*"),
@@ -158,7 +158,8 @@ impl Expr {
         }
     }
 
-    pub fn isomorphic(graph: &ExprGraph, expr_key1: ExprKey, expr_key2: ExprKey) -> bool {
+    pub fn isomorphic0(graph: &ExprGraph, expr_key1: ExprKey, expr_key2: ExprKey) -> bool {
+        // todo: rewrite using iterators
         let (expr1, _, children1) = graph.get3(expr_key1);
         let (expr2, _, children2) = graph.get3(expr_key2);
         let shallow_matched = match (expr1, expr2) {
@@ -207,6 +208,58 @@ impl Expr {
         }
     }
 
+    pub fn isomorphic(graph: &ExprGraph, expr_key1: ExprKey, expr_key2: ExprKey) -> bool {
+        let mut iter1 = graph.iter(expr_key1);
+        let mut iter2 = graph.iter(expr_key2);
+
+        loop {
+            if let Some(expr_key1) = iter1.next() {
+                if let Some(expr_key2) = iter2.next() {
+                    let expr1 = &graph.get(expr_key1).value;
+                    let expr2 = &graph.get(expr_key2).value;
+                    if expr1.equals(expr2) == false {
+                        return false
+                    }
+                } else {
+                    // expr_key1 != None, expr_key2 == None
+                    return false
+                }
+            } else {
+                // expr_key1 == None
+                return iter2.next().is_none()
+            }
+        }
+        return true
+    }
+
+    pub fn equals(&self, other: &Expr) -> bool {
+        let cmp_status = match (self, other) {
+            (CID(qunid1, colid1), CID(qunid2, colid2)) => qunid1 == qunid2 && colid1 == colid2,
+            (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
+            (RelExpr(c1), RelExpr(c2)) => *c1 == *c2,
+            (LogExpr(c1), LogExpr(c2)) => *c1 == *c2,
+            (
+                Column {
+                    prefix: p1,
+                    colname: n1,
+                    qunid: _,
+                    colid: _,
+                },
+                Column {
+                    prefix: p2,
+                    colname: n2,
+                    qunid: _,
+                    colid: _,
+                },
+            ) => p1 == p2 && n1 == n2,
+            (Literal(c1), Literal(c2)) => *c1 == *c2,
+            (NegatedExpr, NegatedExpr) => true,
+            (BetweenExpr, BetweenExpr) => true,
+            (InListExpr, InListExpr) => true,
+            _ => false,
+        };
+        cmp_status
+    }
 }
 
 impl ExprKey {
@@ -230,7 +283,7 @@ impl ExprKey {
     pub fn printable(&self, graph: &ExprGraph, do_escape: bool) -> String {
         let (expr, _, children) = graph.get3(*self);
         let retval = match expr {
-            CID(qunid, colid) => format!("CID({},{})", *qunid, *colid),
+            CID(qunid, colid) => format!("${}.{}", *qunid, *colid),
             Column { prefix, colname, .. } => {
                 if let Some(prefix) = prefix {
                     format!("{}.{}", prefix, colname)
@@ -276,7 +329,7 @@ impl ExprKey {
             AggFunction(aggtype, is_distinct) => {
                 let child_id = children.unwrap()[0];
                 format!("{:?}({})", aggtype, child_id.printable(graph, false))
-            },
+            }
             ScalarFunction(name) => format!("{}()", name),
             _ => {
                 debug!("todo - {:?}", expr);
@@ -290,5 +343,4 @@ impl ExprKey {
             retval
         }
     }
-
 }

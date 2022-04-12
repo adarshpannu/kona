@@ -1,4 +1,8 @@
-use crate::{csv::*, expr::*, graph::*, includes::*, lop::*, flow::*, qgm::*, row::*, task::*};
+// LOP: Physical operators
+
+use std::collections::{HashMap, HashSet};
+
+use crate::{csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, qgm::*, row::*, task::*};
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
@@ -11,28 +15,6 @@ pub struct POPProps {
     npartitions: usize,
 }
 
-impl std::default::Default for POPProps {
-    fn default() -> Self {
-        POPProps {
-            npartitions: 4, // todo
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CSVPOP {
-    filename: String,
-    header: bool,
-    separator: char,
-    partitions: Vec<TextFilePartition>,
-}
-
-macro_rules! fprint {
-    ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes());
-    }};
-}
-
 impl POPKey {
     pub fn printable_key(&self) -> String {
         format!("{:?}", *self).replace("(", "").replace(")", "")
@@ -43,6 +25,22 @@ impl POPKey {
         format!("{:?}-{:?}", *pop, *self)
     }
 }
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub enum POP {
+    CSV(CSV),
+    HashJoin,
+    Repartition,
+}
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CSV {
+    filename: String,
+    header: bool,
+    separator: char,
+    partitions: Vec<TextFilePartition>,
+}
 
 /***************************************************************************************************/
 pub enum NodeRuntime {
@@ -52,12 +50,6 @@ pub enum NodeRuntime {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashJoinPOP {}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum POP {
-    CSVPOP(CSVPOP),
-    HashJoinPOP,
-}
 
 
 impl POP {
@@ -104,19 +96,33 @@ impl Flow {
             LOP::TableScan { input_cols } => {
                 let qunid = lopprops.quns.elements()[0];
                 let qun = qgm.metadata.get_tabledesc(qunid).unwrap();
-                let pop = CSVPOP {
+                let pop = CSV {
                     filename: qun.filename().clone(),
                     header: qun.header(),
                     separator: qun.separator(),
                     partitions: vec![],
                 };
-                pop_graph.add_node(POP::CSVPOP(pop), None)
+                let props = POPProps { npartitions: 4 };
+                pop_graph.add_node_with_props(POP::CSV(pop), props, None)
             }
-            LOP::HashJoin { equi_join_preds } => pop_graph.add_node(POP::HashJoinPOP, Some(pop_children)),
+            LOP::HashJoin { equi_join_preds } => {
+                let props = POPProps { npartitions: 4 };
+                pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children))
+            }
+            LOP::Repartition { cpartitions }=> {
+                let props = POPProps { npartitions: 4 };
+                pop_graph.add_node_with_props(POP::Repartition, props, Some(pop_children))
+            }
             _ => todo!(),
         };
         Ok(pop_key)
     }
+}
+
+macro_rules! fprint {
+    ($file:expr, $($args:expr),*) => {{
+        $file.write_all(format!($($args),*).as_bytes());
+    }};
 }
 
 impl QGM {

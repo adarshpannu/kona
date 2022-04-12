@@ -84,10 +84,8 @@ where
         self.bitmap.len()
     }
 
-    // todo: for some reason, this method doesn't drain iterators
-    pub fn init(mut self, mut it: impl Iterator<Item = T>) -> Self where T: std::fmt::Debug {
-        for t in it.next() {
-            debug!("init set: {:?}", t);
+    pub fn init(mut self, mut it: impl Iterator<Item = T>) -> Self {
+        for t in it {
             self.set(t)
         }
         self

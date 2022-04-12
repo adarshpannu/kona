@@ -57,7 +57,7 @@ impl QGMMetadata {
         if let Some(tabledesc) = self.tabledescmap.get(&quncol.0) {
             tabledesc.columns()[quncol.1].name.clone()
         } else {
-            format!("CID({:?})", quncol.1)
+            format!("${:?}", quncol.1)
         }
     }
 

@@ -36,7 +36,7 @@ impl PartDesc {
                 format!("{}", exprstr)
             }
         };
-        format!("p={}, pkey={}", self.npartitions, part_type_str)
+        format!("p={}, ptype={}", self.npartitions, part_type_str)
     }
 }
 

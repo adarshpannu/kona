@@ -148,7 +148,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/scratch.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/repartition.fsql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {

@@ -1,18 +1,13 @@
 CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/R.csv", "HEADER" = "YES", "SEPARATOR" = ",", "PARTITIONS" = "10");
 CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/S.csv", "HEADER" = "YES", "SEPARATOR" = "," );
-CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/T.csv", "HEADER" = "YES", "SEPARATOR" = "," );
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE R;
 DESCRIBE TABLE S;
-DESCRIBE TABLE T;
 
 //SET PARSE_ONLY = "TRUE";
 
-select r1
-from R, S, T
-where 
- r1 + 1 = s1 + 2
-and r1 + 1 = t2
+select 999
+from R, S
+where r1 = s1 + s2
 ;
 
