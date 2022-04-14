@@ -15,12 +15,29 @@ pub enum Datum {
 }
 
 impl Datum {
-    pub fn as_int(&self) -> isize {
+    pub fn as_isize(&self, err_str: &str) -> Result<isize, String> {
         if let Datum::INT(val) = self {
-            *val
+            Ok(*val)
         } else {
-            panic!("Datum is not an INT.")
+            Err(err_str.to_string())
         }
+    }
+
+    pub fn as_str(&self, err_str: &str) -> Result<Rc<String>, String> {
+        if let Datum::STR(val) = self {
+            Ok(Rc::clone(val))
+        } else {
+            Err(err_str.to_string())
+        }
+    }
+
+    pub fn as_usize(&self, err_str: &str) -> Result<usize, String> {
+        if let Datum::INT(val) = self {
+            if *val >= 0 {
+                return Ok(*val as usize)
+            }
+        }
+        return Err(err_str.to_string())
     }
 }
 

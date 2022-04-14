@@ -25,3 +25,5 @@ lalrpop-util = "0.19.6"
 regex = "1"
 slotmap = { version = "1.0", features = ["serde"] }
 bitmaps = "3.1.0"
+fstrings = "0.2.3"
+itertools = "0.10"

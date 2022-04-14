@@ -49,9 +49,9 @@ impl QGM {
         Box::new(iter)
     }
 
-    pub fn iter_preds(&self) -> Box<dyn Iterator<Item = ExprKey> + '_> {
+    pub fn iter_toplevel_exprs(&self) -> Box<dyn Iterator<Item = ExprKey> + '_> {
         let qblock_iter = self.iter_qblocks();
-        let iter = qblock_iter.flat_map(move |qblock_key| qblock_key.iter_preds(&self.qblock_graph));
+        let iter = qblock_iter.flat_map(move |qblock_key| qblock_key.iter_toplevel_exprs(&self.qblock_graph));
         Box::new(iter)
     }
 }
@@ -75,7 +75,7 @@ impl ExprKey {
 }
 
 impl QueryBlockKey {
-    pub fn iter_preds<'g>(&self, qblock_graph: &'g QueryBlockGraph) -> Box<dyn Iterator<Item = ExprKey> + 'g> {
+    pub fn iter_toplevel_exprs<'g>(&self, qblock_graph: &'g QueryBlockGraph) -> Box<dyn Iterator<Item = ExprKey> + 'g> {
         let qblock = &qblock_graph.get(*self).value;
 
         // Append select_list expressions
@@ -94,7 +94,7 @@ impl QueryBlockKey {
     pub fn iter_quncols<'g>(
         &self, qblock_graph: &'g QueryBlockGraph, expr_graph: &'g ExprGraph,
     ) -> Box<dyn Iterator<Item = QunCol> + 'g> {
-        let iter = self.iter_preds(qblock_graph);
+        let iter = self.iter_toplevel_exprs(qblock_graph);
         let iter = iter.flat_map(move |expr_key| expr_key.iter_quncols(expr_graph));
         Box::new(iter)
     }

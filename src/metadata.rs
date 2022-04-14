@@ -1,11 +1,11 @@
-use crate::{csv::*, expr::Expr::*, expr::*, graph::*, includes::*, qgm::*, row::*};
-
 use crate::includes::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 use std::rc::Rc;
+
+use crate::{csv::*, expr::Expr::*, expr::*, graph::*, includes::*, qgm::*, row::*};
 
 #[derive(Debug, Clone)]
 pub enum PartType {
@@ -40,6 +40,12 @@ impl PartDesc {
     }
 }
 
+#[derive(Debug)]
+pub struct TableStats {
+    nrows: usize,
+    avg_row_size: usize,
+}
+
 pub trait TableDesc {
     fn filename(&self) -> &String;
     fn columns(&self) -> &Vec<ColDesc>;
@@ -50,6 +56,8 @@ pub trait TableDesc {
     }
     fn get_part_desc(&self) -> &PartDesc;
     fn get_column(&self, colname: &String) -> Option<&ColDesc>;
+
+    fn get_stats(&self) -> &TableStats;
 }
 
 #[derive(Debug)]
@@ -67,15 +75,18 @@ impl ColDesc {
 
 #[derive(Debug)]
 pub struct CSVDesc {
-    filename: String,
+    filename: Rc<String>,
     header: bool,
     separator: char,
     columns: Vec<ColDesc>,
     part_desc: PartDesc,
+    table_stats: TableStats,
 }
 
 impl CSVDesc {
-    pub fn new(filename: String, separator: char, header: bool, part_desc: PartDesc) -> Self {
+    pub fn new(
+        filename: Rc<String>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats,
+    ) -> Self {
         let columns = Self::infer_metadata(&filename, separator, header);
         CSVDesc {
             filename,
@@ -83,6 +94,7 @@ impl CSVDesc {
             separator,
             columns,
             part_desc,
+            table_stats,
         }
     }
 
@@ -171,6 +183,10 @@ impl TableDesc for CSVDesc {
     fn separator(&self) -> char {
         self.separator
     }
+
+    fn get_stats(&self) -> &TableStats {
+        &self.table_stats
+    }
 }
 
 pub struct Metadata {
@@ -182,36 +198,58 @@ impl Metadata {
         Metadata { tables: HashMap::new() }
     }
 
-    pub fn catalog_table(&mut self, name: String, options: Vec<(String, String)>) -> Result<(), String> {
+    pub fn catalog_table(&mut self, name: String, options: Vec<(String, Datum)>) -> Result<(), String> {
         let mut name = name.to_uppercase();
         if self.tables.contains_key(&name) {
-            return Err(format!("Table {} cannot be cataloged more than once.", name));
+            return Err(f!("Table {name} cannot be cataloged more than once."));
         }
-        let hm: HashMap<String, String> = options.into_iter().collect();
-        match hm.get("TYPE").map(|e| &e[..]) {
-            Some("CSV") => {
+        let hm: HashMap<String, Datum> = options.into_iter().collect();
+
+        let tp = hm
+            .get("TYPE")
+            .ok_or(f!("Table {name} does not specify a TYPE."))?
+            .as_str(&f!("Table {name} has invalid TYPE."))?;
+
+        match &tp[..] {
+            "CSV" => {
                 // PATH, HEADER, SEPARATOR
-                let path = hm.get("PATH").expect("PATH not specified").to_string();
-                let header = match hm.get("HEADER").map(|e| &e[..]) {
-                    Some("Y") | Some("YES") => true,
-                    _ => false,
+                let path = hm
+                    .get("PATH")
+                    .ok_or("Table {name} does not specify a PATH")?
+                    .as_str(&f!("PATH does not hold a string for table {name}"))?;
+
+                let header = hm.get("HEADER");
+                let header = match header {
+                    Some(Datum::STR(header)) => {
+                        let header = &*header;
+                        yes_or_no(&*header).ok_or(f!("Invalid value for option HEADER: '{header}'"))?
+                    }
+                    None => true,
+                    _ => return Err(f!("Invalid value for option HEADER: '{header:?}'")),
                 };
-                let separator = match hm.get("SEPARATOR").map(|e| &e[..]) {
-                    Some(sep) => {
+
+                let separator = match hm.get("SEPARATOR") {
+                    Some(Datum::STR(sep)) => {
+                        let sep = &**sep;
                         if sep.len() != 1 {
-                            ','
+                            return Err(f!("Invalid value for option SEPARATOR: '{sep}'"));
                         } else {
                             sep.chars().next().unwrap()
                         }
                     }
                     _ => ',',
                 };
-                let npartitions = if let Some(npartitions) = hm.get("PARTITIONS") {
-                    let npartitions = npartitions.parse::<usize>();
-                    let a = npartitions.map_err(stringify)?;
-                    a
-                } else {
-                    1usize
+
+                let npartitions = match hm.get("PARTITIONS") {
+                    Some(Datum::INT(npartitions)) => {
+                        if *npartitions > 0 {
+                            *npartitions as usize
+                        } else {
+                            return Err(format!("Invalid value for option PARTITIONS"));
+                        }
+                    }
+                    None => 1usize,
+                    _ => return Err(format!("Invalid value for option PARTITIONS")),
                 };
 
                 let part_desc = PartDesc {
@@ -219,7 +257,33 @@ impl Metadata {
                     part_type: PartType::RAW,
                 };
 
-                let csvdesc = Rc::new(CSVDesc::new(path, separator, header, part_desc));
+                let nrows = match hm.get("NROWS") {
+                    Some(Datum::INT(nrows)) => {
+                        if *nrows > 0 {
+                            *nrows as usize
+                        } else {
+                            return Err(format!("Invalid value for option NROWS"));
+                        }
+                    }
+                    None => 1usize,
+                    _ => return Err(format!("Invalid value for option NROWS")),
+                };
+
+                let avg_row_size = match hm.get("AVG_ROW_SIZE") {
+                    Some(Datum::INT(avg_row_size)) => {
+                        if *avg_row_size > 0 {
+                            *avg_row_size as usize
+                        } else {
+                            return Err(format!("Invalid value for option AVG_ROW_SIZE"));
+                        }
+                    }
+                    None => 1usize,
+                    _ => return Err(format!("Invalid value for option AVG_ROW_SIZE")),
+                };
+
+                let table_stats = TableStats { nrows, avg_row_size };
+
+                let csvdesc = Rc::new(CSVDesc::new(path, separator, header, part_desc, table_stats));
                 self.tables.insert(name.to_string(), csvdesc);
                 info!("Cataloged table {}", &name);
             }
@@ -242,6 +306,7 @@ impl Metadata {
         info!("  HEADER = {}", tbldesc.header());
         info!("  SEPARATOR = '{}'", tbldesc.separator());
         info!("  PARTITIONS = {:?}", tbldesc.get_part_desc());
+        info!("  STATS = {:?}", tbldesc.get_stats());
         info!("  {} COLUMNS", tbldesc.columns().len());
         for cd in tbldesc.columns() {
             info!("      {} {:?}", cd.name, cd.datatype);

@@ -71,10 +71,10 @@ where
 
     pub fn elements(&self) -> Vec<T> {
         let bitmap = self.bitmap.clone();
+        let rev_dict = (*self.rev_dict).borrow();
         bitmap
             .into_iter()
             .map(|ix| {
-                let rev_dict = (*self.rev_dict).borrow();
                 *rev_dict.get(&ix).unwrap()
             })
             .collect()

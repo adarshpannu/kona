@@ -22,22 +22,6 @@ macro_rules! fprint {
     }};
 }
 
-#[derive(Debug)]
-pub enum AST {
-    CatalogTable {
-        name: String,
-        options: Vec<(String, String)>,
-    },
-    DescribeTable {
-        name: String,
-    },
-    QGM(QGM),
-    SetOption {
-        name: String,
-        value: String,
-    },
-}
-
 pub struct QGMMetadata {
     tabledescmap: HashMap<QunId, Rc<dyn TableDesc>>,
 }

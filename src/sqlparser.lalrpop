@@ -5,10 +5,10 @@ use crate::includes::*;
 
 use crate::expr::{Expr::*, *};
 use crate::row::*;
+use crate::ast::*;
 use crate::qgm::*;
 use crate::graph::*;
 use std::rc::Rc;
-use crate::qgm::{AST, NamedExpr, QueryBlock, QueryBlockType, QGM, ParserState, Quantifier, Ordering};
 
 grammar(parser_state: &mut ParserState);
 
@@ -107,14 +107,30 @@ pub Statement: AST = {
 
 // -------------------- CATALOG TABLE --------------------
 pub CatalogTable: AST = {
-    "CATALOG" "TABLE" <name:Identifier> "(" <options:CatalogTableOptions> ")"  => AST::CatalogTable { name: name, options: options }
+    "CATALOG" "TABLE" <name:Identifier> "(" <options:CatalogTableOptions> ")"  => AST::CatalogTable { name, options }
 }
 
 CatalogTableOptions = CommaSeparatedList<CatalogTableOption>;
 
-CatalogTableOption: (String, String) = {
-    <opt:QuotedString> "=" <val:QuotedString> => (opt, val)
+CatalogTableOption: (String, Datum) = {
+    <opt:IdentifierOrQuotedString> "=" <val:CatalogTableOptionValue> => (opt, val)
 }
+
+CatalogTableOptionValue: Datum = {
+    Integer =>? { isize::from_str(<>)
+        .map(|i| Datum::INT(i))
+        .map_err(|_| ParseError::User { error: "Invalid integer" }) 
+    },
+    Double =>? { f64::from_str(<>)
+        .map(|d| Datum::DOUBLE(111, 222))
+        .map_err(|_| ParseError::User { error: "Invalid double" }) 
+    },
+    <str:IdentifierOrQuotedString> =>? {
+        let str = Rc::new(str);
+        Ok(Datum::STR(str))
+    }
+}
+
 
 // -------------------- DESCRIBE TABLE --------------------
 pub DescribeTable: AST = {
@@ -419,4 +435,9 @@ QuotedString: String = {
         let s = <>;
         s[1..s.len()-1].to_string()
     }
+}
+
+IdentifierOrQuotedString: String = {
+    Identifier,
+    QuotedString
 }

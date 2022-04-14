@@ -1,5 +1,6 @@
 // LOP: Logical operators
 
+use bincode::de;
 use bitmaps::Bitmap;
 use chrono::format::format;
 use std::collections::{HashMap, HashSet};
@@ -41,7 +42,9 @@ pub enum LOP {
         equi_join_preds: Vec<(ExprKey, PredicateAlignment)>,
     },
     Aggregation,
-    Repartition { cpartitions: usize },
+    Repartition {
+        cpartitions: usize,
+    },
 }
 
 /***************************************************************************************************/
@@ -86,7 +89,6 @@ pub struct APSContext {
     all_quncols_bitset: Bitset<QunCol>,
     all_quns_bitset: Bitset<QunId>,
     all_preds_bitset: Bitset<ExprKey>,
-    all_quncols: HashSet<QunCol>,
 }
 
 impl APSContext {
@@ -94,14 +96,12 @@ impl APSContext {
         let mut all_quncols_bitset = Bitset::new();
         let mut all_quns_bitset = Bitset::new();
         let mut all_preds_bitset = Bitset::new();
-        let mut all_quncols = HashSet::new();
 
         for quncol in qgm.iter_quncols() {
             all_quncols_bitset.set(quncol);
             all_quns_bitset.set(quncol.0);
-            all_quncols.insert(quncol);
         }
-        for expr_key in qgm.iter_preds() {
+        for expr_key in qgm.iter_toplevel_exprs() {
             all_preds_bitset.set(expr_key);
         }
 
@@ -109,7 +109,6 @@ impl APSContext {
             all_quncols_bitset,
             all_quns_bitset,
             all_preds_bitset,
-            all_quncols,
         }
     }
 }
@@ -184,16 +183,13 @@ impl QGM {
         let all_quns_bitset = &aps_context.all_quns_bitset;
         let all_preds_bitset = &aps_context.all_preds_bitset;
 
-        let mut select_list_quncol_bitset = all_quncols_bitset.clone().clear(); // shallow copy
-
         // Process select-list: Collect all QunCols
+        let mut select_list_quncol_bitset = all_quncols_bitset.clone().clear(); // shallow copy
         qblock
             .select_list
             .iter()
             .flat_map(|ne| ne.expr_key.iter_quncols(&graph))
             .for_each(|quncol| select_list_quncol_bitset.set(quncol));
-
-        //debug!("select_list_quncols: {:?}", select_list_quncol_bitset.printable(self));
 
         // Process predicates:
         // 1. Classify predicates: pred -> type
@@ -216,8 +212,6 @@ impl QGM {
 
         // Build unary POPs first
         for qun in qblock.quns.iter() {
-            //debug!("Build TableScan: {:?} id={}", qun.display(), qun.id);
-
             // Set quns
             let mut quns_bitset = all_quns_bitset.clone().clear();
             quns_bitset.set(qun.id);
@@ -225,7 +219,8 @@ impl QGM {
             // Set input cols: find all column references for this qun
             let mut input_quncols_bitset = all_quncols_bitset.clone().clear();
             aps_context
-                .all_quncols
+                .all_quncols_bitset
+                .elements()
                 .iter()
                 .filter(|&quncol| quncol.0 == qun.id)
                 .for_each(|&quncol| input_quncols_bitset.set(quncol));
@@ -276,6 +271,8 @@ impl QGM {
                 props,
                 None,
             );
+
+            debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
 
             worklist.push(lopkey);
         }
@@ -374,25 +371,36 @@ impl QGM {
                             partdesc,
                         });
 
-                        let (lhs_partitions, rhs_partitions) = (lhs_props.partdesc.npartitions, rhs_props.partdesc.npartitions);
+                        let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
 
                         let new_lhs_plan_key = if let Some(lhs_repart_props) = lhs_repart_props {
                             // Repartition LHS
-                            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: lhs_partitions }, lhs_repart_props, Some(vec![lhs_plan_key]))
+                            lop_graph.add_node_with_props(
+                                LOP::Repartition {
+                                    cpartitions: lhs_partitions,
+                                },
+                                lhs_repart_props,
+                                Some(vec![lhs_plan_key]),
+                            )
                         } else {
                             lhs_plan_key
                         };
                         let new_rhs_plan_key = if let Some(rhs_repart_props) = rhs_repart_props {
                             // Repartition RHS
-                            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: rhs_partitions }, rhs_repart_props, Some(vec![rhs_plan_key]))
+                            lop_graph.add_node_with_props(
+                                LOP::Repartition {
+                                    cpartitions: rhs_partitions,
+                                },
+                                rhs_repart_props,
+                                Some(vec![rhs_plan_key]),
+                            )
                         } else {
                             rhs_plan_key
                         };
 
-                        let partdesc = PartDesc {
-                            npartitions,
-                            part_type: PartType::RAW,
-                        }; // todo
+                        // Join partitioning is identical to partitioning of children. todo: need to implement eq classes.
+                        let lhs_props = &lop_graph.get(new_lhs_plan_key).properties;
+                        let partdesc = lhs_props.partdesc.clone();
 
                         let props = LOPProps::new(quns_bitset, cols_bitset, preds_bitset, partdesc);
 
@@ -414,7 +422,7 @@ impl QGM {
                 debug!("plan1_key: {:?}", plan1_key);
                 debug!("plan2_key: {:?}", plan2_key);
                 worklist.retain(|&elem| (elem != plan1_key && elem != plan2_key));
-                worklist.push(join_node);
+                worklist.insert(0, join_node);
                 debug!("worklist post-join: {:?}", worklist);
             } else {
                 panic!("No join found!!!")
@@ -478,16 +486,39 @@ impl QGM {
                 }
             }
         }
-        let lhs_partdesc = PartDesc {
-            npartitions: 4,
-            part_type: PartType::HASHEXPR(lhs_expected_keys),
-        };
-        let rhs_partdesc = PartDesc {
-            npartitions: 4,
-            part_type: PartType::HASHEXPR(rhs_expected_keys),
+
+        // Is LHS partitioned on join keys?
+        let lhs_correctly_partitioned = lhs_actual_keys
+            .iter()
+            .zip(lhs_expected_keys.iter())
+            .all(|(join_key, ptn_key)| Expr::isomorphic(expr_graph, *join_key, *ptn_key));
+        let rhs_correctly_partitioned = rhs_actual_keys
+            .iter()
+            .zip(rhs_expected_keys.iter())
+            .all(|(join_key, ptn_key)| Expr::isomorphic(expr_graph, *join_key, *ptn_key));
+
+        let lhs_partdesc = if lhs_actual_keys.len() > 0 && lhs_correctly_partitioned {
+            None
+        } else {
+            Some(PartDesc {
+                npartitions: 4,
+                part_type: PartType::HASHEXPR(lhs_expected_keys),
+            })
         };
 
-        (Some(lhs_partdesc), Some(rhs_partdesc), 4)
+        let rhs_partdesc = if rhs_actual_keys.len() > 0 && rhs_correctly_partitioned {
+            None
+        } else {
+            Some(PartDesc {
+                npartitions: 4,
+                part_type: PartType::HASHEXPR(rhs_expected_keys),
+            })
+        };
+
+        debug!("lhs_correctly_partitioned: {}", lhs_correctly_partitioned);
+        debug!("rhs_correctly_partitioned: {}", rhs_correctly_partitioned);
+
+        (lhs_partdesc, rhs_partdesc, 4)
     }
 
     pub fn write_logical_plan_to_graphviz(
@@ -527,7 +558,7 @@ impl QGM {
         let (lop, props, children) = lop_graph.get3(lop_key);
 
         if let Some(children) = children {
-            for &child_key in children.iter().rev() {
+            for &child_key in children.iter() {
                 let child_name = child_key.printable_key();
                 fprint!(file, "    lopkey{} -> lopkey{};\n", child_name, id);
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
@@ -603,4 +634,18 @@ fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool) -> String {
     }
     predstring.push_str("}");
     predstring
+}
+
+struct ExprEqClass {
+    hm: std::collections::HashMap<ExprKey, usize>,
+}
+
+impl ExprEqClass {
+    fn set_eq(&mut self, expr1: ExprKey, expr2: ExprKey) {
+        unimplemented!()
+    }
+
+    fn check_eq(&self, expr1: ExprKey, expr2: ExprKey) -> bool {
+        unimplemented!()
+    }
 }

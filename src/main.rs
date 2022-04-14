@@ -11,6 +11,9 @@ use clp::CLParser;
 #[macro_use]
 extern crate lalrpop_util;
 
+#[macro_use]
+extern crate fstrings;
+
 lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
 pub mod includes;
@@ -42,6 +45,7 @@ use lop::*;
 use metadata::*;
 use pop::*;
 use flow::*;
+use ast::*;
 use qgm::*;
 
 pub struct Env {
@@ -148,7 +152,7 @@ fn main() -> Result<(), String> {
     // Initialize context
     let mut env = Env::new(1);
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/repartition.fsql";
+    let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
 
     let jobres = run_job(&mut env, filename);
     if let Err(flare_err) = jobres {

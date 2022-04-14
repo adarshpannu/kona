@@ -9,7 +9,7 @@ use Expr::*;
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
 pub enum ArithOp {
     Add,
     Sub,
@@ -30,7 +30,7 @@ impl fmt::Display for ArithOp {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum LogOp {
     And,
     Or,
@@ -50,7 +50,7 @@ impl fmt::Display for LogOp {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum RelOp {
     Eq,
     Ne,
@@ -79,7 +79,7 @@ impl fmt::Display for RelOp {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AggType {
     COUNT,
     MIN,
@@ -102,7 +102,7 @@ impl std::default::Default for ExprProp {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub enum Expr {
     CID(QunId, ColId),
     Column {
@@ -158,56 +158,6 @@ impl Expr {
         }
     }
 
-    pub fn isomorphic0(graph: &ExprGraph, expr_key1: ExprKey, expr_key2: ExprKey) -> bool {
-        // todo: rewrite using iterators
-        let (expr1, _, children1) = graph.get3(expr_key1);
-        let (expr2, _, children2) = graph.get3(expr_key2);
-        let shallow_matched = match (expr1, expr2) {
-            (CID(qunid1, colid1), CID(qunid2, colid2)) => qunid1 == qunid2 && colid1 == colid2,
-            (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
-            (RelExpr(c1), RelExpr(c2)) => *c1 == *c2,
-            (LogExpr(c1), LogExpr(c2)) => *c1 == *c2,
-            (
-                Column {
-                    prefix: p1,
-                    colname: n1,
-                    qunid: _,
-                    colid: _,
-                },
-                Column {
-                    prefix: p2,
-                    colname: n2,
-                    qunid: _,
-                    colid: _,
-                },
-            ) => p1 == p2 && n1 == n2,
-            (Literal(c1), Literal(c2)) => *c1 == *c2,
-            (NegatedExpr, NegatedExpr) => true,
-            (BetweenExpr, BetweenExpr) => true,
-            (InListExpr, InListExpr) => true,
-            _ => false,
-        };
-        if shallow_matched {
-            if children1.is_some() != children2.is_some() {
-                return false;
-            }
-            if children1.is_some() && children2.is_some() {
-                let children1 = children1.unwrap();
-                let children2 = children2.unwrap();
-                if children1.len() == children2.len() {
-                    for (&child1, &child2) in children1.iter().zip(children2.iter()) {
-                        if !Self::isomorphic(graph, child1, child2) {
-                            return false;
-                        }
-                    }
-                }
-            }
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     pub fn isomorphic(graph: &ExprGraph, expr_key1: ExprKey, expr_key2: ExprKey) -> bool {
         let mut iter1 = graph.iter(expr_key1);
         let mut iter2 = graph.iter(expr_key2);
@@ -218,18 +168,18 @@ impl Expr {
                     let expr1 = &graph.get(expr_key1).value;
                     let expr2 = &graph.get(expr_key2).value;
                     if expr1.equals(expr2) == false {
-                        return false
+                        return false;
                     }
                 } else {
                     // expr_key1 != None, expr_key2 == None
-                    return false
+                    return false;
                 }
             } else {
                 // expr_key1 == None
-                return iter2.next().is_none()
+                return iter2.next().is_none();
             }
         }
-        return true
+        return true;
     }
 
     pub fn equals(&self, other: &Expr) -> bool {
@@ -262,7 +212,24 @@ impl Expr {
     }
 }
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 impl ExprKey {
+    pub fn hash(&self, expr_graph: &ExprGraph) -> u64 {
+        let mut iter = expr_graph.iter(*self);
+        let mut state = DefaultHasher::new();
+
+        for exprkey in iter {
+            let expr = &expr_graph.get(exprkey).value;
+            if let Expr::Subquery(_) = expr {
+                panic!("Cannot hash subqueries")
+            }
+            expr.hash(&mut state);
+        }
+        state.finish()
+    }
+
     pub fn get_boolean_factors(self, expr_graph: &ExprGraph, boolean_factors: &mut Vec<ExprKey>) {
         let (expr, _, children) = expr_graph.get3(self);
         if let LogExpr(crate::expr::LogOp::And) = expr {
