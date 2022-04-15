@@ -61,11 +61,15 @@ impl POP {
 impl Flow {
     pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
         if let Ok((lop_graph, lop_key)) = qgm.build_logical_plan() {
+
+            let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
+            qgm.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename);
+
             let mut pop_graph: POPGraph = Graph::new();
 
             debug!("COMPILER!");
             let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
-            let plan_filename = format!("{}/{}", GRAPHVIZDIR, "pop.dot");
+            let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
             QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename);
 
             let flow = Flow {

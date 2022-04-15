@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 use std::fs;
-use task::ThreadPool;
 use std::rc::Rc;
+use task::ThreadPool;
 
 use crate::includes::*;
 use clp::CLParser;
@@ -33,35 +33,39 @@ pub mod graphviz;
 pub mod logging;
 
 pub mod csv;
+pub mod flow;
 pub mod metadata;
 pub mod pop;
-pub mod flow;
 pub mod row;
 pub mod scratch;
 pub mod task;
 
+use ast::*;
 use compiler::*;
+use flow::*;
 use lop::*;
 use metadata::*;
 use pop::*;
-use flow::*;
-use ast::*;
 use qgm::*;
 
 pub struct Env {
     thread_pool: ThreadPool,
     metadata: Metadata,
     options: HashMap<String, String>,
+    input_filename: String,
+    output_dir: String,
 }
 
 impl Env {
-    fn new(nthreads: usize) -> Self {
+    fn new(nthreads: usize, input_filename: String, output_dir: String) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
         Env {
             thread_pool,
             metadata,
             options: HashMap::new(),
+            input_filename,
+            output_dir,
         }
     }
 
@@ -98,13 +102,14 @@ pub fn run_flow(env: &mut Env, flow: &Flow) {
 /*
  * Run a job from a file
  */
-fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
+fn run_job(env: &mut Env) -> Result<(), String> {
+    let filename = env.input_filename.as_str();
     let contents = fs::read_to_string(filename).expect(&format!("Cannot open file: {}", &filename));
 
     let mut parser_state = ParserState::new();
 
-    let qgm_raw_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_raw.dot");
-    let qgm_resolved_filename = format!("{}/{}", GRAPHVIZDIR, "qgm_resolved.dot");
+    let qgm_raw_filename = format!("{}/{}", env.output_dir, "qgm_raw.dot");
+    let qgm_resolved_filename = format!("{}/{}", env.output_dir, "qgm_resolved.dot");
 
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
@@ -138,7 +143,7 @@ fn run_job(env: &mut Env, filename: &str) -> Result<(), String> {
 
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
-    logging::init();
+    logging::init("debug");
 
     let args = "cmdname --rank 0".split(' ').map(|e| e.to_owned()).collect();
 
@@ -150,11 +155,12 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let mut env = Env::new(1);
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
+    let output_dir = "/Users/adarshrp/Projects/flare/".to_string();
 
-    let filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql";
+    let mut env = Env::new(1, input_filename, output_dir);
 
-    let jobres = run_job(&mut env, filename);
+    let jobres = run_job(&mut env);
     if let Err(flare_err) = jobres {
         let errstr = format!("{}", &flare_err);
         error!("{}", errstr);
@@ -167,4 +173,47 @@ fn main() -> Result<(), String> {
     info!("End of program");
 
     Ok(())
+}
+
+#[test]
+fn run_unit_tests() {
+    use std::process::Command;
+
+    // Initialize logger with INFO as default
+    logging::init("error");
+    let mut npassed = 0;
+    let mut ntotal = 0;
+
+    for test in vec!["rst", "repartition"] {
+        // Initialize context
+        let input_filename = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
+        let output_dir = f!("/Users/adarshrp/Projects/flare/tests/output/{test}/");
+
+        println!("---------- Running subtest {}", input_filename);
+        ntotal = ntotal + 1;
+        let mut env = Env::new(1, input_filename, output_dir.clone());
+
+        let jobres = run_job(&mut env);
+        if let Err(flare_err) = jobres {
+            let errstr = format!("{}", &flare_err);
+            error!("{}", errstr);
+        }
+        // Compare with gold output
+        let gold_dir = f!("/Users/adarshrp/Projects/flare/tests/gold/{test}/");
+
+        let output = Command::new("diff")
+            .arg(gold_dir)
+            .arg(output_dir)
+            .output()
+            .expect("failed to execute process");
+
+        let buf = output.stdout;
+        if buf.len() == 0 {
+            npassed = npassed + 1
+        } else {
+            let s = String::from_utf8_lossy(&buf);
+            println!("output: {}", s);
+        }
+    }
+    println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
 }

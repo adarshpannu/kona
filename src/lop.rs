@@ -120,6 +120,9 @@ macro_rules! fprint {
 }
 
 /***************************************************************************************************/
+type PredMap = HashMap<ExprKey, (Bitset<QunCol>, Bitset<QunId>)>;
+type EqJoinPredMap = HashMap<ExprKey, (Bitset<QunId>, Bitset<QunId>)>;
+
 impl QGM {
     pub fn build_logical_plan(self: &mut QGM) -> Result<(LOPGraph, LOPKey), String> {
         // Construct bitmaps
@@ -145,11 +148,10 @@ impl QGM {
             let children = expr.children.as_ref().unwrap();
             let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
 
-            let expr_str = pred_key.printable(graph, false);
             assert!(lhs_props.quns.are_clones(&rhs_props.quns));
 
-            let lhs_pred_quns = lhs_props.quns.clone().clear().init(lhs_child_key.iter_quns(graph));
-            let rhs_pred_quns = rhs_props.quns.clone().clear().init(rhs_child_key.iter_quns(graph));
+            let lhs_pred_quns = lhs_props.quns.clone_n_clear().init(lhs_child_key.iter_quns(graph));
+            let rhs_pred_quns = rhs_props.quns.clone_n_clear().init(rhs_child_key.iter_quns(graph));
 
             // pred-quns should have no common quns
             // lhs_pred_quns.is_disjoint(&rhs_pred_quns) {
@@ -168,56 +170,81 @@ impl QGM {
         pred_type
     }
 
-    pub fn build_qblock_logical_plan(
-        self: &mut QGM, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph,
-    ) -> Result<LOPKey, String> {
-        //let graph = replace(&mut qgm.graph, Graph::new());
-        let graph = &self.expr_graph;
-
-        let qblock = &self.qblock_graph.get(qblock_key).value;
-        let mut worklist: Vec<LOPKey> = vec![];
-
-        assert!(self.cte_list.len() == 0);
-
-        let all_quncols_bitset = &aps_context.all_quncols_bitset;
-        let all_quns_bitset = &aps_context.all_quns_bitset;
-        let all_preds_bitset = &aps_context.all_preds_bitset;
-
-        // Process select-list: Collect all QunCols
-        let mut select_list_quncol_bitset = all_quncols_bitset.clone().clear(); // shallow copy
+    fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
+        let mut select_list_quncol_bitset = aps_context.all_quncols_bitset.clone_n_clear();
         qblock
             .select_list
             .iter()
-            .flat_map(|ne| ne.expr_key.iter_quncols(&graph))
+            .flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph))
             .for_each(|quncol| select_list_quncol_bitset.set(quncol));
+        select_list_quncol_bitset
+    }
 
-        // Process predicates:
-        // 1. Classify predicates: pred -> type
-        // 2. Collect QunCols for each predicates: pred -> set(QunCol)
-        // 3. Collect quns for each predicates: pred -> set(Qun)
-        let mut pred_map: HashMap<ExprKey, (Bitset<QunCol>, Bitset<QunId>)> = HashMap::new();
+    fn collect_preds(&self, aps_context: &APSContext, qblock: &QueryBlock) -> (PredMap, EqJoinPredMap) {
+        let expr_graph = &self.expr_graph;
+        let mut pred_map: PredMap = HashMap::new();
+        let mut eqjoin_pred_map: EqJoinPredMap = HashMap::new();
 
         if let Some(pred_list) = qblock.pred_list.as_ref() {
             for &pred_key in pred_list.iter() {
-                let mut quncols_bitset = all_quncols_bitset.clone().clear();
-                let mut quns_bitset = all_quns_bitset.clone().clear();
+                // Collect quns and quncols for each predicate
+                let mut quncols_bitset = aps_context.all_quncols_bitset.clone_n_clear();
+                let mut quns_bitset = aps_context.all_quns_bitset.clone_n_clear();
 
-                for quncol in pred_key.iter_quncols(&graph) {
+                for quncol in pred_key.iter_quncols(&self.expr_graph) {
                     quncols_bitset.set(quncol);
                     quns_bitset.set(quncol.0);
                 }
                 pred_map.insert(pred_key, (quncols_bitset, quns_bitset));
+
+                // Collect lhs and rhs quns for each equijoin candidate
+
+                let mut expr_with_hash: Vec<(ExprKey, u64, bool)> = vec![]; // ExprKey, hash-code, visited
+                let expr = expr_graph.get(pred_key);
+                if let RelExpr(RelOp::Eq) = expr.value {
+                    let children = expr.children.as_ref().unwrap();
+                    let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
+                    let lhs_pred_quns = aps_context
+                        .all_quns_bitset
+                        .clone_n_clear()
+                        .init(lhs_child_key.iter_quns(expr_graph));
+                    let rhs_pred_quns = aps_context
+                        .all_quns_bitset
+                        .clone_n_clear()
+                        .init(rhs_child_key.iter_quns(expr_graph));
+
+                    if lhs_pred_quns.len() > 0 && rhs_pred_quns.len() > 0 {
+                        eqjoin_pred_map.insert(pred_key, (lhs_pred_quns, rhs_pred_quns));
+
+                        let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
+                        debug!("Eqjoin lhs: {:?}, hash = {}", lhs_child_key.printable(expr_graph, false), lhs_hash);
+                        debug!("Eqjoin rhs: {:?}, hash = {}", rhs_child_key.printable(expr_graph, false), rhs_hash);
+
+                        expr_with_hash.push((lhs_child_key, lhs_hash, false));
+                        expr_with_hash.push((rhs_child_key, rhs_hash, false));
+                    }
+                }
             }
         }
+        (pred_map, eqjoin_pred_map)
+    }
+
+    pub fn build_unary_plans(
+        self: &QGM, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap,
+        select_list_quncol_bitset: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
+    ) {
+        let all_quncols_bitset = &aps_context.all_quncols_bitset;
+        let all_quns_bitset = &aps_context.all_quns_bitset;
+        let all_preds_bitset = &aps_context.all_preds_bitset;
 
         // Build unary POPs first
         for qun in qblock.quns.iter() {
             // Set quns
-            let mut quns_bitset = all_quns_bitset.clone().clear();
+            let mut quns_bitset = all_quns_bitset.clone_n_clear();
             quns_bitset.set(qun.id);
 
             // Set input cols: find all column references for this qun
-            let mut input_quncols_bitset = all_quncols_bitset.clone().clear();
+            let mut input_quncols_bitset = all_quncols_bitset.clone_n_clear();
             aps_context
                 .all_quncols_bitset
                 .elements()
@@ -226,9 +253,9 @@ impl QGM {
                 .for_each(|&quncol| input_quncols_bitset.set(quncol));
 
             // Set output cols + preds
-            let mut unbound_quncols_bitset = select_list_quncol_bitset.clone();
+            let mut unbound_quncols_bitset = all_quncols_bitset.clone();
 
-            let mut preds_bitset = all_preds_bitset.clone().clear();
+            let mut preds_bitset = all_preds_bitset.clone_n_clear();
             pred_map.iter().for_each(|(&pred_key, (quncols_bitset, quns_bitset))| {
                 if quns_bitset.get(qun.id) {
                     if quns_bitset.bitmap.len() == 1 {
@@ -244,22 +271,17 @@ impl QGM {
             let mut output_quncols_bitset = select_list_quncol_bitset.clone();
             output_quncols_bitset.bitmap = unbound_quncols_bitset.bitmap & input_quncols_bitset.bitmap;
 
+            // Remove all preds that will run on this tablescan as they've been bound already
             for pred_key in preds_bitset.elements().iter() {
                 pred_map.remove_entry(pred_key);
             }
 
-            let partdesc = if let Some(tabledesc) = qun.tabledesc.as_ref() {
-                let partdesc = tabledesc.get_part_desc();
-                PartDesc {
-                    npartitions: partdesc.npartitions,
-                    part_type: PartType::RAW,
-                }
+            let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
+                tabledesc.get_part_desc().npartitions
             } else {
-                PartDesc {
-                    npartitions: 3,
-                    part_type: PartType::RAW,
-                }
+                3
             };
+            let partdesc = PartDesc::new(npartitions, PartType::RAW);
 
             // Set props
             let props = LOPProps::new(quns_bitset, output_quncols_bitset, preds_bitset, partdesc);
@@ -276,6 +298,35 @@ impl QGM {
 
             worklist.push(lopkey);
         }
+    }
+
+    pub fn build_qblock_logical_plan(
+        self: &mut QGM, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph,
+    ) -> Result<LOPKey, String> {
+        let qblock = &self.qblock_graph.get(qblock_key).value;
+        let mut worklist: Vec<LOPKey> = vec![];
+
+        assert!(self.cte_list.len() == 0);
+
+        let all_quncols_bitset = &aps_context.all_quncols_bitset;
+        let all_quns_bitset = &aps_context.all_quns_bitset;
+        let all_preds_bitset = &aps_context.all_preds_bitset;
+
+        // Process select-list: Collect all QunCols
+        let mut select_list_quncol_bitset = self.collect_selectlist_quncols(aps_context, qblock);
+
+        // Process predicates: Collect quns, quncols. Also collect lhs/rhs quns for equi-join candidates
+        let (mut pred_map, eqjoin_pred_map) = self.collect_preds(aps_context, qblock);
+
+        // Build unary plans first (i.e. baseline single table scans)
+        self.build_unary_plans(
+            aps_context,
+            qblock,
+            lop_graph,
+            &mut pred_map,
+            &select_list_quncol_bitset,
+            &mut worklist,
+        );
 
         // Run greedy join enumeration
         let n = qblock.quns.len();
@@ -313,11 +364,16 @@ impl QGM {
                     debug!("join_preds len = {}", join_preds.len());
 
                     // Only select equality predicates (hash/merge joins only)
-                    let equi_join_preds = join_preds
+                    let mut equi_join_preds = join_preds
                         .iter()
                         .filter_map(|&pred_key| {
-                            let join_class =
-                                Self::classify_predicate(graph, pred_key, lop_graph, lhs_plan_key, rhs_plan_key);
+                            let join_class = Self::classify_predicate(
+                                &self.expr_graph,
+                                pred_key,
+                                lop_graph,
+                                lhs_plan_key,
+                                rhs_plan_key,
+                            );
                             if join_class.0 == PredicateType::EquiJoin {
                                 Some((pred_key, join_class.1))
                             } else {
@@ -326,8 +382,11 @@ impl QGM {
                         })
                         .collect::<Vec<_>>();
 
+                    // Sort preds since the preceding hash-based ordering can be random
+                    equi_join_preds.sort_by(|a, b| a.0.cmp(&b.0));
+
                     if equi_join_preds.len() > 0 {
-                        let mut join_bitset = all_preds_bitset.clone().clear();
+                        let mut join_bitset = all_preds_bitset.clone_n_clear();
 
                         for &pred_key in join_preds.iter() {
                             join_bitset.set(pred_key);
@@ -361,13 +420,13 @@ impl QGM {
                         let lhs_repart_props = lhs_partdesc.map(|partdesc| LOPProps {
                             quns: lhs_props.quns.clone(),
                             cols: lhs_props.cols.clone(),
-                            preds: lhs_props.preds.clone().clear(),
+                            preds: lhs_props.preds.clone_n_clear(),
                             partdesc,
                         });
                         let rhs_repart_props = rhs_partdesc.map(|partdesc| LOPProps {
                             quns: rhs_props.quns.clone(),
                             cols: rhs_props.cols.clone(),
-                            preds: rhs_props.preds.clone().clear(),
+                            preds: rhs_props.preds.clone_n_clear(),
                             partdesc,
                         });
 
@@ -431,17 +490,10 @@ impl QGM {
 
         if worklist.len() == 1 {
             let root_lop_key = worklist[0];
-
-            let plan_filename = format!("{}/{}", GRAPHVIZDIR, "lop.dot");
-            self.write_logical_plan_to_graphviz(&lop_graph, root_lop_key, &plan_filename);
             Ok(root_lop_key)
         } else {
             Err("Cannot find plan for qblock".to_string())
         }
-    }
-
-    pub fn join_key_matches_part_key() {
-        todo!()
     }
 
     // harmonize_partitions: Return a triplet indicating whether either/both legs of a join need to be repartitioned

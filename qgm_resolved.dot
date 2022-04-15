@@ -116,6 +116,20 @@ digraph example1 {
     exprnodeExprKey58v1 -> exprnodeExprKey59v1;
     exprnodeExprKey58v1[label="100"];
     exprnodeExprKey59v1 -> QB_0_pred_list;
+    exprnodeExprKey67v1[label="="];
+    exprnodeExprKey63v1 -> exprnodeExprKey67v1;
+    exprnodeExprKey63v1[label="+"];
+    exprnodeExprKey61v1 -> exprnodeExprKey63v1;
+    exprnodeExprKey61v1[label="R1 ($0.1)"];
+    exprnodeExprKey62v1 -> exprnodeExprKey63v1;
+    exprnodeExprKey62v1[label="1"];
+    exprnodeExprKey66v1 -> exprnodeExprKey67v1;
+    exprnodeExprKey66v1[label="+"];
+    exprnodeExprKey64v1 -> exprnodeExprKey66v1;
+    exprnodeExprKey64v1[label="T2 ($2.2)"];
+    exprnodeExprKey65v1 -> exprnodeExprKey66v1;
+    exprnodeExprKey65v1[label="3"];
+    exprnodeExprKey67v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_0 type=Select";

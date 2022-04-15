@@ -21,6 +21,10 @@ pub struct PartDesc {
 }
 
 impl PartDesc {
+    pub fn new(npartitions: usize, part_type: PartType) -> Self {
+        PartDesc { npartitions, part_type }
+    }
+    
     pub fn printable(&self, expr_graph: &ExprGraph, do_escape: bool) -> String {
         let part_type_str = match &self.part_type {
             PartType::RAW => format!("{}", "RAW"),

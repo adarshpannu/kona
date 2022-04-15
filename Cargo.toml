@@ -27,3 +27,4 @@ slotmap = { version = "1.0", features = ["serde"] }
 bitmaps = "3.1.0"
 fstrings = "0.2.3"
 itertools = "0.10"
+partitions = "0.2.4"

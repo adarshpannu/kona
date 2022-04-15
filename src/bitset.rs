@@ -69,6 +69,10 @@ where
         self
     }
 
+    pub fn clone_n_clear(&self) -> Self {
+        self.clone().clear()
+    }
+
     pub fn elements(&self) -> Vec<T> {
         let bitmap = self.bitmap.clone();
         let rev_dict = (*self.rev_dict).borrow();
