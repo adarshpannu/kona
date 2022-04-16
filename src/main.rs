@@ -155,7 +155,7 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/repartition.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/".to_string();
 
     let mut env = Env::new(1, input_filename, output_dir);
@@ -201,11 +201,7 @@ fn run_unit_tests() {
         // Compare with gold output
         let gold_dir = f!("/Users/adarshrp/Projects/flare/tests/gold/{test}/");
 
-        let output = Command::new("diff")
-            .arg(gold_dir)
-            .arg(output_dir)
-            .output()
-            .expect("failed to execute process");
+        let output = Command::new("diff").arg(gold_dir).arg(output_dir).output().expect("failed to execute process");
 
         let buf = output.stdout;
         if buf.len() == 0 {
@@ -217,3 +213,4 @@ fn run_unit_tests() {
     }
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
 }
+

@@ -222,10 +222,17 @@ impl ExprKey {
 
         for exprkey in iter {
             let expr = &expr_graph.get(exprkey).value;
-            if let Expr::Subquery(_) = expr {
-                panic!("Cannot hash subqueries")
+            match expr {
+                Expr::Column {
+                    colname, qunid, colid, ..
+                } => {
+                    colname.hash(&mut state);
+                    qunid.hash(&mut state);
+                    colid.hash(&mut state);
+                }
+                Expr::Subquery(_) => panic!("Cannot hash subqueries"),
+                _ => expr.hash(&mut state),
             }
-            expr.hash(&mut state);
         }
         state.finish()
     }
