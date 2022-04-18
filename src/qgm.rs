@@ -265,7 +265,7 @@ impl QueryBlock {
 }
 
 impl QueryBlock {
-    pub fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> std::io::Result<()> {
+    pub fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> Result<(), String> {
         // Write current query block first
         let s = "".to_string();
         let select_names: Vec<&String> = self
@@ -406,8 +406,9 @@ impl QGM {
         qblock
     }
 
-    pub fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> std::io::Result<()> {
-        let mut file = std::fs::File::create(filename)?;
+    pub fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> Result<(), String> {
+        let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
+        
         fprint!(file, "digraph example1 {{\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG
@@ -419,12 +420,12 @@ impl QGM {
         //fprint!(file, "    color=lightgrey;\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
 
-        self.main_qblock().write_qblock_to_graphviz(self, &mut file);
+        self.main_qblock().write_qblock_to_graphviz(self, &mut file)?;
 
         // Write subqueries (CTEs)
         for &qbkey in self.cte_list.iter() {
             let qblock = &self.qblock_graph.get(qbkey).value;
-            qblock.write_qblock_to_graphviz(self, &mut file);
+            qblock.write_qblock_to_graphviz(self, &mut file)?;
         }
 
         fprint!(file, "}}\n");

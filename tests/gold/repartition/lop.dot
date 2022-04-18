@@ -17,5 +17,5 @@ digraph example1 {
     lopkeyLOPKey3v1 -> lopkeyLOPKey7v1;
     lopkeyLOPKey3v1[label="TableScan|[2]|T1 |{}|p=3, ptype=RAW|(input = T1 )"];
     lopkeyLOPKey7v1[label="Repartition|[2]|T1 |{}|p=4, ptype=T1 + 1|c = 4"];
-    lopkeyLOPKey8v1[label="HashJoin|[0, 1, 2]|R1 S1 T1 |{R1 + 1 = T1 + 1}|p=4, ptype=R1 + 1|{R1 + 1 = T1 + 1}"];
+    lopkeyLOPKey8v1[label="HashJoin|[0, 1, 2]|{R1|S1|T1}|{R1 + 1 = T1 + 1}|p=4, ptype=R1 + 1|{R1 + 1 = T1 + 1}"];
 }

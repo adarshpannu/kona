@@ -1,0 +1,17 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+    lopkeyLOPKey5v1 -> lopkeyLOPKey6v1;
+    lopkeyLOPKey3v1 -> lopkeyLOPKey5v1;
+    lopkeyLOPKey1v1 -> lopkeyLOPKey3v1;
+    lopkeyLOPKey1v1[label="TableScan|[0]|AGE DEPT_ID |{E.AGE \> 50}|p=1, ptype=RAW|(input = AGE DEPT_ID )"];
+    lopkeyLOPKey3v1[label="Repartition|[0]|AGE DEPT_ID |{}|p=4, ptype=E.DEPT_ID|c = 4"];
+    lopkeyLOPKey4v1 -> lopkeyLOPKey5v1;
+    lopkeyLOPKey2v1 -> lopkeyLOPKey4v1;
+    lopkeyLOPKey2v1[label="TableScan|[1]|DEPT_ID |{D.DEPT_ID \< 99}|p=1, ptype=RAW|(input = DEPT_ID )"];
+    lopkeyLOPKey4v1[label="Repartition|[1]|DEPT_ID |{}|p=4, ptype=D.DEPT_ID|c = 4"];
+    lopkeyLOPKey5v1[label="HashJoin|[1, 0]|{D.DEPT_ID + 55|E.AGE + 10|E.AGE + 50|E.AGE}|{E.DEPT_ID = D.DEPT_ID}|p=4, ptype=E.DEPT_ID|{E.DEPT_ID = D.DEPT_ID}"];
+    lopkeyLOPKey6v1[label="Aggregation|[3]|{SUM($3.1) * 99 / COUNT($3.2)|$3.0|SUM($3.3) / COUNT($3.3)|$3.0}|{SUM($3.3) \> 100|$3.0 \> 10}|p=4, ptype=E.DEPT_ID|"];
+}

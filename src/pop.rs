@@ -61,14 +61,14 @@ impl Flow {
     pub fn compile(env: &Env, qgm: &mut QGM) -> Result<(), String> {
         if let Ok((lop_graph, lop_key)) = qgm.build_logical_plan() {
             let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
-            qgm.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename);
+            qgm.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
 
             let mut pop_graph: POPGraph = Graph::new();
 
             /*
             let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
             let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
-            QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename);
+            QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename)?;
 
             let flow = Flow {
                 pop_graph,
@@ -128,15 +128,16 @@ macro_rules! fprint {
 }
 
 impl QGM {
-    pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> std::io::Result<()> {
-        let mut file = std::fs::File::create(filename)?;
+    pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> Result<(), String> {
+        let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
+        
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        self.write_pop_to_graphviz(pop_graph, pop_key, &mut file);
+        self.write_pop_to_graphviz(pop_graph, pop_key, &mut file)?;
 
         fprint!(file, "}}\n");
 
@@ -156,7 +157,7 @@ impl QGM {
         Ok(())
     }
 
-    pub fn write_pop_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File) -> std::io::Result<()> {
+    pub fn write_pop_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File) -> Result<(), String> {
         let id = pop_key.printable_key();
         let (pop, props, children) = pop_graph.get3(pop_key);
 

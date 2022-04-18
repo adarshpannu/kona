@@ -125,9 +125,9 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 env.set_option(name, value);
             }
             AST::QGM(mut qgm) => {
-                qgm.write_qgm_to_graphviz(&qgm_raw_filename, false);
+                qgm.write_qgm_to_graphviz(&qgm_raw_filename, false)?;
                 qgm.resolve(&env)?;
-                qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false);
+                qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false)?;
 
                 if !env.get_boolean_option("PARSE_ONLY") {
                     let flow = Flow::compile(env, &mut qgm).unwrap();
@@ -141,23 +141,15 @@ fn run_job(env: &mut Env) -> Result<(), String> {
     Ok(())
 }
 
+/*
+** ----------- main
+*/
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let args = "cmdname --rank 0".split(' ').map(|e| e.to_owned()).collect();
-
-    let mut clpr = CLParser::new(&args);
-
-    clpr.define("--rank int")
-        .define("--host_list string")
-        .define("--workers_per_host int")
-        .parse()?;
-
-    // Initialize context
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/aggregates.fsql".to_string();
-    let output_dir = "/Users/adarshrp/Projects/flare/".to_string();
-
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/groupby.fsql".to_string();
+    let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_filename, output_dir);
 
     let jobres = run_job(&mut env);
@@ -166,15 +158,11 @@ fn main() -> Result<(), String> {
         error!("{}", errstr);
         return Err(errstr);
     }
-
-    //let flow = make_simple_flow(env);
-    //run_flow(&mut env, &flow);
-
-    info!("End of program");
-
     Ok(())
 }
-
+/*
+** ----------- run_tests
+*/
 #[test]
 fn run_unit_tests() {
     use std::process::Command;
@@ -184,8 +172,7 @@ fn run_unit_tests() {
     let mut npassed = 0;
     let mut ntotal = 0;
 
-    for test in vec!["rst", "repartition", "aggregates"] {
-        // Initialize context
+    for test in vec!["rst", "repartition", "groupby", "spja"] {
         let input_filename = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
         let output_dir = f!("/Users/adarshrp/Projects/flare/tests/output/{test}/");
 
@@ -214,7 +201,7 @@ fn run_unit_tests() {
                 println!("{}: {}", tag, s);
             }
         }
-        if ! mismatch {
+        if !mismatch {
             npassed = npassed + 1
         }
     }

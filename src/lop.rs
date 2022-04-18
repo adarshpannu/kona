@@ -151,16 +151,12 @@ impl ExprEqClass {
     }
 
     pub fn set_eq(&mut self, expr1: ExprKey, expr2: ExprKey) {
-        debug!("set_eq: {:?} = {:?}", expr1, expr2);
-
         let id1 = self.key2id(expr1);
         let id2 = self.key2id(expr2);
         self.disjoint_sets.union(id1, id2);
     }
 
     pub fn check_eq(&self, expr1: ExprKey, expr2: ExprKey) -> bool {
-        debug!("check_eq: {:?} = {:?}", expr1, expr2);
-
         let &id1 = self.expr_id_map.get_by_left(&expr1).unwrap();
         let &id2 = self.expr_id_map.get_by_left(&expr2).unwrap();
         self.disjoint_sets.same_set(id1, id2)
@@ -249,6 +245,7 @@ impl QGM {
 
                     if lhs_quns.len() > 0 && rhs_quns.len() > 0 {
                         let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
+                        /*
                         debug!(
                             "Eqjoin lhs key = {:?}, {:?}, hash = {}",
                             lhs_child_key,
@@ -261,6 +258,7 @@ impl QGM {
                             rhs_child_key.printable(expr_graph, false),
                             rhs_hash
                         );
+                        */
 
                         eqpred_legs.push((lhs_hash, lhs_child_key));
                         eqpred_legs.push((rhs_hash, rhs_child_key));
@@ -372,9 +370,7 @@ impl QGM {
 
                 lop_graph.add_node_with_props(LOP::TableScan { input_cols: input_quncols }, props, None)
             };
-
-            debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
-
+            //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
             worklist.push(lopkey);
         }
     }
@@ -433,8 +429,6 @@ impl QGM {
                             }
                         })
                         .collect::<Vec<_>>();
-
-                    debug!("join_preds len = {}", join_preds.len());
 
                     // Only select equality predicates (hash/merge joins only)
                     let mut equi_join_preds = join_preds
@@ -528,12 +522,8 @@ impl QGM {
             }
 
             if let Some((plan1_key, plan2_key, join_node)) = join_status {
-                debug!("worklist pre-join: {:?}", worklist);
-                debug!("plan1_key: {:?}", plan1_key);
-                debug!("plan2_key: {:?}", plan2_key);
                 worklist.retain(|&elem| (elem != plan1_key && elem != plan2_key));
                 worklist.insert(0, join_node);
-                debug!("worklist post-join: {:?}", worklist);
             } else {
                 panic!("No join found!!!")
             }
@@ -554,10 +544,36 @@ impl QGM {
             let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
             let emit_exprs = qblock.select_list.clone();
             props.emit_exprs = Some(emit_exprs);
+
+            info!("Created logical plan for qblock id: {}", qblock.id);
+            
             Ok(root_lop_key)
         } else {
             Err("Cannot find plan for qblock".to_string())
         }
+    }
+
+    pub fn compute_join_partitioning_keys(expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>) -> (Vec<ExprKey>, Vec<ExprKey>) {
+        // Compute expected partitioning keys
+        let mut lhs_expected_keys = vec![];
+        let mut rhs_expected_keys = vec![];
+        for &(join_pred_key, alignment) in join_preds.iter() {
+            let (expr, _, children) = expr_graph.get3(join_pred_key);
+            if let RelExpr(RelOp::Eq) = expr {
+                let children = children.unwrap();
+                let (lhs_pred_key, rhs_pred_key) = (children[0], children[1]);
+                if alignment == PredicateAlignment::Aligned {
+                    lhs_expected_keys.push(lhs_pred_key);
+                    rhs_expected_keys.push(rhs_pred_key);
+                } else if alignment == PredicateAlignment::Reversed {
+                    lhs_expected_keys.push(rhs_pred_key);
+                    rhs_expected_keys.push(lhs_pred_key);
+                } else {
+                    assert!(false);
+                }
+            }
+        }
+        (lhs_expected_keys, rhs_expected_keys)
     }
 
     // harmonize_partitions: Return a triplet indicating whether either/both legs of a join need to be repartitioned
@@ -584,24 +600,7 @@ impl QGM {
         };
 
         // Compute expected partitioning keys
-        let mut lhs_expected_keys = vec![];
-        let mut rhs_expected_keys = vec![];
-        for &(join_pred_key, alignment) in join_preds.iter() {
-            let (expr, _, children) = expr_graph.get3(join_pred_key);
-            if let RelExpr(RelOp::Eq) = expr {
-                let children = children.unwrap();
-                let (lhs_pred_key, rhs_pred_key) = (children[0], children[1]);
-                if alignment == PredicateAlignment::Aligned {
-                    lhs_expected_keys.push(lhs_pred_key);
-                    rhs_expected_keys.push(rhs_pred_key);
-                } else if alignment == PredicateAlignment::Reversed {
-                    lhs_expected_keys.push(rhs_pred_key);
-                    rhs_expected_keys.push(lhs_pred_key);
-                } else {
-                    assert!(false);
-                }
-            }
-        }
+        let (lhs_expected_keys, rhs_expected_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
 
         // Is LHS partitioned on join keys?
         let lhs_correctly_partitioned = lhs_actual_keys
@@ -630,22 +629,19 @@ impl QGM {
                 part_type: PartType::HASHEXPR(rhs_expected_keys),
             })
         };
-
-        debug!("lhs_correctly_partitioned: {}", lhs_correctly_partitioned);
-        debug!("rhs_correctly_partitioned: {}", rhs_correctly_partitioned);
-
         (lhs_partdesc, rhs_partdesc, 4)
     }
 
-    pub fn write_logical_plan_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str) -> std::io::Result<()> {
-        let mut file = std::fs::File::create(filename)?;
+    pub fn write_logical_plan_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str) -> Result<(), String> {
+        let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
+
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        self.write_lop_to_graphviz(lop_graph, lop_key, &mut file);
+        self.write_lop_to_graphviz(lop_graph, lop_key, &mut file)?;
 
         fprint!(file, "}}\n");
 
@@ -665,7 +661,7 @@ impl QGM {
         Ok(())
     }
 
-    pub fn write_lop_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File) -> std::io::Result<()> {
+    pub fn write_lop_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File) -> Result<(), String> {
         let id = lop_key.printable_key();
         let (lop, props, children) = lop_graph.get3(lop_key);
 

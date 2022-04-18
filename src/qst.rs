@@ -12,8 +12,6 @@ use std::rc::Rc;
 
 impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
-        debug!("Normalize QGM");
-
         // Resolve top-level QB
         let qbkey = self.main_qblock_key;
         QueryBlock::resolve(
@@ -59,8 +57,6 @@ impl QueryBlock {
     ) -> Result<(), String> {
         let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
 
-        debug!("Resolve query block: {}", qblock.id);
-
         // Resolve nested query blocks first
         let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.qblock).collect();
         for qbkey in qbkey_children {
@@ -68,6 +64,7 @@ impl QueryBlock {
         }
 
         let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
+        let qblock_id = qblock.id;
 
         // Resolve base table QUNs next
         for qun in qblock.quns.iter_mut() {
@@ -115,16 +112,12 @@ impl QueryBlock {
             qblock.having_clause = Some(boolean_factors);
         }
 
-        for qun in qblock.quns.iter() {
-            //info!("Qun: {}, column_map:{:?}", qun.id, qun.column_read_map)
-        }
-
         // Resolve group-by/having clauses, if they exist
         // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
         if qblock.group_by.is_some() {
             Self::split_groupby(qbkey, env, qblock_graph, expr_graph)?;
         }
-
+        info!("Resolved qblock id: {}", qblock_id);
         Ok(())
     }
 
