@@ -1,13 +1,16 @@
 CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE emp;
+DESCRIBE TABLE dept;
 
-//SET parse_only = "true";
-
-select sum(age + 10)*99 / count(age + 50), dept_id + 55, avg(distinct age), dept_id + 55
-from emp
-where age > 50 and dept_id < 99
-group by dept_id + 55
-having sum(age) > 100 and dept_id + 55 > 10
+select sum(E.age + 10)*99 / count(E.age + 50), D.dept_id + 55, avg(distinct E.age), D.dept_id + 55
+from emp E, dept D
+where 
+    E.age > 50 
+and D.dept_id < 99
+and E.dept_id = D.dept_id
+group by D.dept_id + 55
+having sum(E.age) > 100 and D.dept_id + 55 > 10
 ;
 

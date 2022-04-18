@@ -3,11 +3,12 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
+    popkeyPOPKey8v1 -> popkeyPOPKey9v1;
     popkeyPOPKey7v1 -> popkeyPOPKey8v1;
-    popkeyPOPKey6v1 -> popkeyPOPKey7v1;
-    popkeyPOPKey6v1[label="CSV(CSV  filename: /Users/adarshrp/Projects/flare/data/T.csv, header: true, separator: ',', partitions: [] )"];
-    popkeyPOPKey7v1[label="Repartition"];
-    popkeyPOPKey5v1 -> popkeyPOPKey8v1;
+    popkeyPOPKey7v1[label="CSV(CSV  filename: /Users/adarshrp/Projects/flare/data/T.csv, header: true, separator: ',', partitions: [] )"];
+    popkeyPOPKey8v1[label="Repartition"];
+    popkeyPOPKey6v1 -> popkeyPOPKey9v1;
+    popkeyPOPKey5v1 -> popkeyPOPKey6v1;
     popkeyPOPKey4v1 -> popkeyPOPKey5v1;
     popkeyPOPKey3v1 -> popkeyPOPKey4v1;
     popkeyPOPKey3v1[label="CSV(CSV  filename: /Users/adarshrp/Projects/flare/data/S.csv, header: true, separator: ',', partitions: [] )"];
@@ -17,5 +18,6 @@ digraph example1 {
     popkeyPOPKey1v1[label="CSV(CSV  filename: /Users/adarshrp/Projects/flare/data/R.csv, header: true, separator: ',', partitions: [] )"];
     popkeyPOPKey2v1[label="Repartition"];
     popkeyPOPKey5v1[label="HashJoin"];
-    popkeyPOPKey8v1[label="HashJoin"];
+    popkeyPOPKey6v1[label="Repartition"];
+    popkeyPOPKey9v1[label="HashJoin"];
 }

@@ -51,7 +51,6 @@ pub enum NodeRuntime {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashJoinPOP {}
 
-
 impl POP {
     fn is_stage_boundary(&self) -> bool {
         false
@@ -59,15 +58,14 @@ impl POP {
 }
 
 impl Flow {
-    pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
+    pub fn compile(env: &Env, qgm: &mut QGM) -> Result<(), String> {
         if let Ok((lop_graph, lop_key)) = qgm.build_logical_plan() {
-
             let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
             qgm.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename);
 
             let mut pop_graph: POPGraph = Graph::new();
 
-            debug!("COMPILER!");
+            /*
             let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
             let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
             QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename);
@@ -77,14 +75,14 @@ impl Flow {
                 root_pop_key,
             };
             return Ok(flow);
+            */
+            return Ok(())
         } else {
             todo!()
         }
     }
 
-    pub fn compile_lop(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph,
-    ) -> Result<POPKey, String> {
+    pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph) -> Result<POPKey, String> {
         let (lop, lopprops, lop_children) = lop_graph.get3(lop_key);
 
         // Compile children first
@@ -113,7 +111,7 @@ impl Flow {
                 let props = POPProps { npartitions: 4 };
                 pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children))
             }
-            LOP::Repartition { cpartitions }=> {
+            LOP::Repartition { cpartitions } => {
                 let props = POPProps { npartitions: 4 };
                 pop_graph.add_node_with_props(POP::Repartition, props, Some(pop_children))
             }
@@ -130,9 +128,7 @@ macro_rules! fprint {
 }
 
 impl QGM {
-    pub fn write_physical_plan_to_graphviz(
-        self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str,
-    ) -> std::io::Result<()> {
+    pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> std::io::Result<()> {
         let mut file = std::fs::File::create(filename)?;
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
@@ -160,9 +156,7 @@ impl QGM {
         Ok(())
     }
 
-    pub fn write_pop_to_graphviz(
-        self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File,
-    ) -> std::io::Result<()> {
+    pub fn write_pop_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File) -> std::io::Result<()> {
         let id = pop_key.printable_key();
         let (pop, props, children) = pop_graph.get3(pop_key);
 

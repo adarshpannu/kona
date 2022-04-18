@@ -60,45 +60,45 @@ digraph example1 {
   subgraph cluster_select_listQB_4 {
     exprnodeExprKey33v1[label="+: 0"];
     exprnodeExprKey31v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey31v1[label="D.DEPT_ID ($1.0)"];
+    exprnodeExprKey31v1[label="DEPT_ID ($0.2)"];
     exprnodeExprKey32v1 -> exprnodeExprKey33v1;
     exprnodeExprKey32v1[label="55"];
     exprnodeExprKey33v1 -> "QB_4_selectlist";
     exprnodeExprKey3v1[label="+: 1"];
     exprnodeExprKey1v1 -> exprnodeExprKey3v1;
-    exprnodeExprKey1v1[label="E.AGE ($0.1)"];
+    exprnodeExprKey1v1[label="AGE ($0.1)"];
     exprnodeExprKey2v1 -> exprnodeExprKey3v1;
     exprnodeExprKey2v1[label="10"];
     exprnodeExprKey3v1 -> "QB_4_selectlist";
     exprnodeExprKey9v1[label="+: 2"];
     exprnodeExprKey7v1 -> exprnodeExprKey9v1;
-    exprnodeExprKey7v1[label="E.AGE ($0.1)"];
+    exprnodeExprKey7v1[label="AGE ($0.1)"];
     exprnodeExprKey8v1 -> exprnodeExprKey9v1;
     exprnodeExprKey8v1[label="50"];
     exprnodeExprKey9v1 -> "QB_4_selectlist";
-    exprnodeExprKey15v1[label="E.AGE ($0.1): 3"];
+    exprnodeExprKey15v1[label="AGE ($0.1): 3"];
     exprnodeExprKey15v1 -> "QB_4_selectlist";
 }
-    "QUN_1"[label="QUN_1 DEPT/D", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_0"[label="QUN_0 EMP/E", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_1"[label="QUN_1 R/", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_0"[label="QUN_0 EMP/", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_4 {
     exprnodeExprKey22v1[label=">"];
     exprnodeExprKey20v1 -> exprnodeExprKey22v1;
-    exprnodeExprKey20v1[label="E.AGE ($0.1)"];
+    exprnodeExprKey20v1[label="AGE ($0.1)"];
     exprnodeExprKey21v1 -> exprnodeExprKey22v1;
     exprnodeExprKey21v1[label="50"];
     exprnodeExprKey22v1 -> QB_4_pred_list;
     exprnodeExprKey25v1[label="<"];
     exprnodeExprKey23v1 -> exprnodeExprKey25v1;
-    exprnodeExprKey23v1[label="D.DEPT_ID ($1.0)"];
+    exprnodeExprKey23v1[label="DEPT_ID ($0.2)"];
     exprnodeExprKey24v1 -> exprnodeExprKey25v1;
     exprnodeExprKey24v1[label="99"];
     exprnodeExprKey25v1 -> QB_4_pred_list;
     exprnodeExprKey29v1[label="="];
     exprnodeExprKey27v1 -> exprnodeExprKey29v1;
-    exprnodeExprKey27v1[label="E.DEPT_ID ($0.2)"];
+    exprnodeExprKey27v1[label="DEPT_ID ($0.2)"];
     exprnodeExprKey28v1 -> exprnodeExprKey29v1;
-    exprnodeExprKey28v1[label="D.DEPT_ID ($1.0)"];
+    exprnodeExprKey28v1[label="R0 ($1.0)"];
     exprnodeExprKey29v1 -> QB_4_pred_list;
     "QB_4_pred_list"[label="pred_list",shape=box,style=filled];
 }

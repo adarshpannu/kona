@@ -131,7 +131,7 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 
                 if !env.get_boolean_option("PARSE_ONLY") {
                     let flow = Flow::compile(env, &mut qgm).unwrap();
-                    run_flow(env, &flow);
+                    //run_flow(env, &flow);
                 }
             }
             _ => unimplemented!(),
@@ -155,7 +155,7 @@ fn main() -> Result<(), String> {
         .parse()?;
 
     // Initialize context
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/repartition.fsql".to_string();
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/aggregates.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/".to_string();
 
     let mut env = Env::new(1, input_filename, output_dir);
@@ -184,12 +184,15 @@ fn run_unit_tests() {
     let mut npassed = 0;
     let mut ntotal = 0;
 
-    for test in vec!["rst", "repartition"] {
+    for test in vec!["rst", "repartition", "aggregates"] {
         // Initialize context
         let input_filename = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
         let output_dir = f!("/Users/adarshrp/Projects/flare/tests/output/{test}/");
 
         println!("---------- Running subtest {}", input_filename);
+        std::fs::remove_dir_all(&output_dir);
+        std::fs::create_dir_all(&output_dir);
+
         ntotal = ntotal + 1;
         let mut env = Env::new(1, input_filename, output_dir.clone());
 
@@ -203,14 +206,17 @@ fn run_unit_tests() {
 
         let output = Command::new("diff").arg(gold_dir).arg(output_dir).output().expect("failed to execute process");
 
-        let buf = output.stdout;
-        if buf.len() == 0 {
+        let mut mismatch = false;
+        for (tag, buf) in vec![("out", output.stdout), ("err", output.stderr)].iter() {
+            if buf.len() > 0 {
+                mismatch = true;
+                let s = String::from_utf8_lossy(buf);
+                println!("{}: {}", tag, s);
+            }
+        }
+        if ! mismatch {
             npassed = npassed + 1
-        } else {
-            let s = String::from_utf8_lossy(&buf);
-            println!("output: {}", s);
         }
     }
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
 }
-

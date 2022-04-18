@@ -37,22 +37,29 @@ impl LOPKey {
 pub enum LOP {
     TableScan { input_cols: Bitset<QunCol> },
     HashJoin { equi_join_preds: Vec<(ExprKey, PredicateAlignment)> },
-    Aggregation,
     Repartition { cpartitions: usize },
+    Aggregation,
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LOPProps {
     pub quns: Bitset<QunId>,
-    pub cols: Bitset<QunCol>, // output cols
+    pub cols: Bitset<QunCol>,
     pub preds: Bitset<ExprKey>,
     pub partdesc: PartDesc,
+    pub emit_exprs: Option<Vec<NamedExpr>>,
 }
 
 impl LOPProps {
-    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc) -> Self {
-        LOPProps { quns, cols, preds, partdesc }
+    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, emit_exprs: Option<Vec<NamedExpr>>) -> Self {
+        LOPProps {
+            quns,
+            cols,
+            preds,
+            partdesc,
+            emit_exprs,
+        }
     }
 }
 
@@ -342,17 +349,29 @@ impl QGM {
                 pred_map.remove_entry(pred_key);
             }
 
-            let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
-                tabledesc.get_part_desc().npartitions
+            // Build plan for nested query blocks
+            let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
+                let subqblock_key = qun.qblock.unwrap();
+                let subqblock = &self.qblock_graph.get(subqblock_key).value;
+                let child = self.build_qblock_logical_plan(subqblock_key, aps_context, lop_graph).unwrap();
+                let children = Some(vec![child]);
+
+                // todo: partitioning needs to match group-by list
+                let partdesc = lop_graph.get(child).properties.partdesc.clone();
+                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
+                lop_graph.add_node_with_props(LOP::Aggregation, props, children)
             } else {
-                3
+                let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
+                    tabledesc.get_part_desc().npartitions
+                } else {
+                    3
+                };
+                let partdesc = PartDesc::new(npartitions, PartType::RAW);
+
+                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
+
+                lop_graph.add_node_with_props(LOP::TableScan { input_cols: input_quncols }, props, None)
             };
-            let partdesc = PartDesc::new(npartitions, PartType::RAW);
-
-            // Set props
-            let props = LOPProps::new(quns, output_quncols, preds, partdesc);
-
-            let lopkey = lop_graph.add_node_with_props(LOP::TableScan { input_cols: input_quncols }, props, None);
 
             debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
 
@@ -360,7 +379,7 @@ impl QGM {
         }
     }
 
-    pub fn build_qblock_logical_plan(self: &mut QGM, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph) -> Result<LOPKey, String> {
+    pub fn build_qblock_logical_plan(self: &QGM, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph) -> Result<LOPKey, String> {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
 
@@ -468,12 +487,14 @@ impl QGM {
                             cols: lhs_props.cols.clone(),
                             preds: lhs_props.preds.clone_n_clear(),
                             partdesc,
+                            emit_exprs: None,
                         });
                         let rhs_repart_props = rhs_partdesc.map(|partdesc| LOPProps {
                             quns: rhs_props.quns.clone(),
                             cols: rhs_props.cols.clone(),
                             preds: rhs_props.preds.clone_n_clear(),
                             partdesc,
+                            emit_exprs: None,
                         });
 
                         let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
@@ -495,7 +516,7 @@ impl QGM {
                         let lhs_props = &lop_graph.get(new_lhs_plan_key).properties;
                         let partdesc = lhs_props.partdesc.clone();
 
-                        let props = LOPProps::new(quns, cols, preds, partdesc);
+                        let props = LOPProps::new(quns, cols, preds, partdesc, None);
 
                         let join_node = lop_graph.add_node_with_props(LOP::HashJoin { equi_join_preds }, props, Some(vec![new_lhs_plan_key, new_rhs_plan_key]));
                         join_status = Some((lhs_plan_key, rhs_plan_key, join_node));
@@ -520,6 +541,19 @@ impl QGM {
 
         if worklist.len() == 1 {
             let root_lop_key = worklist[0];
+            /*
+            let mut props = lop_graph.get(root_lop_key).properties.clone();
+            props.quns = props.quns.clear();
+            props.cols = props.cols.clear();
+            props.preds = props.preds.clear();
+
+            // Add emitter
+            let emit_exprs = qblock.select_list.clone();
+            let root_lop_key = lop_graph.add_node_with_props(LOP::Emit { emit_exprs }, props, Some(vec![root_lop_key]));
+            */
+            let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
+            let emit_exprs = qblock.select_list.clone();
+            props.emit_exprs = Some(emit_exprs);
             Ok(root_lop_key)
         } else {
             Err("Cannot find plan for qblock".to_string())
@@ -642,7 +676,13 @@ impl QGM {
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let colstring = props.cols.printable(self);
+        let colstring = if let Some(emit_exprs) = props.emit_exprs.as_ref() {
+            let emit_exprs = emit_exprs.iter().map(|e| e.expr_key).collect::<Vec<_>>();
+            printable_preds(&emit_exprs, self, true)
+        } else {
+            props.cols.printable(self)
+        };
+
         let predstring = props.preds.printable(self, true);
 
         let (label, extrastr) = match &lop {
@@ -660,7 +700,7 @@ impl QGM {
                 let extrastr = format!("c = {}", cpartitions);
                 (String::from("Repartition"), extrastr)
             }
-            _ => (format!("{:?}", &lop), String::from("")),
+            LOP::Aggregation => (String::from("Aggregation"), String::from("")),
         };
 
         fprint!(

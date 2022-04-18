@@ -84,7 +84,7 @@ impl QGM {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamedExpr {
     pub alias: Option<String>,
     pub expr_key: ExprKey,
