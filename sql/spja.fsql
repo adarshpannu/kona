@@ -1,5 +1,5 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 3);
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", PARTITIONS = 3);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
@@ -10,6 +10,7 @@ where
     E.age > 50 
 and D.dept_id < 99
 and E.dept_id = D.dept_id
+and D.name = "Engineering"
 group by D.dept_id + 55
 having sum(E.age) > 100 and D.dept_id + 55 > 10
 ;

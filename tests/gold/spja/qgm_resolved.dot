@@ -10,47 +10,52 @@ digraph example1 {
     exprnodeExprKey6v1[label="*"];
     exprnodeExprKey4v1 -> exprnodeExprKey6v1;
     exprnodeExprKey4v1[label="SUM"];
-    exprnodeExprKey44v1 -> exprnodeExprKey4v1;
-    exprnodeExprKey44v1[label="$3.1"];
+    exprnodeExprKey48v1 -> exprnodeExprKey4v1;
+    exprnodeExprKey48v1[label="$3.1"];
     exprnodeExprKey5v1 -> exprnodeExprKey6v1;
     exprnodeExprKey5v1[label="99"];
     exprnodeExprKey10v1 -> exprnodeExprKey11v1;
     exprnodeExprKey10v1[label="COUNT"];
-    exprnodeExprKey45v1 -> exprnodeExprKey10v1;
-    exprnodeExprKey45v1[label="$3.2"];
+    exprnodeExprKey49v1 -> exprnodeExprKey10v1;
+    exprnodeExprKey49v1[label="$3.2"];
     exprnodeExprKey11v1 -> "QB_0_selectlist";
-    exprnodeExprKey46v1[label="$3.0: 1"];
-    exprnodeExprKey46v1 -> "QB_0_selectlist";
-    exprnodeExprKey50v1[label="/: 2"];
-    exprnodeExprKey48v1 -> exprnodeExprKey50v1;
-    exprnodeExprKey48v1[label="SUM"];
-    exprnodeExprKey47v1 -> exprnodeExprKey48v1;
-    exprnodeExprKey47v1[label="$3.3"];
-    exprnodeExprKey49v1 -> exprnodeExprKey50v1;
-    exprnodeExprKey49v1[label="COUNT"];
-    exprnodeExprKey47v1 -> exprnodeExprKey49v1;
-    exprnodeExprKey47v1[label="$3.3"];
+    exprnodeExprKey50v1[label="$3.0: 1"];
     exprnodeExprKey50v1 -> "QB_0_selectlist";
-    exprnodeExprKey51v1[label="$3.0: 3"];
-    exprnodeExprKey51v1 -> "QB_0_selectlist";
+    exprnodeExprKey54v1[label="/: 2"];
+    exprnodeExprKey52v1 -> exprnodeExprKey54v1;
+    exprnodeExprKey52v1[label="SUM"];
+    exprnodeExprKey51v1 -> exprnodeExprKey52v1;
+    exprnodeExprKey51v1[label="$3.3"];
+    exprnodeExprKey53v1 -> exprnodeExprKey54v1;
+    exprnodeExprKey53v1[label="COUNT"];
+    exprnodeExprKey51v1 -> exprnodeExprKey53v1;
+    exprnodeExprKey51v1[label="$3.3"];
+    exprnodeExprKey54v1 -> "QB_0_selectlist";
+    exprnodeExprKey55v1[label="$3.0: 3"];
+    exprnodeExprKey55v1 -> "QB_0_selectlist";
 }
     "QUN_3"[label="QUN_3 /", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_0 {
-    exprnodeExprKey37v1[label=">"];
-    exprnodeExprKey35v1 -> exprnodeExprKey37v1;
-    exprnodeExprKey35v1[label="SUM"];
-    exprnodeExprKey52v1 -> exprnodeExprKey35v1;
-    exprnodeExprKey52v1[label="$3.3"];
-    exprnodeExprKey36v1 -> exprnodeExprKey37v1;
-    exprnodeExprKey36v1[label="100"];
-    exprnodeExprKey37v1 -> QB_0_pred_list;
-    exprnodeExprKey42v1[label=">"];
-    exprnodeExprKey53v1 -> exprnodeExprKey42v1;
-    exprnodeExprKey53v1[label="$3.0"];
-    exprnodeExprKey41v1 -> exprnodeExprKey42v1;
-    exprnodeExprKey41v1[label="10"];
-    exprnodeExprKey42v1 -> QB_0_pred_list;
+    exprnodeExprKey41v1[label=">"];
+    exprnodeExprKey39v1 -> exprnodeExprKey41v1;
+    exprnodeExprKey39v1[label="SUM"];
+    exprnodeExprKey56v1 -> exprnodeExprKey39v1;
+    exprnodeExprKey56v1[label="$3.3"];
+    exprnodeExprKey40v1 -> exprnodeExprKey41v1;
+    exprnodeExprKey40v1[label="100"];
+    exprnodeExprKey41v1 -> QB_0_pred_list;
+    exprnodeExprKey46v1[label=">"];
+    exprnodeExprKey57v1 -> exprnodeExprKey46v1;
+    exprnodeExprKey57v1[label="$3.0"];
+    exprnodeExprKey45v1 -> exprnodeExprKey46v1;
+    exprnodeExprKey45v1[label="10"];
+    exprnodeExprKey46v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
+}
+  subgraph cluster_group_byQB_0 {
+    "QB_0_group_by"[label="group_by",shape=box,style=filled];
+    exprnodeExprKey58v1[label="$3.0: 0"];
+    exprnodeExprKey58v1 -> "QB_0_group_by";
 }
     label = "QB_0 type=GroupBy";
 }
@@ -58,12 +63,12 @@ digraph example1 {
   subgraph cluster_QB_4 {
     "QB_4_selectlist"[label="select_list",shape=box,style=filled];
   subgraph cluster_select_listQB_4 {
-    exprnodeExprKey33v1[label="+: 0"];
-    exprnodeExprKey31v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey31v1[label="D.DEPT_ID ($1.0)"];
-    exprnodeExprKey32v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey32v1[label="55"];
-    exprnodeExprKey33v1 -> "QB_4_selectlist";
+    exprnodeExprKey37v1[label="+: 0"];
+    exprnodeExprKey35v1 -> exprnodeExprKey37v1;
+    exprnodeExprKey35v1[label="D.DEPT_ID ($1.0)"];
+    exprnodeExprKey36v1 -> exprnodeExprKey37v1;
+    exprnodeExprKey36v1[label="55"];
+    exprnodeExprKey37v1 -> "QB_4_selectlist";
     exprnodeExprKey3v1[label="+: 1"];
     exprnodeExprKey1v1 -> exprnodeExprKey3v1;
     exprnodeExprKey1v1[label="E.AGE ($0.1)"];
@@ -100,6 +105,12 @@ digraph example1 {
     exprnodeExprKey28v1 -> exprnodeExprKey29v1;
     exprnodeExprKey28v1[label="D.DEPT_ID ($1.0)"];
     exprnodeExprKey29v1 -> QB_4_pred_list;
+    exprnodeExprKey33v1[label="="];
+    exprnodeExprKey31v1 -> exprnodeExprKey33v1;
+    exprnodeExprKey31v1[label="D.NAME ($1.1)"];
+    exprnodeExprKey32v1 -> exprnodeExprKey33v1;
+    exprnodeExprKey32v1[label="\"Engineering\""];
+    exprnodeExprKey33v1 -> QB_4_pred_list;
     "QB_4_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_4 type=Select";

@@ -324,7 +324,7 @@ impl QGM {
                 .for_each(|&quncol| input_quncols.set(quncol));
 
             // Set output cols + preds
-            let mut unbound_quncols = all_quncols.clone();
+            let mut unbound_quncols = select_list_quncol.clone();
 
             let mut preds = all_preds.clone_n_clear();
             pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, eqjoin_desc })| {
@@ -351,6 +351,8 @@ impl QGM {
             let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
                 let subqblock_key = qun.qblock.unwrap();
                 let subqblock = &self.qblock_graph.get(subqblock_key).value;
+
+                // child == subplan that we'll be aggregating.
                 let child = self.build_qblock_logical_plan(subqblock_key, aps_context, lop_graph).unwrap();
                 let children = Some(vec![child]);
 
@@ -491,7 +493,8 @@ impl QGM {
                             emit_exprs: None,
                         });
 
-                        let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
+                        //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
+                        let (lhs_partitions, rhs_partitions) = (lhs_props.partdesc.npartitions, rhs_props.partdesc.npartitions);
 
                         let new_lhs_plan_key = if let Some(lhs_repart_props) = lhs_repart_props {
                             // Repartition LHS
@@ -546,7 +549,7 @@ impl QGM {
             props.emit_exprs = Some(emit_exprs);
 
             info!("Created logical plan for qblock id: {}", qblock.id);
-            
+
             Ok(root_lop_key)
         } else {
             Err("Cannot find plan for qblock".to_string())

@@ -14,13 +14,7 @@ impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
         // Resolve top-level QB
         let qbkey = self.main_qblock_key;
-        QueryBlock::resolve(
-            qbkey,
-            env,
-            &mut self.qblock_graph,
-            &mut self.expr_graph,
-            &mut self.metadata,
-        )?;
+        QueryBlock::resolve(qbkey, env, &mut self.qblock_graph, &mut self.expr_graph, &mut self.metadata)?;
 
         Ok(())
     }
@@ -52,8 +46,7 @@ impl QueryBlockColidDispenser {
 
 impl QueryBlock {
     pub fn resolve(
-        qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
-        metadata: &mut QGMMetadata,
+        qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata,
     ) -> Result<(), String> {
         let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
 
@@ -121,9 +114,7 @@ impl QueryBlock {
         Ok(())
     }
 
-    pub fn split_groupby(
-        qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph,
-    ) -> Result<(), String> {
+    pub fn split_groupby(qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph) -> Result<(), String> {
         let inner_qb_key = qblock_graph.add_node(QueryBlock::new0(expr_graph.next_id(), QueryBlockType::Select), None);
         let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
 
@@ -131,7 +122,7 @@ impl QueryBlock {
 
         let agg_qun_id = expr_graph.next_id();
 
-        //let select_list = replace(&mut qblock.select_list, vec![]);
+        // Replace group_by expressions with references to child qun
         let group_by = replace(&mut qblock.group_by, None).unwrap();
         let group_by_expr_count = group_by.len();
 
@@ -139,8 +130,8 @@ impl QueryBlock {
 
         // Transform group_by into inner-select-list
         let mut inner_select_list = group_by
-            .into_iter()
-            .map(|expr_key| NamedExpr::new(None, expr_key, &expr_graph))
+            .iter()
+            .map(|&expr_key| NamedExpr::new(None, expr_key, &expr_graph))
             .collect::<Vec<NamedExpr>>();
 
         // Contruct outer select-list by replacing agg() references with inner columns
@@ -190,19 +181,24 @@ impl QueryBlock {
             None,
         );
 
+        let group_by = group_by
+        .iter()
+        .enumerate()
+        .map(|(cid, expr)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
+        .collect::<Vec<_>>();
+
         inner_qb_node.value = inner_qb;
         let outer_qun = Quantifier::new(agg_qun_id, None, Some(inner_qb_key), None);
         outer_qb.name = None;
         outer_qb.qbtype = QueryBlockType::GroupBy;
         outer_qb.quns = vec![outer_qun];
         outer_qb.pred_list = outer_pred_list;
+        outer_qb.group_by = Some(group_by);
 
         Ok(())
     }
 
-    fn find(
-        graph: &ExprGraph, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_key: ExprKey,
-    ) -> Option<usize> {
+    fn find(graph: &ExprGraph, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_key: ExprKey) -> Option<usize> {
         // Does this expression already exist in the select_list[..until_index]?
         for (ix, ne) in select_list.iter().enumerate() {
             if ix >= group_by_expr_count {
@@ -228,8 +224,7 @@ impl QueryBlock {
     // transform_groupby_expr: Traverse expression `expr_key` (which is part of aggregate qb select list) such that any subexpressions are replaced with
     // corresponding references to inner/select qb select-list using CID#
     pub fn transform_groupby_expr(
-        env: &Env, expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize,
-        qunid: QunId, expr_key: &mut ExprKey,
+        env: &Env, expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId, expr_key: &mut ExprKey,
     ) -> Result<(), String> {
         let node = expr_graph.get(*expr_key);
         if let AggFunction(aggtype, _) = node.value {
@@ -254,13 +249,7 @@ impl QueryBlock {
             // Expression in GROUP-BY list, all good
             let new_child_key = expr_graph.add_node(CID(qunid, cid), None);
             *expr_key = new_child_key;
-        } else if let Column {
-            prefix,
-            colname,
-            qunid,
-            colid,
-        } = &node.value
-        {
+        } else if let Column { prefix, colname, qunid, colid } = &node.value {
             // User error: Unaggregated expression in select-list not in group-by clause
             return Err(format!(
                 "Column {} is referenced in select-list/having-clause but it is not specified in the GROUP-BY list",
@@ -278,9 +267,7 @@ impl QueryBlock {
         Ok(())
     }
 
-    pub fn resolve_column(
-        &self, env: &Env, prefix: Option<&String>, colname: &String,
-    ) -> Result<(QunCol, DataType, ColId), String> {
+    pub fn resolve_column(&self, env: &Env, prefix: Option<&String>, colname: &String) -> Result<(QunCol, DataType, ColId), String> {
         let mut retval = None;
         let mut colid = 0;
 
@@ -328,8 +315,7 @@ impl QueryBlock {
     }
 
     pub fn resolve_expr(
-        &self, env: &Env, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata, expr_key: ExprKey,
-        agg_fns_allowed: bool,
+        &self, env: &Env, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata, expr_key: ExprKey, agg_fns_allowed: bool,
     ) -> Result<DataType, String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_key).value {
             // Nested aggregate functions not allowed

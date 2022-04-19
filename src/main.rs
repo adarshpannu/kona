@@ -99,9 +99,6 @@ pub fn run_flow(env: &mut Env, flow: &Flow) {
     env.thread_pool.join();
 }
 
-/*
- * Run a job from a file
- */
 fn run_job(env: &mut Env) -> Result<(), String> {
     let filename = env.input_filename.as_str();
     let contents = fs::read_to_string(filename).expect(&format!("Cannot open file: {}", &filename));
@@ -142,13 +139,13 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 }
 
 /*
-** ----------- main
+********************************** main ****************************************************************
 */
 fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/groupby.fsql".to_string();
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/spja.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_filename, output_dir);
 
@@ -161,7 +158,7 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 /*
-** ----------- run_tests
+********************************** run_unit_tests *********************************************************
 */
 #[test]
 fn run_unit_tests() {

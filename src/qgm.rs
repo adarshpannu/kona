@@ -28,9 +28,7 @@ pub struct QGMMetadata {
 
 impl QGMMetadata {
     pub fn new() -> QGMMetadata {
-        QGMMetadata {
-            tabledescmap: HashMap::new(),
-        }
+        QGMMetadata { tabledescmap: HashMap::new() }
     }
 
     pub fn add_tabledesc(&mut self, qunid: QunId, tabledesc: Rc<dyn TableDesc>) {
@@ -67,9 +65,7 @@ pub struct QGM {
 }
 
 impl QGM {
-    pub fn new(
-        main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph,
-    ) -> QGM {
+    pub fn new(main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph) -> QGM {
         QGM {
             main_qblock_key: main_qblock,
             cte_list,
@@ -164,8 +160,7 @@ impl Quantifier {
     }
 
     pub fn matches_name_or_alias(&self, prefix: &String) -> bool {
-        self.tablename.as_ref().map(|e| e == prefix).unwrap_or(false)
-            || self.alias.as_ref().map(|e| e == prefix).unwrap_or(false)
+        self.tablename.as_ref().map(|e| e == prefix).unwrap_or(false) || self.alias.as_ref().map(|e| e == prefix).unwrap_or(false)
     }
 
     pub fn display(&self) -> String {
@@ -211,9 +206,9 @@ pub struct QueryBlock {
 
 impl QueryBlock {
     pub fn new(
-        id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>,
-        pred_list: Option<Vec<ExprKey>>, group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>,
-        order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty, topN: Option<usize>,
+        id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Option<Vec<ExprKey>>,
+        group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>, order_by: Option<Vec<(ExprKey, Ordering)>>,
+        distinct: DistinctProperty, topN: Option<usize>,
     ) -> Self {
         QueryBlock {
             id,
@@ -268,20 +263,12 @@ impl QueryBlock {
     pub fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> Result<(), String> {
         // Write current query block first
         let s = "".to_string();
-        let select_names: Vec<&String> = self
-            .select_list
-            .iter()
-            .map(|e| e.alias.as_ref().unwrap_or(&s))
-            .collect();
+        let select_names: Vec<&String> = self.select_list.iter().map(|e| e.alias.as_ref().unwrap_or(&s)).collect();
         let select_names = format!("{:?}", select_names).replace("\"", "");
 
         // --- begin query block cluster ---
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
-        fprint!(
-            file,
-            "    \"{}_selectlist\"[label=\"select_list\",shape=box,style=filled];\n",
-            self.name()
-        );
+        fprint!(file, "    \"{}_selectlist\"[label=\"select_list\",shape=box,style=filled];\n", self.name());
 
         // Write select_list
         fprint!(file, "  subgraph cluster_select_list{} {{\n", self.name());
@@ -289,12 +276,7 @@ impl QueryBlock {
             let expr_key = nexpr.expr_key;
             QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix));
             let childid_name = expr_key.to_string();
-            fprint!(
-                file,
-                "    exprnode{} -> \"{}_selectlist\";\n",
-                childid_name,
-                self.name()
-            );
+            fprint!(file, "    exprnode{} -> \"{}_selectlist\";\n", childid_name, self.name());
         }
         fprint!(file, "}}\n");
 
@@ -323,11 +305,7 @@ impl QueryBlock {
                 let (expr, _, children) = qgm.expr_graph.get3(expr_key);
                 fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
             }
-            fprint!(
-                file,
-                "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n",
-                self.name()
-            );
+            fprint!(file, "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n", self.name());
             fprint!(file, "}}\n");
         }
 
@@ -335,11 +313,7 @@ impl QueryBlock {
         if let Some(group_by) = self.group_by.as_ref() {
             fprint!(file, "  subgraph cluster_group_by{} {{\n", self.name());
 
-            fprint!(
-                file,
-                "    \"{}_group_by\"[label=\"group_by\",shape=box,style=filled];\n",
-                self.name()
-            );
+            fprint!(file, "    \"{}_group_by\"[label=\"group_by\",shape=box,style=filled];\n", self.name());
 
             for (ix, &expr_key) in group_by.iter().enumerate() {
                 QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix));
@@ -360,11 +334,7 @@ impl QueryBlock {
                 let (expr, _, children) = qgm.expr_graph.get3(expr_key);
                 fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
             }
-            fprint!(
-                file,
-                "    \"{}_having_clause\"[label=\"having_clause\",shape=box,style=filled];\n",
-                self.name()
-            );
+            fprint!(file, "    \"{}_having_clause\"[label=\"having_clause\",shape=box,style=filled];\n", self.name());
             fprint!(file, "}}\n");
         }
         fprint!(file, "    label = \"{} type={:?}\";\n", self.name(), self.qbtype);
@@ -408,7 +378,7 @@ impl QGM {
 
     pub fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> Result<(), String> {
         let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
-        
+
         fprint!(file, "digraph example1 {{\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG
@@ -444,24 +414,15 @@ impl QGM {
             .expect("failed to execute process");
 
         if open_jpg {
-            let _cmd = Command::new("open")
-                .arg(ofilename)
-                .status()
-                .expect("failed to execute process");
+            let _cmd = Command::new("open").arg(ofilename).status().expect("failed to execute process");
         }
         Ok(())
     }
 
-    fn write_expr_to_graphvis(
-        qgm: &QGM, expr_key: ExprKey, file: &mut File, order_ix: Option<usize>,
-    ) -> std::io::Result<()> {
+    fn write_expr_to_graphvis(qgm: &QGM, expr_key: ExprKey, file: &mut File, order_ix: Option<usize>) -> std::io::Result<()> {
         let id = expr_key.to_string();
         let (expr, _, children) = qgm.expr_graph.get3(expr_key);
-        let ix_str = if let Some(ix) = order_ix {
-            format!(": {}", ix)
-        } else {
-            String::from("")
-        };
+        let ix_str = if let Some(ix) = order_ix { format!(": {}", ix) } else { String::from("") };
 
         fprint!(file, "    exprnode{}[label=\"{}{}\"];\n", id, expr.name(), ix_str);
         if let Some(children) = children {

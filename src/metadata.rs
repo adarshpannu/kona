@@ -10,7 +10,6 @@ use crate::{csv::*, expr::Expr::*, expr::*, graph::*, includes::*, qgm::*, row::
 #[derive(Debug, Clone)]
 pub enum PartType {
     RAW,
-    HASHCOL(Vec<ColId>),
     HASHEXPR(Vec<ExprKey>),
 }
 
@@ -28,7 +27,6 @@ impl PartDesc {
     pub fn printable(&self, expr_graph: &ExprGraph, do_escape: bool) -> String {
         let part_type_str = match &self.part_type {
             PartType::RAW => format!("{}", "RAW"),
-            PartType::HASHCOL(cols) => format!("{} {:?})", "HASHCOL", cols),
             PartType::HASHEXPR(exprs) => {
                 let mut exprstr = String::from("");
                 for (ix, expr_key) in exprs.iter().enumerate() {
@@ -40,7 +38,7 @@ impl PartDesc {
                 format!("{}", exprstr)
             }
         };
-        format!("p={}, ptype={}", self.npartitions, part_type_str)
+        format!("p = {} ({})", self.npartitions, part_type_str)
     }
 }
 

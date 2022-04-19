@@ -52,6 +52,11 @@ digraph example1 {
     exprnodeExprKey38v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
 }
+  subgraph cluster_group_byQB_0 {
+    "QB_0_group_by"[label="group_by",shape=box,style=filled];
+    exprnodeExprKey50v1[label="$2.0: 0"];
+    exprnodeExprKey50v1 -> "QB_0_group_by";
+}
     label = "QB_0 type=GroupBy";
 }
     "QUN_2" -> "QB_3_selectlist";
