@@ -1,9 +1,0 @@
-digraph example1 {
-    node [shape=record];
-    rankdir=BT;
-    nodesep=0.5;
-    ordering="in";
-    lopkeyLOPKey1v1 -> lopkeyLOPKey2v1;
-    lopkeyLOPKey1v1[label="TableScan|[0]|{DEPT_ID + 55|AGE + 10|AGE + 50|AGE}|{AGE \> 50|DEPT_ID \< 99}|p=1, ptype=RAW|(input = DEPT_ID AGE )"];
-    lopkeyLOPKey2v1[label="Aggregation|[2]|{SUM($2.1) * 99 / COUNT($2.2)|$2.0|SUM($2.3) / COUNT($2.3)|$2.0}|{SUM($2.3) \> 100|$2.0 \> 10}|p=1, ptype=RAW|"];
-}
