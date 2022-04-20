@@ -6,7 +6,6 @@ use crate::qgm::*;
 use crate::row::{DataType, Datum};
 
 use crate::includes::*;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -20,11 +19,13 @@ impl QGM {
     }
 }
 
+#[allow(dead_code)]
 pub struct QueryBlockColidDispenser {
     hashmap: HashMap<QunCol, ColId>,
     next_id: ColId,
 }
 
+#[allow(dead_code)]
 impl QueryBlockColidDispenser {
     fn new() -> QueryBlockColidDispenser {
         QueryBlockColidDispenser {
@@ -48,12 +49,12 @@ impl QueryBlock {
     pub fn resolve(
         qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata,
     ) -> Result<(), String> {
-        let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
+        let qblock = &mut qblock_graph.get_mut(qbkey).value;
 
         // Resolve nested query blocks first
         let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.qblock).collect();
         for qbkey in qbkey_children {
-            Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata);
+            Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata)?;
         }
 
         let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
@@ -118,7 +119,7 @@ impl QueryBlock {
         let inner_qb_key = qblock_graph.add_node(QueryBlock::new0(expr_graph.next_id(), QueryBlockType::Select), None);
         let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
 
-        let mut qblock = &mut outer_qb_node.value;
+        let qblock = &mut outer_qb_node.value;
 
         let agg_qun_id = expr_graph.next_id();
 
@@ -128,37 +129,23 @@ impl QueryBlock {
 
         let having_clause = replace(&mut qblock.having_clause, None);
 
-        // Transform group_by into inner-select-list
+        // Construct inner select-list by first adding GROUP-BY clause expressions
         let mut inner_select_list = group_by
             .iter()
             .map(|&expr_key| NamedExpr::new(None, expr_key, &expr_graph))
             .collect::<Vec<NamedExpr>>();
 
-        // Contruct outer select-list by replacing agg() references with inner columns
+        // Augment inner select-list by extracting parameters from `agg(parameter)` expressions
         for ne in qblock.select_list.iter_mut() {
-            Self::transform_groupby_expr(
-                env,
-                expr_graph,
-                &mut inner_select_list,
-                group_by_expr_count,
-                agg_qun_id,
-                &mut ne.expr_key,
-            )?;
+            Self::transform_groupby_expr(env, expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut ne.expr_key)?;
         }
 
-        // Fixup having clause -> outer qb filter
+        // Transform HAVING clause expressions -> outer qb predicates
         let outer_pred_list = if let Some(having_clause) = having_clause {
             let mut new_having_clause = vec![];
             for having_pred in having_clause.iter() {
                 let mut new_pred_id = *having_pred;
-                Self::transform_groupby_expr(
-                    env,
-                    expr_graph,
-                    &mut inner_select_list,
-                    group_by_expr_count,
-                    agg_qun_id,
-                    &mut new_pred_id,
-                );
+                Self::transform_groupby_expr(env, expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut new_pred_id)?;
                 new_having_clause.push(new_pred_id);
             }
             Some(new_having_clause)
@@ -182,10 +169,10 @@ impl QueryBlock {
         );
 
         let group_by = group_by
-        .iter()
-        .enumerate()
-        .map(|(cid, expr)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
-        .collect::<Vec<_>>();
+            .iter()
+            .enumerate()
+            .map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
+            .collect::<Vec<_>>();
 
         inner_qb_node.value = inner_qb;
         let outer_qun = Quantifier::new(agg_qun_id, None, Some(inner_qb_key), None);
@@ -226,6 +213,8 @@ impl QueryBlock {
     pub fn transform_groupby_expr(
         env: &Env, expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId, expr_key: &mut ExprKey,
     ) -> Result<(), String> {
+        //debug!("transform_groupby_expr: {:?}", expr_key.printable(&expr_graph, false));
+
         let node = expr_graph.get(*expr_key);
         if let AggFunction(aggtype, _) = node.value {
             // Aggregate-function: replace argument with CID reference to inner query-block
@@ -249,7 +238,7 @@ impl QueryBlock {
             // Expression in GROUP-BY list, all good
             let new_child_key = expr_graph.add_node(CID(qunid, cid), None);
             *expr_key = new_child_key;
-        } else if let Column { prefix, colname, qunid, colid } = &node.value {
+        } else if let Column { colname, .. } = &node.value {
             // User error: Unaggregated expression in select-list not in group-by clause
             return Err(format!(
                 "Column {} is referenced in select-list/having-clause but it is not specified in the GROUP-BY list",
@@ -267,9 +256,9 @@ impl QueryBlock {
         Ok(())
     }
 
-    pub fn resolve_column(&self, env: &Env, prefix: Option<&String>, colname: &String) -> Result<(QunCol, DataType, ColId), String> {
+    pub fn resolve_column(&self, _env: &Env, prefix: Option<&String>, colname: &String) -> Result<(QunCol, DataType, ColId), String> {
         let mut retval = None;
-        let mut colid = 0;
+        let colid = 0;
 
         for qun in self.quns.iter() {
             let desc = qun.tabledesc.as_ref().unwrap().clone();
@@ -336,12 +325,12 @@ impl QueryBlock {
         }
 
         let mut node = expr_graph.get_mut(expr_key);
-        let mut expr = &mut node.value;
+        let expr = &mut node.value;
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
             CID(_, _) => node.properties.datatype,
-            RelExpr(relop) => {
+            RelExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
                     return Err("Datatype mismatch".to_string());
@@ -349,7 +338,7 @@ impl QueryBlock {
                     DataType::BOOL
                 }
             }
-            BinaryExpr(binop) => {
+            BinaryExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != DataType::INT || children_datatypes[0] != DataType::INT {
                     return Err("Binary operands must be numeric types".to_string());
@@ -361,23 +350,22 @@ impl QueryBlock {
             Column {
                 prefix,
                 colname,
-                qunid: ref mut qunid,
-                colid: ref mut colid,
+                ref mut qunid,
+                ref mut colid,
             } => {
-                let (quncol, datatype, qtuple_ix) = self.resolve_column(env, prefix.as_ref(), colname)?;
+                let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
                 *colid = quncol.1;
-                /// FIXME - No longer using qtuple!! *colid =  qtuple_ix;
+                // FIXME - No longer using qtuple!! *colid =  qtuple_ix;
                 //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
                 datatype
             }
-            LogExpr(logop) => DataType::BOOL,
+            LogExpr(..) => DataType::BOOL,
             Literal(Datum::STR(_)) => DataType::STR,
             Literal(Datum::INT(_)) => DataType::INT,
             Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
             Literal(Datum::BOOL(_)) => DataType::BOOL,
-            Literal(Datum::STR(_)) => DataType::STR,
-            AggFunction(aggtype, is_distinct) => {
+            AggFunction(aggtype, ..) => {
                 if !agg_fns_allowed {
                     return Err(format!("Aggregate function {:?} not allowed.", aggtype));
                 }

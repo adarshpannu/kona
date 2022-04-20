@@ -1,8 +1,6 @@
 // Use bitmaps on arbitrary bitmaps
 
 use bitmaps::Bitmap;
-use log::debug;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -88,7 +86,7 @@ where
         self.bitmap.len()
     }
 
-    pub fn init(mut self, mut it: impl Iterator<Item = T>) -> Self {
+    pub fn init(mut self, it: impl Iterator<Item = T>) -> Self {
         for t in it {
             self.set(t)
         }
@@ -119,7 +117,6 @@ where
 }
 
 use std::ops::BitAnd;
-use std::ops::BitAndAssign;
 use std::ops::BitOr;
 use std::ops::BitOrAssign;
 

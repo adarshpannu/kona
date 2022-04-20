@@ -83,7 +83,7 @@ where
     }
 
     pub fn get_mut(&mut self, key: K) -> &mut Node<K, V, P> {
-        let mut node = self.sm.get_mut(key).unwrap();
+        let node = self.sm.get_mut(key).unwrap();
         node
     }
 
@@ -92,8 +92,8 @@ where
     }
 
     pub fn replace(&mut self, key: K, v: V, p: P) {
-        let mut node = self.sm.get_mut(key).unwrap();
-        let mut new_node = Node::new(v, p);
+        let node = self.sm.get_mut(key).unwrap();
+        let new_node = Node::new(v, p);
         *node = new_node;
     }
 
@@ -102,7 +102,6 @@ where
         // children already present in graph although not connected
         let mut node = self.sm.get_mut(parent_key).unwrap();
         let mut new_children: Vec<K> = vec![];
-        let seen_old_child = false;
 
         for &child_key in node.children.as_ref().unwrap() {
             if child_key == key {
@@ -143,7 +142,7 @@ where
         }
         let cur_key = self.queue.pop();
         if let Some(cur_key) = cur_key {
-            let (value, _, children) = self.graph.get3(cur_key);
+            let children = self.graph.get(cur_key).children.as_ref();
             if let Some(children) = children {
                 self.queue.extend(children.iter());
             }

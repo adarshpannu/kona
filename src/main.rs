@@ -1,12 +1,10 @@
-#![allow(warnings)]
+//#![allow(unused_variables)]
 
 use std::collections::HashMap;
 use std::fs;
-use std::rc::Rc;
 use task::ThreadPool;
 
 use crate::includes::*;
-use clp::CLParser;
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -41,11 +39,8 @@ pub mod scratch;
 pub mod task;
 
 use ast::*;
-use compiler::*;
 use flow::*;
-use lop::*;
 use metadata::*;
-use pop::*;
 use qgm::*;
 
 pub struct Env {
@@ -87,16 +82,17 @@ impl Env {
 }
 
 /***************************************************************************************************/
-pub fn run_flow(env: &mut Env, flow: &Flow) {
+pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     // Clear output directories
     let dirname = format!("{}/flow", TEMPDIR);
-    std::fs::remove_dir_all(dirname);
+    std::fs::remove_dir_all(dirname).map_err(stringify)?;
 
     // Run the flow
     flow.run(&env);
 
     env.thread_pool.close_all();
     env.thread_pool.join();
+    Ok(())
 }
 
 fn run_job(env: &mut Env) -> Result<(), String> {
@@ -110,7 +106,7 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
-    for (ix, mut ast) in astlist.into_iter().enumerate() {
+    for ast in astlist.into_iter() {
         match ast {
             AST::CatalogTable { name, options } => {
                 env.metadata.catalog_table(name, options)?;
@@ -127,11 +123,10 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false)?;
 
                 if !env.get_boolean_option("PARSE_ONLY") {
-                    let flow = Flow::compile(env, &mut qgm).unwrap();
+                    Flow::compile(env, &mut qgm).unwrap();
                     //run_flow(env, &flow);
                 }
             }
-            _ => unimplemented!(),
         }
     }
     //dbg!(&env.metadata);
@@ -161,7 +156,7 @@ fn main() -> Result<(), String> {
 ********************************** run_unit_tests *********************************************************
 */
 #[test]
-fn run_unit_tests() {
+fn run_unit_tests() -> Result<(), String> {
     use std::process::Command;
 
     // Initialize logger with INFO as default
@@ -174,8 +169,8 @@ fn run_unit_tests() {
         let output_dir = f!("/Users/adarshrp/Projects/flare/tests/output/{test}/");
 
         println!("---------- Running subtest {}", input_filename);
-        std::fs::remove_dir_all(&output_dir);
-        std::fs::create_dir_all(&output_dir);
+        std::fs::remove_dir_all(&output_dir).map_err(stringify)?;
+        std::fs::create_dir_all(&output_dir).map_err(stringify)?;
 
         ntotal = ntotal + 1;
         let mut env = Env::new(1, input_filename, output_dir.clone());
@@ -203,4 +198,5 @@ fn run_unit_tests() {
         }
     }
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
+    Ok(())
 }

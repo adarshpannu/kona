@@ -1,4 +1,4 @@
-use crate::{csv::*, expr::*, graph::*, includes::*, lop::*, pop::*, qgm::*, row::*, task::*};
+use crate::{graph::*, includes::*, pop::*, task::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
@@ -16,7 +16,6 @@ impl Flow {
             .iter(self.root_pop_key)
             .filter(|&pop_key| if pop_key == self.root_pop_key { true } else { false })
             .map(|pop_key| {
-                let (pop, props, _) = self.pop_graph.get3(pop_key);
                 //let npartitions = props.npartitions;
                 Stage::new(self, pop_key)
             })

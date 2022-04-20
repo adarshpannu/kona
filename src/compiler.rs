@@ -1,23 +1,17 @@
 use crate::expr::{Expr::*, *};
-use crate::pop::*;
 use crate::graph::*;
 use crate::includes::*;
-use crate::qgm::*;
-use crate::lop::*;
 use crate::row::*;
-use crate::pop::*;
 
 /***************************************************************************************************/
 impl Expr {
     pub fn eval<'a>(graph: &ExprGraph, expr_key: ExprKey, row: &'a Row) -> Datum {
         let (expr, _, children) = &graph.get3(expr_key);
         match expr {
-            CID(qunid, colid) => row.get_column(*colid).clone(),
+            CID(_, colid) => row.get_column(*colid).clone(),
             Column {
-                prefix,
-                colname,
-                qunid,
                 colid,
+                ..
             } => row.get_column(*colid).clone(),
             Literal(lit) => lit.clone(),
             RelExpr(op) => {

@@ -144,14 +144,14 @@ pub SetOption: AST = {
 
 // -------------------- U/I/E QUERY --------------------
 pub UIEOperator: QueryBlockType = {
-    "UNION" <all:"ALL"?> => { if all.is_some() { QueryBlockType::UnionAll } else { QueryBlockType::Union } },
+    "UNION" <all:"ALL"?> => if all.is_some() { QueryBlockType::UnionAll } else { QueryBlockType::Union },
     "INTERSECT" => QueryBlockType::Intersect,
     "EXCEPT" => QueryBlockType::Except,
 }
 
 // -------------------- FULL QUERY --------------------
 
-pub Query: AST = <cte_list:WithClause?> <mut main_qblock_key:SUIEQuery> => {
+pub Query: AST = <cte_list:WithClause?> <main_qblock_key:SUIEQuery> => {
     //main_qblock_key.name = Some(String::from("main"));
     //main_qblock_key.qbtype = QueryBlockType::Select;
 
@@ -188,7 +188,7 @@ pub SUIEQuery: QueryBlockKey = {
 pub QueryBlock: QueryBlockKey = {
     "SELECT" TopN? <distinct:AllOrDistinct?> 
     <select_list: SelectList> 
-    "FROM" <mut quns: FromList> 
+    "FROM" <quns: FromList> 
     <pred_list: WhereClause?> 
     <group_by:GroupByClause?> 
     <having_clause:HavingClause?> 
@@ -225,7 +225,7 @@ WithClause = "WITH" <CTEList>;
 
 CTEList = CommaSeparatedList<CTE>;
 
-CTE: QueryBlockKey = <name:Identifier> "AS" <mut subqkey:Subquery> => {
+CTE: QueryBlockKey = <name:Identifier> "AS" <subqkey:Subquery> => {
     let subq = &mut parser_state.qblock_graph.get_mut(subqkey).value;
     subq.name = Some(name);
     subq.qbtype = QueryBlockType::Select;

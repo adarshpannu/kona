@@ -5,8 +5,6 @@ use log::Level;
 use std::io::Write;
 use std::thread;
 
-use crate::includes::*;
-
 pub fn init(default_log_level: &str) {
     let mut builder = env_logger::Builder::from_env(
         Env::default().default_filter_or(default_log_level),

@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use crate::includes::*;
 
 use std::collections::HashMap;

@@ -1,11 +1,11 @@
 use crate::includes::*;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead};
 use std::path::Path;
 use std::rc::Rc;
 
-use crate::{csv::*, expr::Expr::*, expr::*, graph::*, includes::*, qgm::*, row::*};
+use crate::{expr::*, graph::*, row::*};
 
 #[derive(Debug, Clone)]
 pub enum PartType {
@@ -201,7 +201,7 @@ impl Metadata {
     }
 
     pub fn catalog_table(&mut self, name: String, options: Vec<(String, Datum)>) -> Result<(), String> {
-        let mut name = name.to_uppercase();
+        let name = name.to_uppercase();
         if self.tables.contains_key(&name) {
             return Err(f!("Table {name} cannot be cataloged more than once."));
         }

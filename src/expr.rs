@@ -152,8 +152,8 @@ impl Expr {
             InSubqExpr => format!("IN_SUBQ"),
             ExistsExpr => format!("EXISTS"),
             LogExpr(op) => format!("{:?}", op),
-            Subquery(qblock) => format!("(subquery)"),
-            AggFunction(aggtype, is_distinct) => format!("{:?}", aggtype),
+            Subquery(_) => format!("(subquery)"),
+            AggFunction(aggtype, ..) => format!("{:?}", aggtype),
             ScalarFunction(name) => format!("{}()", name),
         }
     }
@@ -179,7 +179,6 @@ impl Expr {
                 return iter2.next().is_none();
             }
         }
-        return true;
     }
 
     pub fn equals(&self, other: &Expr) -> bool {
@@ -217,7 +216,7 @@ use std::hash::{Hash, Hasher};
 
 impl ExprKey {
     pub fn hash(&self, expr_graph: &ExprGraph) -> u64 {
-        let mut iter = expr_graph.iter(*self);
+        let iter = expr_graph.iter(*self);
         let mut state = DefaultHasher::new();
 
         for exprkey in iter {
@@ -299,16 +298,12 @@ impl ExprKey {
             InListExpr => format!("IN"),
             InSubqExpr => format!("IN_SUBQ"),
             ExistsExpr => format!("EXISTS"),
-            Subquery(qblock) => format!("(subquery)"),
-            AggFunction(aggtype, is_distinct) => {
+            Subquery(_) => format!("(subquery)"),
+            AggFunction(aggtype, _) => {
                 let child_id = children.unwrap()[0];
                 format!("{:?}({})", aggtype, child_id.printable(graph, false))
             }
             ScalarFunction(name) => format!("{}()", name),
-            _ => {
-                debug!("todo - {:?}", expr);
-                todo!()
-            }
         };
         if do_escape {
             let re = Regex::new(r"([><])").unwrap();

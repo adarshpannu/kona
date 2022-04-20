@@ -1,8 +1,6 @@
 // QGM Iterators
 
-use bitmaps::Iter;
-
-use crate::expr::{self, Expr::*, *};
+use crate::expr::{Expr::*, *};
 use crate::graph::*;
 use crate::includes::*;
 use crate::qgm::*;
@@ -17,7 +15,7 @@ impl<'a> Iterator for QueryBlockIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         while self.queue.len() > 0 {
             let qbkey = self.queue.pop().unwrap();
-            let (qblocknode, _, children) = self.qblock_graph.get3(qbkey);
+            let qblocknode = &self.qblock_graph.get(qbkey).value;
             /*
             if let Some(children) = children {
                 // UIE set operators have legs; make sure we traverse them

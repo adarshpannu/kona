@@ -35,7 +35,7 @@ pub fn remove_quotes(s: &str) -> String {
 }
 
 pub fn stringify<E: std::fmt::Debug>(e: E) -> String {
-    format!("xerror: {:?}", e)
+    format!("{:?}", e)
 }
 
 pub fn yes_or_no(s: &str) -> Option<bool> {

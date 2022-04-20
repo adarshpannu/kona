@@ -1,8 +1,10 @@
 CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 3);
 CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", PARTITIONS = 3);
+CATALOG TABLE dept_details ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept_details.csv", PARTITIONS = 3);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
+DESCRIBE TABLE dept_details;
 
 select sum(E.age + 10)*99 / count(E.age + 50), D.dept_id + 55, avg(distinct E.age), D.dept_id + 55
 from emp E, dept D

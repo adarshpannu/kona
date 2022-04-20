@@ -1,12 +1,10 @@
 // LOP: Physical operators
+#![allow(warnings)]
 
-use std::collections::{HashMap, HashSet};
-
-use crate::{csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, qgm::*, row::*, task::*};
+use crate::{flow::*, graph::*, includes::*, lop::*, qgm::*};
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
-use std::rc::Rc;
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
@@ -51,21 +49,14 @@ pub enum NodeRuntime {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashJoinPOP {}
 
-impl POP {
-    fn is_stage_boundary(&self) -> bool {
-        false
-    }
-}
-
 impl Flow {
     pub fn compile(env: &Env, qgm: &mut QGM) -> Result<(), String> {
         if let Ok((lop_graph, lop_key)) = qgm.build_logical_plan() {
             let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
             qgm.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
 
-            let mut pop_graph: POPGraph = Graph::new();
-
             /*
+            let mut pop_graph: POPGraph = Graph::new();
             let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
             let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
             QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename)?;
@@ -76,7 +67,7 @@ impl Flow {
             };
             return Ok(flow);
             */
-            return Ok(())
+            return Ok(());
         } else {
             todo!()
         }
@@ -123,14 +114,14 @@ impl Flow {
 
 macro_rules! fprint {
     ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes());
+        $file.write_all(format!($($args),*).as_bytes()).map_err(|err| f!("{:?}", err))?;
     }};
 }
 
 impl QGM {
     pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> Result<(), String> {
         let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
-        
+
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG

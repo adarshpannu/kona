@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use crate::includes::*;
-use core::panic;
 use std::fmt;
 use std::rc::Rc;
 
@@ -58,7 +57,7 @@ impl fmt::Display for Column {
             Column::DOUBLE(i1, i2) => write!(f, "{}.{}", i1, i2),
             Column::STR(sl) => write!(f, "\"{}\"", sl),
             Column::BOOL(bl) => write!(f, "{}", bl),
-            NULL => write!(f, "{}", "NULL"),
+            Column::NULL => write!(f, "{}", "NULL"),
         }
     }
 }

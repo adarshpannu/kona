@@ -1,9 +1,6 @@
 // LOP: Logical operators
 
-use bincode::de;
-use bitmaps::Bitmap;
-use chrono::format::format;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
@@ -13,12 +10,9 @@ use crate::expr::{Expr::*, *};
 use crate::graph::*;
 use crate::includes::*;
 use crate::metadata::*;
-use crate::pop::POPProps;
 use crate::qgm::*;
 
 pub type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
-
-const BITMAPLEN: usize = 256;
 
 /***************************************************************************************************/
 impl LOPKey {
@@ -111,19 +105,16 @@ impl APSContext {
 
 macro_rules! fprint {
     ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes());
+        $file.write_all(format!($($args),*).as_bytes()).map_err(|err| f!("{:?}", err))?;
     }};
 }
 
 /***************************************************************************************************/
 type PredMap = HashMap<ExprKey, PredDesc>;
-type EqJoinPredMap = HashMap<ExprKey, (Bitset<QunId>, Bitset<QunId>)>;
 
 pub struct EqJoinDesc {
     lhs_quns: Bitset<QunId>,
-    lhs_hash: u64,
     rhs_quns: Bitset<QunId>,
-    rhs_hash: u64,
 }
 
 pub struct PredDesc {
@@ -182,7 +173,7 @@ fn sizes() {
 impl QGM {
     pub fn build_logical_plan(self: &mut QGM) -> Result<(LOPGraph, LOPKey), String> {
         // Construct bitmaps
-        let mut aps_context = APSContext::new(self);
+        let aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
         let lop_key = self.build_qblock_logical_plan(self.main_qblock_key, &aps_context, &mut lop_graph);
@@ -193,7 +184,7 @@ impl QGM {
         }
     }
 
-    pub fn classify_predicate(graph: &ExprGraph, eqjoin_desc: &EqJoinDesc, lhs_props: &LOPProps, rhs_props: &LOPProps) -> (PredicateType, PredicateAlignment) {
+    pub fn classify_predicate(eqjoin_desc: &EqJoinDesc, lhs_props: &LOPProps, rhs_props: &LOPProps) -> (PredicateType, PredicateAlignment) {
         let (lhs_pred_quns, rhs_pred_quns) = (&eqjoin_desc.lhs_quns, &eqjoin_desc.rhs_quns);
 
         // pred-quns must be subset of plan quns
@@ -267,9 +258,7 @@ impl QGM {
 
                         Some(Box::new(EqJoinDesc {
                             lhs_quns,
-                            lhs_hash,
                             rhs_quns,
-                            rhs_hash,
                         }))
                     } else {
                         None
@@ -327,7 +316,7 @@ impl QGM {
             let mut unbound_quncols = select_list_quncol.clone();
 
             let mut preds = all_preds.clone_n_clear();
-            pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, eqjoin_desc })| {
+            pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, .. })| {
                 if quns.get(qun.id) {
                     if quns.bitmap.len() == 1 {
                         // Set preds: find local preds that refer to this qun
@@ -350,7 +339,7 @@ impl QGM {
             // Build plan for nested query blocks
             let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
                 let subqblock_key = qun.qblock.unwrap();
-                let subqblock = &self.qblock_graph.get(subqblock_key).value;
+                //let subqblock = &self.qblock_graph.get(subqblock_key).value;
 
                 // child == subplan that we'll be aggregating.
                 let child = self.build_qblock_logical_plan(subqblock_key, aps_context, lop_graph).unwrap();
@@ -384,13 +373,13 @@ impl QGM {
         assert!(self.cte_list.len() == 0);
 
         let APSContext {
-            all_quncols,
-            all_quns,
+            all_quncols: _,
+            all_quns: _,
             all_preds,
         } = aps_context;
 
         // Process select-list: Collect all QunCols
-        let mut select_list_quncol = self.collect_selectlist_quncols(aps_context, qblock);
+        let select_list_quncol = self.collect_selectlist_quncols(aps_context, qblock);
 
         // Process predicates: Collect quns, quncols. Also collect lhs/rhs quns for equi-join candidates
         let (mut pred_map, eqclass) = self.collect_preds(aps_context, qblock);
@@ -400,18 +389,18 @@ impl QGM {
 
         // Run greedy join enumeration
         let n = qblock.quns.len();
-        for ix in (2..=n).rev() {
+        for _ix in (2..=n).rev() {
             let mut join_status = None;
 
             // Iterate over pairs of all plans in work-list
-            'outer: for (ix1, &lhs_plan_key) in worklist.iter().enumerate() {
-                for (ix2, &rhs_plan_key) in worklist.iter().enumerate() {
+            'outer: for (_ix1, &lhs_plan_key) in worklist.iter().enumerate() {
+                for (_ix2, &rhs_plan_key) in worklist.iter().enumerate() {
                     if lhs_plan_key == rhs_plan_key {
                         continue;
                     }
 
-                    let (lhs_plan, lhs_props, _) = lop_graph.get3(lhs_plan_key);
-                    let (rhs_plan, rhs_props, _) = lop_graph.get3(rhs_plan_key);
+                    let lhs_props= &lop_graph.get(lhs_plan_key).properties;
+                    let rhs_props= &lop_graph.get(rhs_plan_key).properties;
 
                     let join_quns_bitmap = lhs_props.quns.bitmap | rhs_props.quns.bitmap;
 
@@ -421,7 +410,7 @@ impl QGM {
                     let join_preds = pred_map
                         .iter()
                         .filter_map(|(pred_key, pred_desc)| {
-                            let PredDesc { quncols, quns, .. } = pred_desc;
+                            let PredDesc { quns, .. } = pred_desc;
                             let pred_quns_bitmap = quns.bitmap;
                             let is_subset = (pred_quns_bitmap & join_quns_bitmap) == pred_quns_bitmap;
                             if is_subset {
@@ -437,7 +426,7 @@ impl QGM {
                         .iter()
                         .filter_map(|&pred_key| {
                             if let Some(eqjoin_desc) = pred_map.get(&pred_key).unwrap().eqjoin_desc.as_ref() {
-                                let join_class = Self::classify_predicate(&self.expr_graph, &*eqjoin_desc, lhs_props, rhs_props);
+                                let join_class = Self::classify_predicate(&*eqjoin_desc, lhs_props, rhs_props);
                                 if join_class.0 == PredicateType::EquiJoin {
                                     Some((pred_key, join_class.1))
                                 } else {
@@ -472,10 +461,10 @@ impl QGM {
                         for (_, PredDesc { quncols, .. }) in pred_map.iter() {
                             colbitmap = colbitmap | quncols.bitmap;
                         }
-                        cols.bitmap = (cols.bitmap & colbitmap);
+                        cols.bitmap = cols.bitmap & colbitmap;
 
                         // Repartition join legs as needed
-                        let (lhs_partdesc, rhs_partdesc, npartitions) =
+                        let (lhs_partdesc, rhs_partdesc, _npartitions) =
                             Self::harmonize_partitions(lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
 
                         let lhs_repart_props = lhs_partdesc.map(|partdesc| LOPProps {
@@ -588,8 +577,8 @@ impl QGM {
         // Both sides must be partitioned on equivalent keys and with identical partition counts
 
         // Compute actual partitioning keys
-        let (lhs_plan, lhs_props, _) = lop_graph.get3(lhs_plan_key);
-        let (rhs_plan, rhs_props, _) = lop_graph.get3(rhs_plan_key);
+        let lhs_props = &lop_graph.get(lhs_plan_key).properties;
+        let rhs_props = &lop_graph.get(rhs_plan_key).properties;
         let empty_vec = vec![];
         let lhs_actual_keys = if let PartType::HASHEXPR(keys) = &lhs_props.partdesc.part_type {
             keys
@@ -650,7 +639,6 @@ impl QGM {
 
         drop(file);
 
-        let ofilename = format!("{}.jpg", filename);
         let oflag = format!("-o{}.jpg", filename);
 
         // dot -Tjpg -oex.jpg exampl1.dot
