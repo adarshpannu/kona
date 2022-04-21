@@ -1,5 +1,4 @@
 // includes.rs
-
 pub use log::{error, warn, info, debug};
 
 //pub const DATADIR: &str = "/Users/adarshrp/Projects/flare/data";
@@ -45,3 +44,10 @@ pub fn yes_or_no(s: &str) -> Option<bool> {
         _ => None
     }
 }
+
+macro_rules! fprint {
+    ($file:expr, $($args:expr),*) => {{
+        $file.write_all(format!($($args),*).as_bytes()).map_err(stringify)?;
+    }};
+}
+pub(crate) use fprint;

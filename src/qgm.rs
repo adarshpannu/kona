@@ -15,12 +15,6 @@ use std::process::Command;
 
 pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlock, ()>;
 
-macro_rules! fprint {
-    ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes()).map_err(|err| f!("{:?}", err))?;
-    }};
-}
-
 pub struct QGMMetadata {
     tabledescmap: HashMap<QunId, Rc<dyn TableDesc>>,
 }

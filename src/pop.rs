@@ -1,10 +1,12 @@
 // LOP: Physical operators
 #![allow(warnings)]
 
-use crate::{flow::*, graph::*, includes::*, lop::*, qgm::*};
+use std::fmt;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
+
+pub use crate::{flow::*, graph::*, includes::*, lop::*, qgm::*};
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
@@ -29,15 +31,23 @@ pub enum POP {
     CSV(CSV),
     HashJoin,
     Repartition,
+    Aggregation,
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CSV {
     filename: String,
     header: bool,
     separator: char,
     partitions: Vec<TextFilePartition>,
+}
+
+impl fmt::Debug for CSV {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let filename = self.filename.split("/").last().unwrap();
+        fmt.debug_struct("").field("file", &filename).finish()
+    }
 }
 
 /***************************************************************************************************/
@@ -50,27 +60,18 @@ pub enum NodeRuntime {
 pub struct HashJoinPOP {}
 
 impl Flow {
-    pub fn compile(env: &Env, qgm: &mut QGM) -> Result<(), String> {
-        if let Ok((lop_graph, lop_key)) = qgm.build_logical_plan() {
-            let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
-            qgm.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
+    pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
+        let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
+        let mut pop_graph: POPGraph = Graph::new();
 
-            /*
-            let mut pop_graph: POPGraph = Graph::new();
-            let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
-            let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
-            QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename)?;
+        
+        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
 
-            let flow = Flow {
-                pop_graph,
-                root_pop_key,
-            };
-            return Ok(flow);
-            */
-            return Ok(());
-        } else {
-            todo!()
-        }
+        let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
+        QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename)?;
+
+        let flow = Flow { pop_graph, root_pop_key };
+        return Ok(flow);
     }
 
     pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph) -> Result<POPKey, String> {
@@ -106,18 +107,16 @@ impl Flow {
                 let props = POPProps { npartitions: 4 };
                 pop_graph.add_node_with_props(POP::Repartition, props, Some(pop_children))
             }
-            _ => todo!(),
+            LOP::Aggregation { .. } => {
+                let props = POPProps { npartitions: 4 };
+                pop_graph.add_node_with_props(POP::Aggregation, props, Some(pop_children))
+            }
         };
         Ok(pop_key)
     }
 }
 
-macro_rules! fprint {
-    ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes()).map_err(|err| f!("{:?}", err))?;
-    }};
-}
-
+#[macro_use]
 impl QGM {
     pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> Result<(), String> {
         let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
@@ -153,7 +152,7 @@ impl QGM {
         let (pop, props, children) = pop_graph.get3(pop_key);
 
         if let Some(children) = children {
-            for &child_key in children.iter().rev() {
+            for &child_key in children.iter() {
                 let child_name = child_key.printable_key();
                 fprint!(file, "    popkey{} -> popkey{};\n", child_name, id);
                 self.write_pop_to_graphviz(pop_graph, child_key, file)?;

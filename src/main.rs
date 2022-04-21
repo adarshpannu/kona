@@ -123,7 +123,7 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false)?;
 
                 if !env.get_boolean_option("PARSE_ONLY") {
-                    Flow::compile(env, &mut qgm).unwrap();
+                    let _flow = Flow::compile(env, &mut qgm).unwrap();
                     //run_flow(env, &flow);
                 }
             }

@@ -1,0 +1,21 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+    popkeyPOPKey5v1 -> popkeyPOPKey8v1;
+    popkeyPOPKey2v1 -> popkeyPOPKey5v1;
+    popkeyPOPKey1v1 -> popkeyPOPKey2v1;
+    popkeyPOPKey1v1[label="CSV(  file: R.csv )"];
+    popkeyPOPKey2v1[label="Repartition"];
+    popkeyPOPKey4v1 -> popkeyPOPKey5v1;
+    popkeyPOPKey3v1 -> popkeyPOPKey4v1;
+    popkeyPOPKey3v1[label="CSV(  file: S.csv )"];
+    popkeyPOPKey4v1[label="Repartition"];
+    popkeyPOPKey5v1[label="HashJoin"];
+    popkeyPOPKey7v1 -> popkeyPOPKey8v1;
+    popkeyPOPKey6v1 -> popkeyPOPKey7v1;
+    popkeyPOPKey6v1[label="CSV(  file: T.csv )"];
+    popkeyPOPKey7v1[label="Repartition"];
+    popkeyPOPKey8v1[label="HashJoin"];
+}

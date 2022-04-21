@@ -44,9 +44,12 @@ digraph example1 {
     exprnodeExprKey18v1[label="55"];
     exprnodeExprKey19v1 -> "QB_0_selectlist";
 }
+    "QUN_2"[label="QUN_2 DEPT_DETAILS/DD", fillcolor=black, fontcolor=white, style=filled]
     "QUN_1"[label="QUN_1 DEPT/D", fillcolor=black, fontcolor=white, style=filled]
     "QUN_0"[label="QUN_0 EMP/E", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_0 {
+    exprnodeExprKey38v1[label="And"];
+    exprnodeExprKey34v1 -> exprnodeExprKey38v1;
     exprnodeExprKey34v1[label="And"];
     exprnodeExprKey30v1 -> exprnodeExprKey34v1;
     exprnodeExprKey30v1[label="And"];
@@ -73,42 +76,48 @@ digraph example1 {
     exprnodeExprKey33v1 -> exprnodeExprKey34v1;
     exprnodeExprKey33v1[label="="];
     exprnodeExprKey31v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey31v1[label="D.NAME ($0.0)"];
+    exprnodeExprKey31v1[label="D.DEPT_ID ($0.0)"];
     exprnodeExprKey32v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey32v1[label="\"Engineering\""];
-    exprnodeExprKey34v1 -> QB_0_pred_list;
+    exprnodeExprKey32v1[label="DD.DEPT_ID ($0.0)"];
+    exprnodeExprKey37v1 -> exprnodeExprKey38v1;
+    exprnodeExprKey37v1[label="="];
+    exprnodeExprKey35v1 -> exprnodeExprKey37v1;
+    exprnodeExprKey35v1[label="D.NAME ($0.0)"];
+    exprnodeExprKey36v1 -> exprnodeExprKey37v1;
+    exprnodeExprKey36v1[label="\"Engineering\""];
+    exprnodeExprKey38v1 -> QB_0_pred_list;
     "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
 }
   subgraph cluster_group_byQB_0 {
     "QB_0_group_by"[label="group_by",shape=box,style=filled];
-    exprnodeExprKey37v1[label="+: 0"];
-    exprnodeExprKey35v1 -> exprnodeExprKey37v1;
-    exprnodeExprKey35v1[label="D.DEPT_ID ($0.0)"];
-    exprnodeExprKey36v1 -> exprnodeExprKey37v1;
-    exprnodeExprKey36v1[label="55"];
-    exprnodeExprKey37v1 -> "QB_0_group_by";
+    exprnodeExprKey41v1[label="+: 0"];
+    exprnodeExprKey39v1 -> exprnodeExprKey41v1;
+    exprnodeExprKey39v1[label="D.DEPT_ID ($0.0)"];
+    exprnodeExprKey40v1 -> exprnodeExprKey41v1;
+    exprnodeExprKey40v1[label="55"];
+    exprnodeExprKey41v1 -> "QB_0_group_by";
 }
   subgraph cluster_having_clauseQB_0 {
-    exprnodeExprKey47v1[label="And"];
-    exprnodeExprKey41v1 -> exprnodeExprKey47v1;
-    exprnodeExprKey41v1[label=">"];
-    exprnodeExprKey39v1 -> exprnodeExprKey41v1;
-    exprnodeExprKey39v1[label="SUM"];
-    exprnodeExprKey38v1 -> exprnodeExprKey39v1;
-    exprnodeExprKey38v1[label="E.AGE ($0.0)"];
-    exprnodeExprKey40v1 -> exprnodeExprKey41v1;
-    exprnodeExprKey40v1[label="100"];
-    exprnodeExprKey46v1 -> exprnodeExprKey47v1;
-    exprnodeExprKey46v1[label=">"];
-    exprnodeExprKey44v1 -> exprnodeExprKey46v1;
-    exprnodeExprKey44v1[label="+"];
-    exprnodeExprKey42v1 -> exprnodeExprKey44v1;
-    exprnodeExprKey42v1[label="D.DEPT_ID ($0.0)"];
-    exprnodeExprKey43v1 -> exprnodeExprKey44v1;
-    exprnodeExprKey43v1[label="55"];
-    exprnodeExprKey45v1 -> exprnodeExprKey46v1;
-    exprnodeExprKey45v1[label="10"];
-    exprnodeExprKey47v1 -> QB_0_having_clause;
+    exprnodeExprKey51v1[label="And"];
+    exprnodeExprKey45v1 -> exprnodeExprKey51v1;
+    exprnodeExprKey45v1[label=">"];
+    exprnodeExprKey43v1 -> exprnodeExprKey45v1;
+    exprnodeExprKey43v1[label="SUM"];
+    exprnodeExprKey42v1 -> exprnodeExprKey43v1;
+    exprnodeExprKey42v1[label="E.AGE ($0.0)"];
+    exprnodeExprKey44v1 -> exprnodeExprKey45v1;
+    exprnodeExprKey44v1[label="100"];
+    exprnodeExprKey50v1 -> exprnodeExprKey51v1;
+    exprnodeExprKey50v1[label=">"];
+    exprnodeExprKey48v1 -> exprnodeExprKey50v1;
+    exprnodeExprKey48v1[label="+"];
+    exprnodeExprKey46v1 -> exprnodeExprKey48v1;
+    exprnodeExprKey46v1[label="D.DEPT_ID ($0.0)"];
+    exprnodeExprKey47v1 -> exprnodeExprKey48v1;
+    exprnodeExprKey47v1[label="55"];
+    exprnodeExprKey49v1 -> exprnodeExprKey50v1;
+    exprnodeExprKey49v1[label="10"];
+    exprnodeExprKey51v1 -> QB_0_having_clause;
     "QB_0_having_clause"[label="having_clause",shape=box,style=filled];
 }
     label = "QB_0 type=Select";

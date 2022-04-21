@@ -1,0 +1,9 @@
+digraph example1 {
+    node [shape=record];
+    rankdir=BT;
+    nodesep=0.5;
+    ordering="in";
+    popkeyPOPKey1v1 -> popkeyPOPKey2v1;
+    popkeyPOPKey1v1[label="CSV(  file: emp.csv )"];
+    popkeyPOPKey2v1[label="Aggregation"];
+}

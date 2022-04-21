@@ -103,12 +103,6 @@ impl APSContext {
     }
 }
 
-macro_rules! fprint {
-    ($file:expr, $($args:expr),*) => {{
-        $file.write_all(format!($($args),*).as_bytes()).map_err(|err| f!("{:?}", err))?;
-    }};
-}
-
 /***************************************************************************************************/
 type PredMap = HashMap<ExprKey, PredDesc>;
 
@@ -171,13 +165,15 @@ fn sizes() {
 }
 
 impl QGM {
-    pub fn build_logical_plan(self: &mut QGM) -> Result<(LOPGraph, LOPKey), String> {
+    pub fn build_logical_plan(self: &mut QGM, env: &Env) -> Result<(LOPGraph, LOPKey), String> {
         // Construct bitmaps
         let aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
         let lop_key = self.build_qblock_logical_plan(self.main_qblock_key, &aps_context, &mut lop_graph);
         if let Ok(lop_key) = lop_key {
+            let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
+            self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
             Ok((lop_graph, lop_key))
         } else {
             Err("Something bad happened lol".to_string())
