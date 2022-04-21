@@ -139,7 +139,7 @@ pub DescribeTable: AST = {
 
 // -------------------- SET OPTION --------------------
 pub SetOption: AST = {
-    "SET" <name:Identifier> "=" <value:QuotedString> => AST::SetOption { name, value }
+    "SET" <name:Identifier> "=" <value:CatalogTableOptionValue> => AST::SetOption { name, value }
 }
 
 // -------------------- U/I/E QUERY --------------------

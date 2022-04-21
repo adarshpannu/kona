@@ -14,6 +14,6 @@ pub enum AST {
     QGM(QGM),
     SetOption {
         name: String,
-        value: String,
+        value: Datum,
     },
 }

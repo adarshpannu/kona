@@ -1,10 +1,10 @@
 //#![allow(unused_variables)]
 
-use std::collections::HashMap;
 use std::fs;
 use task::ThreadPool;
 
 use crate::includes::*;
+use crate::row::Datum;
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -43,41 +43,71 @@ use flow::*;
 use metadata::*;
 use qgm::*;
 
+pub struct EnvOptions {
+    pub parallel_degree: Option<usize>,
+    pub parse_only: Option<bool>,
+}
+
+impl EnvOptions {
+    pub fn new() -> EnvOptions {
+        EnvOptions {
+            parallel_degree: None,
+            parse_only: None,
+        }
+    }
+}
+
 pub struct Env {
     thread_pool: ThreadPool,
     metadata: Metadata,
-    options: HashMap<String, String>,
     input_filename: String,
     output_dir: String,
+    options: EnvOptions,
 }
 
 impl Env {
     fn new(nthreads: usize, input_filename: String, output_dir: String) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
+        let options = EnvOptions::new();
+
         Env {
             thread_pool,
             metadata,
-            options: HashMap::new(),
             input_filename,
             output_dir,
+            options,
         }
     }
 
-    fn set_option(&mut self, name: String, value: String) {
+    fn set_option(&mut self, name: String, value: Datum) -> Result<(), String> {
         debug!("SET {} = {}", &name, &value);
-        self.options.insert(name.to_uppercase(), value.to_uppercase());
+        let name = name.to_uppercase();
+        match name.as_str() {
+            "PARALLEL_DEGREE" => self.options.parallel_degree = Some(self.get_int_option(name.as_str(), &value)? as usize),
+            "PARSE_ONLY" => self.options.parse_only = Some(self.get_boolean_option(name.as_str(), &value)?),
+            _ => return Err(f!("Invalid option specified: {name}.")),
+        };
+        Ok(())
     }
 
-    fn get_boolean_option(&self, name: &str) -> bool {
-        if let Some(opt) = self.options.get(name) {
-            return match opt.as_str() {
-                "TRUE" | "YES" => true,
-                _ => false,
+    fn get_boolean_option(&self, name: &str, value: &Datum) -> Result<bool, String> {
+        if let Datum::STR(s) = value {
+            let s = s.to_uppercase();
+            return match s.as_str() {
+                "TRUE" | "T" | "YES" | "Y" => Ok(true),
+                _ => Ok(false),
             };
-        } else {
-            return false;
         }
+
+        return Err(f!("Option {name} needs to be a string. It holds {value} instead."));
+    }
+
+    fn get_int_option(&self, name: &str, value: &Datum) -> Result<isize, String> {
+        if let Datum::INT(ival) = value {
+            return Ok(*ival);
+        }
+        return Err(f!("Option {name} needs to be an integer. It holds {value} instead."));
     }
 }
 
@@ -115,14 +145,14 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 env.metadata.describe_table(name)?;
             }
             AST::SetOption { name, value } => {
-                env.set_option(name, value);
+                env.set_option(name, value)?;
             }
             AST::QGM(mut qgm) => {
                 qgm.write_qgm_to_graphviz(&qgm_raw_filename, false)?;
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false)?;
 
-                if !env.get_boolean_option("PARSE_ONLY") {
+                if !env.options.parse_only.unwrap_or(false) {
                     let _flow = Flow::compile(env, &mut qgm).unwrap();
                     //run_flow(env, &flow);
                 }

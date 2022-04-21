@@ -8,6 +8,7 @@ DESCRIBE TABLE S;
 DESCRIBE TABLE T;
 
 //SET PARSE_ONLY = "TRUE";
+set PARALLEL_DEGREE = 4;
 
 select r1, s1, t1
 from R, S, T

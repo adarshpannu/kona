@@ -12,7 +12,7 @@ pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
-    npartitions: usize,
+    //npartitions: usize,
 }
 
 impl POPKey {
@@ -64,7 +64,6 @@ impl Flow {
         let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
         let mut pop_graph: POPGraph = Graph::new();
 
-        
         let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph)?;
 
         let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
@@ -96,19 +95,19 @@ impl Flow {
                     separator: qun.separator(),
                     partitions: vec![],
                 };
-                let props = POPProps { npartitions: 4 };
+                let props = POPProps {};
                 pop_graph.add_node_with_props(POP::CSV(pop), props, None)
             }
             LOP::HashJoin { equi_join_preds } => {
-                let props = POPProps { npartitions: 4 };
+                let props = POPProps {};
                 pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children))
             }
             LOP::Repartition { cpartitions } => {
-                let props = POPProps { npartitions: 4 };
+                let props = POPProps {};
                 pop_graph.add_node_with_props(POP::Repartition, props, Some(pop_children))
             }
             LOP::Aggregation { .. } => {
-                let props = POPProps { npartitions: 4 };
+                let props = POPProps {};
                 pop_graph.add_node_with_props(POP::Aggregation, props, Some(pop_children))
             }
         };

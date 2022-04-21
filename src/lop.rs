@@ -170,7 +170,7 @@ impl QGM {
         let aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
-        let lop_key = self.build_qblock_logical_plan(self.main_qblock_key, &aps_context, &mut lop_graph);
+        let lop_key = self.build_qblock_logical_plan(env, self.main_qblock_key, &aps_context, &mut lop_graph);
         if let Ok(lop_key) = lop_key {
             let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
             self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
@@ -284,7 +284,7 @@ impl QGM {
     }
 
     pub fn build_unary_plans(
-        self: &QGM, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap, select_list_quncol: &Bitset<QunCol>,
+        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap, select_list_quncol: &Bitset<QunCol>,
         worklist: &mut Vec<LOPKey>,
     ) {
         let APSContext {
@@ -338,7 +338,7 @@ impl QGM {
                 //let subqblock = &self.qblock_graph.get(subqblock_key).value;
 
                 // child == subplan that we'll be aggregating.
-                let child = self.build_qblock_logical_plan(subqblock_key, aps_context, lop_graph).unwrap();
+                let child = self.build_qblock_logical_plan(env, subqblock_key, aps_context, lop_graph).unwrap();
                 let children = Some(vec![child]);
 
                 // todo: partitioning needs to match group-by list
@@ -362,7 +362,7 @@ impl QGM {
         }
     }
 
-    pub fn build_qblock_logical_plan(self: &QGM, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph) -> Result<LOPKey, String> {
+    pub fn build_qblock_logical_plan(self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph) -> Result<LOPKey, String> {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
 
@@ -381,7 +381,7 @@ impl QGM {
         let (mut pred_map, eqclass) = self.collect_preds(aps_context, qblock);
 
         // Build unary plans first (i.e. baseline single table scans)
-        self.build_unary_plans(aps_context, qblock, lop_graph, &mut pred_map, &select_list_quncol, &mut worklist);
+        self.build_unary_plans(env, aps_context, qblock, lop_graph, &mut pred_map, &select_list_quncol, &mut worklist);
 
         // Run greedy join enumeration
         let n = qblock.quns.len();
@@ -461,7 +461,7 @@ impl QGM {
 
                         // Repartition join legs as needed
                         let (lhs_partdesc, rhs_partdesc, _npartitions) =
-                            Self::harmonize_partitions(lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
+                            Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
 
                         let lhs_repart_props = lhs_partdesc.map(|partdesc| LOPProps {
                             quns: lhs_props.quns.clone(),
@@ -565,7 +565,7 @@ impl QGM {
     }
 
     // harmonize_partitions: Return a triplet indicating whether either/both legs of a join need to be repartitioned
-    pub fn harmonize_partitions(
+    pub fn harmonize_partitions(env: &Env,
         lop_graph: &LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
         eqclass: &ExprEqClass,
     ) -> (Option<PartDesc>, Option<PartDesc>, usize) {
@@ -604,7 +604,7 @@ impl QGM {
             None
         } else {
             Some(PartDesc {
-                npartitions: 4,
+                npartitions: env.options.parallel_degree.unwrap_or(1),
                 part_type: PartType::HASHEXPR(lhs_expected_keys),
             })
         };
@@ -613,7 +613,7 @@ impl QGM {
             None
         } else {
             Some(PartDesc {
-                npartitions: 4,
+                npartitions: env.options.parallel_degree.unwrap_or(1),
                 part_type: PartType::HASHEXPR(rhs_expected_keys),
             })
         };
