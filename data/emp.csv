@@ -1,4 +1,4 @@
-name,age,dept_id
+name,age,emp_dept_id
 john,32,1
 aby,30,2
 sarah,53,2

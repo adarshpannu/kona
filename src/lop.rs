@@ -1,6 +1,6 @@
 // LOP: Logical operators
 
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
@@ -141,10 +141,16 @@ impl ExprEqClass {
         self.disjoint_sets.union(id1, id2);
     }
 
-    pub fn check_eq(&self, expr1: ExprKey, expr2: ExprKey) -> bool {
-        let &id1 = self.expr_id_map.get_by_left(&expr1).unwrap();
-        let &id2 = self.expr_id_map.get_by_left(&expr2).unwrap();
-        self.disjoint_sets.same_set(id1, id2)
+    pub fn check_eq(&self, expr_graph: &ExprGraph, expr1: ExprKey, expr2: ExprKey) -> bool {
+        debug!("check_eq1 {:?} {:?}", expr1, expr1.printable(expr_graph, false));
+        debug!("check_eq2 {:?} {:?}", expr2, expr2.printable(expr_graph, false));
+
+        if let Some(&id1) = self.expr_id_map.get_by_left(&expr1) {
+            if let Some(&id2) = self.expr_id_map.get_by_left(&expr2) {
+                return self.disjoint_sets.same_set(id1, id2)
+            }
+        }
+        return false
     }
 
     fn key2id(&mut self, expr_key: ExprKey) -> usize {
@@ -170,7 +176,7 @@ impl QGM {
         let aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
-        let lop_key = self.build_qblock_logical_plan(env, self.main_qblock_key, &aps_context, &mut lop_graph);
+        let lop_key = self.build_qblock_logical_plan(env, self.main_qblock_key, &aps_context, &mut lop_graph, None);
         if let Ok(lop_key) = lop_key {
             let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
             self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
@@ -232,30 +238,12 @@ impl QGM {
 
                     if lhs_quns.len() > 0 && rhs_quns.len() > 0 {
                         let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
-                        /*
-                        debug!(
-                            "Eqjoin lhs key = {:?}, {:?}, hash = {}",
-                            lhs_child_key,
-                            lhs_child_key.printable(expr_graph, false),
-                            lhs_hash
-                        );
-                        debug!(
-                            "Eqjoin rhs key = {:?}, {:?}, hash = {}",
-                            rhs_child_key,
-                            rhs_child_key.printable(expr_graph, false),
-                            rhs_hash
-                        );
-                        */
-
                         eqpred_legs.push((lhs_hash, lhs_child_key));
                         eqpred_legs.push((rhs_hash, rhs_child_key));
-
                         eqclass.set_eq(lhs_child_key, rhs_child_key);
+                        debug!("set_eq {:?} {:?}", lhs_child_key, lhs_child_key.printable(expr_graph, false));
 
-                        Some(Box::new(EqJoinDesc {
-                            lhs_quns,
-                            rhs_quns,
-                        }))
+                        Some(Box::new(EqJoinDesc { lhs_quns, rhs_quns }))
                     } else {
                         None
                     }
@@ -264,6 +252,15 @@ impl QGM {
                 };
                 pred_map.insert(pred_key, PredDesc { quncols, quns, eqjoin_desc });
             }
+        }
+
+        // SELECT expressions are also added to eq-class. These come into play when determining partitioning.
+        for ne in qblock.select_list.iter() {
+            let expr_key = ne.expr_key;
+            let expr_hash = expr_key.hash(expr_graph);
+            debug!("set_eq qblock={} {:?} {:?}", qblock.id, expr_key, expr_key.printable(expr_graph, false));
+
+            eqpred_legs.push((expr_hash, expr_key));
         }
 
         let mut visited = vec![false; eqpred_legs.len()];
@@ -284,9 +281,9 @@ impl QGM {
     }
 
     pub fn build_unary_plans(
-        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap, select_list_quncol: &Bitset<QunCol>,
-        worklist: &mut Vec<LOPKey>,
-    ) {
+        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap,
+        select_list_quncol: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
+    ) -> Result<(), String> {
         let APSContext {
             all_quncols,
             all_quns,
@@ -334,22 +331,28 @@ impl QGM {
 
             // Build plan for nested query blocks
             let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
-                let subqblock_key = qun.qblock.unwrap();
-                //let subqblock = &self.qblock_graph.get(subqblock_key).value;
+                let child_qblock_key = qun.qblock.unwrap();
+                let child_qblock = &self.qblock_graph.get(child_qblock_key).value;
+                let group_by_len = qblock.group_by.as_ref().unwrap().len();
+                let expected_partitioning = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
 
                 // child == subplan that we'll be aggregating.
-                let child = self.build_qblock_logical_plan(env, subqblock_key, aps_context, lop_graph).unwrap();
-                let children = Some(vec![child]);
+                for e in expected_partitioning.iter() {
+                    debug!("expected: {:?}", e.printable(&self.expr_graph, false))
+                }
 
-                // todo: partitioning needs to match group-by list
-                let partdesc = lop_graph.get(child).properties.partdesc.clone();
+                let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
+
+                let children = Some(vec![child_lop_key]);
+
+                let partdesc = lop_graph.get(child_lop_key).properties.partdesc.clone();
                 let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
                 lop_graph.add_node_with_props(LOP::Aggregation, props, children)
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
                     tabledesc.get_part_desc().npartitions
                 } else {
-                    3
+                    env.options.parallel_degree.unwrap_or(1) * 2 // todo: temporary hack to force different partition counts in a plan
                 };
                 let partdesc = PartDesc::new(npartitions, PartType::RAW);
 
@@ -360,9 +363,12 @@ impl QGM {
             //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
             worklist.push(lopkey);
         }
+        Ok(())
     }
 
-    pub fn build_qblock_logical_plan(self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph) -> Result<LOPKey, String> {
+    pub fn build_qblock_logical_plan(
+        self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph, expected_partitioning: Option<Vec<ExprKey>>,
+    ) -> Result<LOPKey, String> {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
 
@@ -381,7 +387,7 @@ impl QGM {
         let (mut pred_map, eqclass) = self.collect_preds(aps_context, qblock);
 
         // Build unary plans first (i.e. baseline single table scans)
-        self.build_unary_plans(env, aps_context, qblock, lop_graph, &mut pred_map, &select_list_quncol, &mut worklist);
+        self.build_unary_plans(env, aps_context, qblock, lop_graph, &mut pred_map, &select_list_quncol, &mut worklist)?;
 
         // Run greedy join enumeration
         let n = qblock.quns.len();
@@ -395,8 +401,8 @@ impl QGM {
                         continue;
                     }
 
-                    let lhs_props= &lop_graph.get(lhs_plan_key).properties;
-                    let rhs_props= &lop_graph.get(rhs_plan_key).properties;
+                    let lhs_props = &lop_graph.get(lhs_plan_key).properties;
+                    let rhs_props = &lop_graph.get(rhs_plan_key).properties;
 
                     let join_quns_bitmap = lhs_props.quns.bitmap | rhs_props.quns.bitmap;
 
@@ -518,7 +524,35 @@ impl QGM {
         }
 
         if worklist.len() == 1 {
-            let root_lop_key = worklist[0];
+            let mut root_lop_key = worklist[0];
+
+            if let Some(expected_partitioning) = expected_partitioning {
+                let props = &lop_graph.get(root_lop_key).properties;
+                let empty_vec = vec![];
+                let actual_partitioning = if let PartType::HASHEXPR(keys) = &props.partdesc.part_type {
+                    keys
+                } else {
+                    &empty_vec
+                };
+
+                if !Self::is_correctly_partitioned(&self.expr_graph, &expected_partitioning, actual_partitioning, &eqclass) {
+                    let partdesc = PartDesc {
+                        npartitions: 4,
+                        part_type: PartType::HASHEXPR(expected_partitioning),
+                    };
+                    let cpartitions = props.partdesc.npartitions;
+
+                    let props = LOPProps {
+                        quns: props.quns.clone(),
+                        cols: props.cols.clone(),
+                        preds: props.preds.clone_n_clear(),
+                        partdesc,
+                        emit_exprs: None,
+                    };
+                    root_lop_key = lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![root_lop_key]));
+                }
+            }
+
             /*
             let mut props = lop_graph.get(root_lop_key).properties.clone();
             props.quns = props.quns.clear();
@@ -564,9 +598,20 @@ impl QGM {
         (lhs_expected_keys, rhs_expected_keys)
     }
 
+    pub fn is_correctly_partitioned(expr_graph: &ExprGraph, expected_keys: &Vec<ExprKey>, actual_keys: &Vec<ExprKey>, eqclass: &ExprEqClass) -> bool {
+        if expected_keys.len() == actual_keys.len() {
+            actual_keys
+                .iter()
+                .zip(expected_keys.iter())
+                .all(|(key1, key2)| eqclass.check_eq(expr_graph, *key1, *key2))
+        } else {
+            false
+        }
+    }
+
     // harmonize_partitions: Return a triplet indicating whether either/both legs of a join need to be repartitioned
-    pub fn harmonize_partitions(env: &Env,
-        lop_graph: &LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
+    pub fn harmonize_partitions(
+        env: &Env, lop_graph: &LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
         eqclass: &ExprEqClass,
     ) -> (Option<PartDesc>, Option<PartDesc>, usize) {
         // Compare expected vs actual partitioning keys on both sides of the join
@@ -590,17 +635,8 @@ impl QGM {
         // Compute expected partitioning keys
         let (lhs_expected_keys, rhs_expected_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
 
-        // Is LHS partitioned on join keys?
-        let lhs_correctly_partitioned = lhs_actual_keys
-            .iter()
-            .zip(lhs_expected_keys.iter())
-            .all(|(join_key, ptn_key)| eqclass.check_eq(*join_key, *ptn_key));
-        let rhs_correctly_partitioned = rhs_actual_keys
-            .iter()
-            .zip(rhs_expected_keys.iter())
-            .all(|(join_key, ptn_key)| eqclass.check_eq(*join_key, *ptn_key));
-
-        let lhs_partdesc = if lhs_actual_keys.len() > 0 && lhs_correctly_partitioned {
+        // todo: need to ensure #partitions are matched up correctly esp. in light of situations wherein one leg is correctly partitioned while the other isn't
+        let lhs_partdesc = if Self::is_correctly_partitioned(expr_graph, &lhs_expected_keys, lhs_actual_keys, eqclass) {
             None
         } else {
             Some(PartDesc {
@@ -609,7 +645,7 @@ impl QGM {
             })
         };
 
-        let rhs_partdesc = if rhs_actual_keys.len() > 0 && rhs_correctly_partitioned {
+        let rhs_partdesc = if Self::is_correctly_partitioned(expr_graph, &rhs_expected_keys, rhs_actual_keys, eqclass) {
             None
         } else {
             Some(PartDesc {

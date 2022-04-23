@@ -2,12 +2,12 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-select sum(age + 10)*99 / count(age + 50), dept_id + 55, avg(distinct age), dept_id + 55
+select sum(age + 10)*99 / count(age + 50), emp_dept_id + 55, avg(distinct age), emp_dept_id + 55
 from emp E
 where 
     age > 50 
-and dept_id < 99
-group by dept_id + 55
-having sum(age) > 100 and dept_id + 55 > 10
+and emp_dept_id < 99
+group by emp_dept_id + 55
+having sum(age) > 100 and emp_dept_id + 55 > 10
 ;
 

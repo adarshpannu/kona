@@ -8,15 +8,15 @@ DESCRIBE TABLE dept_details;
 
 set PARALLEL_DEGREE = 5;
 
-select sum(E.age + 50)*99 / count(E.age + 50), avg(distinct E.age), D.dept_id
+select sum(E.age + 10)*99 / count(E.age + 50), avg(distinct E.age), D.dept_id + 55
 from emp E, dept D, dept_details DD
 where 
     E.age > 50 
 and D.dept_id < 99
-and E.emp_dept_id = D.dept_id
-and D.dept_id = DD.details_dept_id
+and E.dept_id = D.dept_id
+and D.dept_id = DD.dept_id
 and D.name = "Engineering"
-group by D.dept_id
-having sum(E.age) > 100 and D.dept_id > 10
+group by D.dept_id + 55
+having sum(E.age) > 100 and D.dept_id + 55 > 10
 ;
 

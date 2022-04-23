@@ -7,17 +7,17 @@ digraph example1 {
     lopkeyLOPKey6v1 -> lopkeyLOPKey8v1;
     lopkeyLOPKey4v1 -> lopkeyLOPKey6v1;
     lopkeyLOPKey1v1 -> lopkeyLOPKey4v1;
-    lopkeyLOPKey1v1[label="TableScan|[0]|AGE DEPT_ID |{E.AGE \> 50}|p = 3 (RAW)|(input = AGE DEPT_ID )"];
-    lopkeyLOPKey4v1[label="Repartition|[0]|AGE DEPT_ID |{}|p = 5 (E.DEPT_ID)|c = 3"];
+    lopkeyLOPKey1v1[label="TableScan|[0]|AGE EMP_DEPT_ID |{E.AGE \> 50}|p = 3 (RAW)|(input = AGE EMP_DEPT_ID )"];
+    lopkeyLOPKey4v1[label="Repartition|[0]|AGE EMP_DEPT_ID |{}|p = 5 (E.EMP_DEPT_ID)|c = 3"];
     lopkeyLOPKey5v1 -> lopkeyLOPKey6v1;
     lopkeyLOPKey2v1 -> lopkeyLOPKey5v1;
     lopkeyLOPKey2v1[label="TableScan|[1]|DEPT_ID |{D.DEPT_ID \< 99|D.NAME = \"Engineering\"}|p = 3 (RAW)|(input = DEPT_ID NAME )"];
     lopkeyLOPKey5v1[label="Repartition|[1]|DEPT_ID |{}|p = 5 (D.DEPT_ID)|c = 3"];
-    lopkeyLOPKey6v1[label="HashJoin|[1, 0]|DEPT_ID AGE |{E.DEPT_ID = D.DEPT_ID}|p = 5 (E.DEPT_ID)|{E.DEPT_ID = D.DEPT_ID}"];
+    lopkeyLOPKey6v1[label="HashJoin|[1, 0]|DEPT_ID AGE |{E.EMP_DEPT_ID = D.DEPT_ID}|p = 5 (E.EMP_DEPT_ID)|{E.EMP_DEPT_ID = D.DEPT_ID}"];
     lopkeyLOPKey7v1 -> lopkeyLOPKey8v1;
     lopkeyLOPKey3v1 -> lopkeyLOPKey7v1;
-    lopkeyLOPKey3v1[label="TableScan|[2]|DEPT_ID |{}|p = 3 (RAW)|(input = DEPT_ID )"];
-    lopkeyLOPKey7v1[label="Repartition|[2]|DEPT_ID |{}|p = 5 (DD.DEPT_ID)|c = 3"];
-    lopkeyLOPKey8v1[label="HashJoin|[1, 0, 2]|{D.DEPT_ID + 55|E.AGE + 10|E.AGE + 50|E.AGE}|{D.DEPT_ID = DD.DEPT_ID}|p = 5 (E.DEPT_ID)|{D.DEPT_ID = DD.DEPT_ID}"];
-    lopkeyLOPKey9v1[label="Aggregation|[4]|{SUM($4.1) * 99 / COUNT($4.2)|$4.0|SUM($4.3) / COUNT($4.3)|$4.0}|{SUM($4.3) \> 100|$4.0 \> 10}|p = 5 (E.DEPT_ID)|"];
+    lopkeyLOPKey3v1[label="TableScan|[2]|DETAILS_DEPT_ID |{}|p = 3 (RAW)|(input = DETAILS_DEPT_ID )"];
+    lopkeyLOPKey7v1[label="Repartition|[2]|DETAILS_DEPT_ID |{}|p = 5 (DD.DETAILS_DEPT_ID)|c = 3"];
+    lopkeyLOPKey8v1[label="HashJoin|[1, 0, 2]|{D.DEPT_ID|E.AGE + 50|E.AGE}|{D.DEPT_ID = DD.DETAILS_DEPT_ID}|p = 5 (E.EMP_DEPT_ID)|{D.DEPT_ID = DD.DETAILS_DEPT_ID}"];
+    lopkeyLOPKey9v1[label="Aggregation|[4]|{SUM($4.1) * 99 / COUNT($4.1)|SUM($4.2) / COUNT($4.2)|$4.0}|{SUM($4.2) \> 100|$4.0 \> 10}|p = 5 (E.EMP_DEPT_ID)|"];
 }
