@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
+use bimap::BiMap;
+use partitions::PartitionVec;
 
 use crate::bitset::*;
 use crate::expr::{Expr::*, *};
@@ -32,7 +34,7 @@ pub enum LOP {
     TableScan { input_cols: Bitset<QunCol> },
     HashJoin { equi_join_preds: Vec<(ExprKey, PredicateAlignment)> },
     Repartition { cpartitions: usize },
-    Aggregation,
+    Aggregation { group_by_len: usize },
 }
 
 /***************************************************************************************************/
@@ -117,9 +119,6 @@ pub struct PredDesc {
     eqjoin_desc: Option<Box<EqJoinDesc>>,
 }
 
-use bimap::BiMap;
-use partitions::PartitionVec;
-
 pub struct ExprEqClass {
     next_id: usize,
     expr_id_map: BiMap<ExprKey, usize>,
@@ -141,16 +140,13 @@ impl ExprEqClass {
         self.disjoint_sets.union(id1, id2);
     }
 
-    pub fn check_eq(&self, expr_graph: &ExprGraph, expr1: ExprKey, expr2: ExprKey) -> bool {
-        debug!("check_eq1 {:?} {:?}", expr1, expr1.printable(expr_graph, false));
-        debug!("check_eq2 {:?} {:?}", expr2, expr2.printable(expr_graph, false));
-
+    pub fn check_eq(&self, _expr_graph: &ExprGraph, expr1: ExprKey, expr2: ExprKey) -> bool {
         if let Some(&id1) = self.expr_id_map.get_by_left(&expr1) {
             if let Some(&id2) = self.expr_id_map.get_by_left(&expr2) {
-                return self.disjoint_sets.same_set(id1, id2)
+                return self.disjoint_sets.same_set(id1, id2);
             }
         }
-        return false
+        return false;
     }
 
     fn key2id(&mut self, expr_key: ExprKey) -> usize {
@@ -241,8 +237,6 @@ impl QGM {
                         eqpred_legs.push((lhs_hash, lhs_child_key));
                         eqpred_legs.push((rhs_hash, rhs_child_key));
                         eqclass.set_eq(lhs_child_key, rhs_child_key);
-                        debug!("set_eq {:?} {:?}", lhs_child_key, lhs_child_key.printable(expr_graph, false));
-
                         Some(Box::new(EqJoinDesc { lhs_quns, rhs_quns }))
                     } else {
                         None
@@ -258,7 +252,6 @@ impl QGM {
         for ne in qblock.select_list.iter() {
             let expr_key = ne.expr_key;
             let expr_hash = expr_key.hash(expr_graph);
-            debug!("set_eq qblock={} {:?} {:?}", qblock.id, expr_key, expr_key.printable(expr_graph, false));
 
             eqpred_legs.push((expr_hash, expr_key));
         }
@@ -347,7 +340,7 @@ impl QGM {
 
                 let partdesc = lop_graph.get(child_lop_key).properties.partdesc.clone();
                 let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
-                lop_graph.add_node_with_props(LOP::Aggregation, props, children)
+                lop_graph.add_node_with_props(LOP::Aggregation { group_by_len }, props, children)
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
                     tabledesc.get_part_desc().npartitions
@@ -719,7 +712,10 @@ impl QGM {
                 let extrastr = format!("c = {}", cpartitions);
                 (String::from("Repartition"), extrastr)
             }
-            LOP::Aggregation => (String::from("Aggregation"), String::from("")),
+            LOP::Aggregation { group_by_len } => {
+                let extrastr = format!("by_len = {}", group_by_len);
+                (String::from("Aggregation"), extrastr)
+            }
         };
 
         fprint!(

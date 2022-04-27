@@ -19,5 +19,5 @@ digraph example1 {
     lopkeyLOPKey3v1[label="TableScan|[2]|DETAILS_DEPT_ID |{}|p = 3 (RAW)|(input = DETAILS_DEPT_ID )"];
     lopkeyLOPKey7v1[label="Repartition|[2]|DETAILS_DEPT_ID |{}|p = 5 (DD.DETAILS_DEPT_ID)|c = 3"];
     lopkeyLOPKey8v1[label="HashJoin|[1, 0, 2]|{D.DEPT_ID|E.AGE + 50|E.AGE}|{D.DEPT_ID = DD.DETAILS_DEPT_ID}|p = 5 (E.EMP_DEPT_ID)|{D.DEPT_ID = DD.DETAILS_DEPT_ID}"];
-    lopkeyLOPKey9v1[label="Aggregation|[4]|{SUM($4.1) * 99 / COUNT($4.1)|SUM($4.2) / COUNT($4.2)|$4.0}|{SUM($4.2) \> 100|$4.0 \> 10}|p = 5 (E.EMP_DEPT_ID)|"];
+    lopkeyLOPKey9v1[label="Aggregation|[4]|{SUM($4.1) * 99 / COUNT($4.1)|SUM($4.2) / COUNT($4.2)|$4.0}|{SUM($4.2) \> 100|$4.0 \> 10}|p = 5 (E.EMP_DEPT_ID)|by_len = 1"];
 }

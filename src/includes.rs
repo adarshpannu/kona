@@ -11,7 +11,7 @@ pub type QunId = usize;
 pub type QBId = usize;
 pub type PartitionId = usize;
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct QunCol(pub QunId, pub ColId);
 
 pub type ColMap = std::collections::HashMap<ColId, ColId>;

@@ -1,13 +1,8 @@
-CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/R.csv", "HEADER" = "YES", "SEPARATOR" = ",", "PARTITIONS" = "10");
-CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/S.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv");
 
-DESCRIBE TABLE R;
-DESCRIBE TABLE S;
+DESCRIBE TABLE emp;
 
-//SET PARSE_ONLY = "TRUE";
-
-select 999
-from R, S
-where r1 = s1 + s2
+SELECT name, age + 55 from emp
+where emp_dept_id = 4
 ;
 

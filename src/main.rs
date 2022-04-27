@@ -37,6 +37,7 @@ pub mod pop;
 pub mod row;
 pub mod scratch;
 pub mod task;
+pub mod pcode;
 
 use ast::*;
 use flow::*;
@@ -170,7 +171,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/spja.fsql".to_string();
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/scratch.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_filename, output_dir);
 

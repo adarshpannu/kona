@@ -6,7 +6,6 @@ use crate::qgm::*;
 use crate::row::{DataType, Datum};
 
 use crate::includes::*;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 impl QGM {
@@ -16,32 +15,6 @@ impl QGM {
         QueryBlock::resolve(qbkey, env, &mut self.qblock_graph, &mut self.expr_graph, &mut self.metadata)?;
 
         Ok(())
-    }
-}
-
-#[allow(dead_code)]
-pub struct QueryBlockColidDispenser {
-    hashmap: HashMap<QunCol, ColId>,
-    next_id: ColId,
-}
-
-#[allow(dead_code)]
-impl QueryBlockColidDispenser {
-    fn new() -> QueryBlockColidDispenser {
-        QueryBlockColidDispenser {
-            hashmap: HashMap::new(),
-            next_id: 0,
-        }
-    }
-
-    fn next_id(&mut self, quncol: QunCol) -> ColId {
-        let next_id = self.next_id;
-        let e = self.hashmap.entry(quncol).or_insert(next_id);
-        if *e == next_id {
-            self.next_id = next_id + 1;
-        }
-        //debug!("Assigned {:?} -> {}", &quncol, *e);
-        *e
     }
 }
 

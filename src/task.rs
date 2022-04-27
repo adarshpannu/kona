@@ -14,15 +14,15 @@ use crate::row::*;
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Stage {
+pub struct OldStage {
     pub root_pop_key: POPKey,
     pub npartitions_producer: usize,
     pub npartitions_consumer: usize,
 }
 
-impl Stage {
-    pub fn new(flow: &Flow, top: POPKey) -> Stage {
-        Stage {
+impl OldStage {
+    pub fn new(flow: &Flow, top: POPKey) -> OldStage {
+        OldStage {
             root_pop_key: top,
             npartitions_producer: 0,
             npartitions_consumer: 0,
@@ -43,7 +43,7 @@ impl Stage {
             let encoded: Vec<u8> = bincode::serialize(&t2sa).unwrap();
             //debug!("Serialized task len = {}", encoded.len());
 
-            let decoded: (Flow, Stage, Task) = bincode::deserialize(&encoded[..]).unwrap();
+            let decoded: (Flow, OldStage, Task) = bincode::deserialize(&encoded[..]).unwrap();
 
             //dbg!(&decoded.0);
 
@@ -74,7 +74,7 @@ impl Task {
         }
     }
 
-    pub fn run(&mut self, flow: &Flow, stage: &Stage) {
+    pub fn run(&mut self, flow: &Flow, stage: &OldStage) {
         todo!();
         /*
         debug!(
@@ -142,7 +142,7 @@ impl ThreadPool {
                             break;
                         }
                         ThreadPoolMessage::RunTask(encoded) => {
-                            let (flow, stage, mut task): (Flow, Stage, Task) =
+                            let (flow, stage, mut task): (Flow, OldStage, Task) =
                                 bincode::deserialize(&encoded[..]).unwrap();
 
                             /*
