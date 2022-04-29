@@ -68,10 +68,7 @@ pub enum POP {
 
 impl POP {
     pub fn is_stage_root(&self) -> bool {
-        match *self {
-            POP::Repartition => true,
-            _ => false,
-        }
+        matches!(self, POP::Repartition)
     }
 }
 

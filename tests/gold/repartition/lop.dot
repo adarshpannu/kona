@@ -6,16 +6,16 @@ digraph example1 {
     lopkeyLOPKey6v1 -> lopkeyLOPKey8v1;
     lopkeyLOPKey4v1 -> lopkeyLOPKey6v1;
     lopkeyLOPKey1v1 -> lopkeyLOPKey4v1;
-    lopkeyLOPKey1v1[label="TableScan|[0]|R1 |{}|p = 3 (RAW)|(input = R1 )"];
-    lopkeyLOPKey4v1[label="Repartition|[0]|R1 |{}|p = 4 (R1 + 1)|c = 3"];
+    lopkeyLOPKey1v1[label="TableScan-1v1|[0]|R1 |{}|p = 3 (RAW)|(input = R1 )"];
+    lopkeyLOPKey4v1[label="Repartition-4v1|[0]|R1 |{}|p = 4 (R1 + 1)|c = 3"];
     lopkeyLOPKey5v1 -> lopkeyLOPKey6v1;
     lopkeyLOPKey2v1 -> lopkeyLOPKey5v1;
-    lopkeyLOPKey2v1[label="TableScan|[1]|S1 |{}|p = 3 (RAW)|(input = S1 )"];
-    lopkeyLOPKey5v1[label="Repartition|[1]|S1 |{}|p = 4 (S1 + 1)|c = 3"];
-    lopkeyLOPKey6v1[label="HashJoin|[0, 1]|R1 S1 |{R1 + 1 = S1 + 1}|p = 4 (R1 + 1)|{R1 + 1 = S1 + 1}"];
+    lopkeyLOPKey2v1[label="TableScan-2v1|[1]|S1 |{}|p = 3 (RAW)|(input = S1 )"];
+    lopkeyLOPKey5v1[label="Repartition-5v1|[1]|S1 |{}|p = 4 (S1 + 1)|c = 3"];
+    lopkeyLOPKey6v1[label="HashJoin-6v1|[0, 1]|R1 S1 |{R1 + 1 = S1 + 1}|p = 4 (R1 + 1)|{R1 + 1 = S1 + 1}"];
     lopkeyLOPKey7v1 -> lopkeyLOPKey8v1;
     lopkeyLOPKey3v1 -> lopkeyLOPKey7v1;
-    lopkeyLOPKey3v1[label="TableScan|[2]|T1 |{}|p = 3 (RAW)|(input = T1 )"];
-    lopkeyLOPKey7v1[label="Repartition|[2]|T1 |{}|p = 4 (T1 + 1)|c = 3"];
-    lopkeyLOPKey8v1[label="HashJoin|[0, 1, 2]|{R1|S1|T1}|{R1 + 1 = T1 + 1}|p = 4 (R1 + 1)|{R1 + 1 = T1 + 1}"];
+    lopkeyLOPKey3v1[label="TableScan-3v1|[2]|T1 |{}|p = 3 (RAW)|(input = T1 )"];
+    lopkeyLOPKey7v1[label="Repartition-7v1|[2]|T1 |{}|p = 4 (T1 + 1)|c = 3"];
+    lopkeyLOPKey8v1[label="HashJoin-8v1|[0, 1, 2]|{R1|S1|T1}|{R1 + 1 = T1 + 1}|p = 4 (R1 + 1)|{R1 + 1 = T1 + 1}"];
 }
