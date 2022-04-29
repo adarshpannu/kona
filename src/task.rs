@@ -1,4 +1,3 @@
-#![allow(warnings)]
 
 use crate::includes::*;
 
@@ -8,9 +7,6 @@ use std::thread;
 use std::thread::JoinHandle;
 
 use crate::pop::*;
-use crate::flow::*;
-use crate::graph::*;
-use crate::row::*;
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,7 +17,7 @@ pub struct OldStage {
 }
 
 impl OldStage {
-    pub fn new(flow: &Flow, top: POPKey) -> OldStage {
+    pub fn new(_flow: &Flow, top: POPKey) -> OldStage {
         OldStage {
             root_pop_key: top,
             npartitions_producer: 0,
@@ -30,10 +26,10 @@ impl OldStage {
     }
 
     pub fn run(&self, env: &Env, flow: &Flow) {
-        let node = flow.get_node(self.root_pop_key);
-        let npartitions = self.npartitions_producer;
+        let (_, props, ..) = flow.pop_graph.get3(self.root_pop_key);
+        let npartitions = props.npartitions;
         for partition_id in 0..npartitions {
-            let mut task = Task::new(partition_id);
+            let task = Task::new(partition_id);
             //task.run(flow, self);
 
             let thread_id = partition_id % (env.thread_pool.size());
@@ -41,13 +37,13 @@ impl OldStage {
             //let t2sa = Task2SendAcross { flow: flow.clone() };
             let t2sa = &(flow, self, task);
             let encoded: Vec<u8> = bincode::serialize(&t2sa).unwrap();
-            //debug!("Serialized task len = {}", encoded.len());
+            debug!("Serialized task len = {}", encoded.len());
 
-            let decoded: (Flow, OldStage, Task) = bincode::deserialize(&encoded[..]).unwrap();
+            let _decoded: (Flow, OldStage, Task) = bincode::deserialize(&encoded[..]).unwrap();
 
             //dbg!(&decoded.0);
 
-            env.thread_pool.s2t_channels_sx[thread_id].send(ThreadPoolMessage::RunTask(encoded));
+            env.thread_pool.s2t_channels_sx[thread_id].send(ThreadPoolMessage::RunTask(encoded)).unwrap();
         }
     }
 }
@@ -75,16 +71,14 @@ impl Task {
     }
 
     pub fn run(&mut self, flow: &Flow, stage: &OldStage) {
-        todo!();
         /*
         debug!(
-            "Running task: stage = {}, partition = {}/{}",
-            stage.head_node_id, self.partition_id, stage.npartitions_producer
+            "Running task: stage = {:?}, partition = {}/{}",
+            stage.root_pop_key, self.partition_id, stage.npartitions_producer
         );
-        self.task_row = Row::from(vec![Datum::NULL; 8]); // FIXME
-        let node = flow.get_node(stage.head_node_id);
-        node.next(flow, stage, self, true);
-                */
+        */
+        self.task_row = Row::from(vec![Datum::NULL; 32]); // FIXME
+        while stage.root_pop_key.next(flow, stage, self, true) {}
     }
 }
 
@@ -98,7 +92,7 @@ pub enum ThreadPoolMessage {
 pub struct ThreadPool {
     threads: Option<Vec<JoinHandle<()>>>,
     s2t_channels_sx: Vec<mpsc::Sender<ThreadPoolMessage>>, // scheduler -> threads (T channels i.e. one per thread)
-    t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>,     // threads -> scheduler (1 channel, shared by all threads)
+    //t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>,     // threads -> scheduler (1 channel, shared by all threads)
 }
 
 impl ThreadPool {
@@ -119,7 +113,7 @@ impl ThreadPool {
 
     pub fn close_all(&mut self) {
         for tx in self.s2t_channels_sx.iter() {
-            tx.send(ThreadPoolMessage::EndTask);
+            tx.send(ThreadPoolMessage::EndTask).unwrap();
         }
     }
 
@@ -127,7 +121,7 @@ impl ThreadPool {
         let mut threads = vec![];
         let mut s2t_channels_sx = vec![];
 
-        let (t2s_channel_tx, t2s_channel_rx) = mpsc::channel::<ThreadPoolMessage>();
+        let (t2s_channel_tx, _t2s_channel_rx) = mpsc::channel::<ThreadPoolMessage>();
 
         for i in 0..nthreads {
             let t2s_channel_tx_clone = t2s_channel_tx.clone();
@@ -142,8 +136,7 @@ impl ThreadPool {
                             break;
                         }
                         ThreadPoolMessage::RunTask(encoded) => {
-                            let (flow, stage, mut task): (Flow, OldStage, Task) =
-                                bincode::deserialize(&encoded[..]).unwrap();
+                            let (flow, stage, mut task): (Flow, OldStage, Task) = bincode::deserialize(&encoded[..]).unwrap();
 
                             /*
                             debug!(
@@ -155,7 +148,8 @@ impl ThreadPool {
                             */
                             task.run(&flow, &stage);
 
-                            t2s_channel_tx_clone.send(ThreadPoolMessage::TaskEnded);
+                            // The following send may not succeed if the scheduler is gone
+                            t2s_channel_tx_clone.send(ThreadPoolMessage::TaskEnded).unwrap_or_default()
                         }
                         ThreadPoolMessage::TaskEnded => {
                             panic!("Invalid message")
@@ -171,7 +165,7 @@ impl ThreadPool {
         ThreadPool {
             threads: Some(threads),
             s2t_channels_sx,
-            t2s_channel_rx,
+            //t2s_channel_rx,
         }
     }
 }

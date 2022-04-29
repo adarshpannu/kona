@@ -41,9 +41,9 @@ impl fmt::Display for LogOp {
     // This trait requires `fmt` with this exact signature.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let display_str = match self {
-            LogOp::And => "&&",
-            LogOp::Or => "||",
-            LogOp::Not => "!",
+            LogOp::And => "AND",
+            LogOp::Or => "OR",
+            LogOp::Not => "NOT",
         };
         write!(f, "{}", display_str)
     }
@@ -130,12 +130,7 @@ impl Expr {
     pub fn name(&self) -> String {
         match self {
             CID(qunid, colid) => format!("${}.{}", *qunid, *colid),
-            Column {
-                prefix,
-                colname,
-                qunid,
-                colid,
-            } => {
+            Column { prefix, colname, qunid, colid } => {
                 if let Some(prefix) = prefix {
                     format!("{}.{} (${}.{})", prefix, colname, *qunid, *colid)
                 } else {
@@ -222,9 +217,7 @@ impl ExprKey {
         for exprkey in iter {
             let expr = &expr_graph.get(exprkey).value;
             match expr {
-                Expr::Column {
-                    colname, qunid, colid, ..
-                } => {
+                Expr::Column { colname, qunid, colid, .. } => {
                     colname.hash(&mut state);
                     qunid.hash(&mut state);
                     colid.hash(&mut state);
@@ -268,31 +261,19 @@ impl ExprKey {
             Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
             BinaryExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!(
-                    "{} {} {}",
-                    lhs_key.printable(graph, false),
-                    op,
-                    rhs_key.printable(graph, false),
-                )
+                format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
             }
-            NegatedExpr => "-".to_string(),
+            NegatedExpr => {
+                let lhs_key = children.unwrap()[0];
+                format!("-{}", lhs_key.printable(graph, false))
+            },
             RelExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!(
-                    "{} {} {}",
-                    lhs_key.printable(graph, false),
-                    op,
-                    rhs_key.printable(graph, false),
-                )
+                format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
             }
             LogExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!(
-                    "{} {} {}",
-                    lhs_key.printable(graph, false),
-                    op,
-                    rhs_key.printable(graph, false),
-                )
+                format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
             }
             BetweenExpr => format!("BETWEEEN"),
             InListExpr => format!("IN"),

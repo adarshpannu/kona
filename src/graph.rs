@@ -5,7 +5,6 @@ new_key_type! { pub struct ExprKey; }
 new_key_type! { pub struct LOPKey; }
 new_key_type! { pub struct POPKey; }
 new_key_type! { pub struct QueryBlockKey; }
-//new_key_type! { pub struct StageKey; }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Node<K, V, P> {

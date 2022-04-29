@@ -116,7 +116,8 @@ impl Env {
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     // Clear output directories
     let dirname = format!("{}/flow", TEMPDIR);
-    std::fs::remove_dir_all(dirname).map_err(stringify)?;
+    //std::fs::remove_dir_all(&dirname).map_err(|err| format!("Cannot remove temporary directory: {}", dirname))?;
+    std::fs::remove_dir_all(&dirname).unwrap_or_default();
 
     // Run the flow
     flow.run(&env);
@@ -155,7 +156,7 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 
                 if !env.options.parse_only.unwrap_or(false) {
                     let _flow = Flow::compile(env, &mut qgm).unwrap();
-                    //run_flow(env, &flow);
+                    //run_flow(env, &flow)?;
                 }
             }
         }
@@ -171,7 +172,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/scratch.fsql".to_string();
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/join.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_filename, output_dir);
 

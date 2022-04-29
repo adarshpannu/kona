@@ -352,6 +352,12 @@ impl QueryBlock {
                         children_datatypes[0]
                     }
                 }
+            },
+            NegatedExpr => {
+                if children_datatypes[0] != DataType::INT && children_datatypes[0] != DataType::DOUBLE {
+                    return Err(format!("Only numeric datatypes can be negated."));
+                }
+                children_datatypes[0]
             }
             _ => {
                 debug!("TODO: {:?}", &expr);

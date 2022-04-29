@@ -3,7 +3,7 @@ pub use log::{error, warn, info, debug};
 
 //pub const DATADIR: &str = "/Users/adarshrp/Projects/flare/data";
 pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
-pub const TEMPDIR: &str = "/Users/adarshrp/Projects/flare/temp";
+pub const TEMPDIR: &str = "/Users/adarshrp/Projects/flare/tmp";
 pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/flare";
 
 pub type ColId = usize;

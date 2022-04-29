@@ -1,7 +1,5 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", 
-                    "HEADER" = "YES", "SEPARATOR" = ",", "PARTITIONS" = "10");
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", 
-                    "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 3);
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", PARTITIONS = 3);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
@@ -9,7 +7,7 @@ DESCRIBE TABLE dept;
 // All engineers aged 35+ 
 SELECT EMP.name, DEPT.DEPT_ID 
 from EMP, DEPT
-where EMP.DEPT_ID = DEPT.DEPT_ID
+where EMP.EMP_DEPT_ID = DEPT.DEPT_ID
 AND EMP.age > 35
 AND DEPT.NAME = "Engineering"
 ;

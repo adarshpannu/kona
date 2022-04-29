@@ -80,6 +80,7 @@ pub fn compute_partitions(
             end += line.len() as u64;
         }
         splits.push(TextFilePartition(begin, end));
+        /*
         debug!(
             "File {}, partition-{} offsets = [{}, {})",
             filename,
@@ -87,6 +88,7 @@ pub fn compute_partitions(
             begin,
             end
         );
+        */
         begin = end;
     }
     Ok(splits)

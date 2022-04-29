@@ -1,11 +1,11 @@
 // LOP: Logical operators
 
+use bimap::BiMap;
+use partitions::PartitionVec;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
-use bimap::BiMap;
-use partitions::PartitionVec;
 
 use crate::bitset::*;
 use crate::expr::{Expr::*, *};
@@ -13,6 +13,7 @@ use crate::graph::*;
 use crate::includes::*;
 use crate::metadata::*;
 use crate::qgm::*;
+use regex::Regex;
 
 pub type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
 
@@ -25,6 +26,16 @@ impl LOPKey {
     pub fn printable(&self, lop_graph: &LOPGraph) -> String {
         let lop = &lop_graph.get(*self).value;
         format!("{:?}-{:?}", *lop, *self)
+    }
+
+    pub fn printable_id(&self) -> String {
+        let re1 = Regex::new(r"^.*\(").unwrap();
+        let re2 = Regex::new(r"\).*$").unwrap();
+
+        let id = format!("{:?}", *self);
+        let id = re1.replace_all(&id, "");
+        let id = re2.replace_all(&id, "");
+        id.to_string()
     }
 }
 
@@ -720,9 +731,10 @@ impl QGM {
 
         fprint!(
             file,
-            "    lopkey{}[label=\"{}|{:?}|{}|{}|{}|{}\"];\n",
+            "    lopkey{}[label=\"{}-{}|{:?}|{}|{}|{}|{}\"];\n",
             id,
             label,
+            lop_key.printable_id(),
             props.quns.elements(),
             colstring,
             predstring,
