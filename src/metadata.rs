@@ -81,7 +81,7 @@ impl ColDesc {
 #[derive(Debug)]
 pub struct CSVDesc {
     tp: TableType,
-    filename: Rc<String>,
+    pathname: Rc<String>,
     header: bool,
     separator: char,
     columns: Vec<ColDesc>,
@@ -91,11 +91,11 @@ pub struct CSVDesc {
 
 impl CSVDesc {
     pub fn new(
-        tp: TableType, filename: Rc<String>, columns: Vec<ColDesc>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats,
+        tp: TableType, pathname: Rc<String>, columns: Vec<ColDesc>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats,
     ) -> Result<Self, String> {
         let csvdesc = CSVDesc {
             tp,
-            filename,
+            pathname,
             header,
             separator,
             columns,
@@ -116,8 +116,8 @@ impl CSVDesc {
         }
     }
 
-    pub fn infer_metadata(filename: &str, separator: char, header: bool) -> Vec<ColDesc> {
-        let mut iter = read_lines(&filename).unwrap();
+    pub fn infer_metadata(pathname: &str, separator: char, header: bool) -> Vec<ColDesc> {
+        let mut iter = read_lines(&pathname).unwrap();
         let mut colnames: Vec<String> = vec![];
         let mut coltypes: Vec<DataType> = vec![];
         let mut first_row = true;
@@ -164,7 +164,7 @@ impl TableDesc for CSVDesc {
     }
 
     fn pathname(&self) -> &String {
-        &self.filename
+        &self.pathname
     }
 
     fn describe(&self) -> String {
@@ -368,7 +368,7 @@ impl Metadata {
         }
         let tbldesc = tbldesc.unwrap();
         info!("Table {}", name);
-        info!("  FILENAME = \"{}\"", tbldesc.pathname());
+        info!("  pathname = \"{}\"", tbldesc.pathname());
         info!("  HEADER = {}", tbldesc.header());
         info!("  SEPARATOR = '{}'", tbldesc.separator());
         info!("  PARTITIONS = {:?}", tbldesc.get_part_desc());

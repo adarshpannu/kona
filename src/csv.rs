@@ -12,11 +12,11 @@ pub struct CSVPartitionIter {
 }
 
 impl CSVPartitionIter {
-    pub fn new(filename: &String, partition: &TextFilePartition) -> Result<CSVPartitionIter, String> {
-        let file = File::open(filename).unwrap();
+    pub fn new(pathname: &String, partition: &TextFilePartition) -> Result<CSVPartitionIter, String> {
+        let file = File::open(pathname).unwrap();
         let mut reader = BufReader::new(file);
 
-        reader.seek(SeekFrom::Start(partition.0)).map_err(|err| stringify1(err, filename))?;
+        reader.seek(SeekFrom::Start(partition.0)).map_err(|err| stringify1(err, pathname))?;
 
         Ok(CSVPartitionIter {
             reader,
@@ -48,11 +48,11 @@ impl Iterator for CSVPartitionIter {
 use std::fs::File;
 use std::io::{self, BufReader};
 
-pub fn compute_partitions(filename: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
-    let f = fs::File::open(&filename).map_err(|err| stringify1(err, &filename))?;
+pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
+    let f = fs::File::open(&pathname).map_err(|err| stringify1(err, &pathname))?;
     let mut reader = BufReader::new(f);
 
-    let metadata = fs::metadata(filename).map_err(|err| stringify1(err, &filename))?;
+    let metadata = fs::metadata(pathname).map_err(|err| stringify1(err, &pathname))?;
     let sz = metadata.len();
     let blk_size = sz / nsplits;
     //let blk_size = 50;
@@ -67,16 +67,16 @@ pub fn compute_partitions(filename: &str, nsplits: u64) -> Result<Vec<TextFilePa
         if end > sz {
             end = sz;
         } else {
-            reader.seek(SeekFrom::Start(end)).map_err(|err| stringify1(err, &filename))?;
+            reader.seek(SeekFrom::Start(end)).map_err(|err| stringify1(err, &pathname))?;
             line.clear();
-            reader.read_line(&mut line).map_err(|err| stringify1(err, &filename))?;
+            reader.read_line(&mut line).map_err(|err| stringify1(err, &pathname))?;
             end += line.len() as u64;
         }
         splits.push(TextFilePartition(begin, end));
         /*
         debug!(
             "File {}, partition-{} offsets = [{}, {})",
-            filename,
+            pathname,
             splits.len(),
             begin,
             end
@@ -91,14 +91,14 @@ pub fn compute_partitions(filename: &str, nsplits: u64) -> Result<Vec<TextFilePa
 #[test]
 fn test() {
     debug!("Hello, world!");
-    let filename = format!("{}/{}", DATADIR, "emp.csv").to_string();
+    let pathname = format!("{}/{}", DATADIR, "emp.csv").to_string();
 
-    let partitions = compute_partitions(&filename, 4).unwrap();
+    let partitions = compute_partitions(&pathname, 4).unwrap();
     for partition in partitions.iter() {
         debug!("split = {:?}", partition);
     }
 
-    let ptniter = CSVPartitionIter::new(&filename, &partitions[1]);
+    let ptniter = CSVPartitionIter::new(&pathname, &partitions[1]);
     for line in ptniter {
         debug!("line = {:?}", line);
     }
@@ -110,7 +110,7 @@ fn test() {
 /***************************************************************************************************/
 
 pub struct CSVDirIter {
-    filenames: Vec<std::path::PathBuf>,
+    pathnames: Vec<std::path::PathBuf>,
     cur_file_offset: usize,
     cur_read: u64,
     reader: Option<io::BufReader<File>>,
@@ -119,13 +119,13 @@ pub struct CSVDirIter {
 impl CSVDirIter {
     pub fn new(dirname: &String) -> Result<CSVDirIter, String> {
         dbg!(&dirname);
-        let filenames = fs::read_dir(dirname).map_err(|err| stringify1(err, dirname))?;
-        let mut filenames: Vec<_> = filenames.map(|res| res.map(|e| e.path())).collect::<Result<Vec<_>, io::Error>>().unwrap();
+        let pathnames = fs::read_dir(dirname).map_err(|err| stringify1(err, dirname))?;
+        let mut pathnames: Vec<_> = pathnames.map(|res| res.map(|e| e.path())).collect::<Result<Vec<_>, io::Error>>().unwrap();
 
-        filenames.sort();
+        pathnames.sort();
 
         Ok(CSVDirIter {
-            filenames,
+            pathnames,
             cur_file_offset: 0,
             cur_read: 0,
             reader: None,
@@ -139,13 +139,13 @@ impl Iterator for CSVDirIter {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if self.reader.is_none() {
-                if self.cur_file_offset >= self.filenames.len() {
+                if self.cur_file_offset >= self.pathnames.len() {
                     // Exhausted all files
                     return None;
                 } else {
                     // Open first/next file
-                    let filename = &self.filenames[self.cur_file_offset];
-                    let file = File::open(filename).unwrap();
+                    let pathname = &self.pathnames[self.cur_file_offset];
+                    let file = File::open(pathname).unwrap();
                     let mut reader = BufReader::new(file);
                     reader.seek(SeekFrom::Start(0)).unwrap();
                     self.reader = Some(reader);

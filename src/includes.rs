@@ -60,26 +60,26 @@ pub(crate) use fprint;
 
 pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {
     let dir = fs::read_dir(dirname).map_err(|err| stringify1(err, &dirname))?;
-    let mut filenames = vec![];
+    let mut pathnames = vec![];
     for entry in dir {
         let entry = entry.map_err(stringify)?;
         let path = entry.path();
         if !path.is_dir() {
             let pathstr = path.into_os_string().into_string().map_err(stringify)?;
-            filenames.push(pathstr)
+            pathnames.push(pathstr)
         }
     }
-    Ok(filenames)
+    Ok(pathnames)
 }
 
 use std::io::{self, BufRead};
 use std::fs::File;
 use std::path::Path;
 
-pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+pub fn read_lines<P>(pathname: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
 {
-    let file = File::open(filename)?;
+    let file = File::open(pathname)?;
     Ok(io::BufReader::new(file).lines())
 }

@@ -61,13 +61,13 @@ impl EnvOptions {
 pub struct Env {
     thread_pool: ThreadPool,
     metadata: Metadata,
-    input_filename: String,
+    input_pathname: String,
     output_dir: String,
     options: EnvOptions,
 }
 
 impl Env {
-    fn new(nthreads: usize, input_filename: String, output_dir: String) -> Self {
+    fn new(nthreads: usize, input_pathname: String, output_dir: String) -> Self {
         let thread_pool = task::ThreadPool::new(nthreads);
         let metadata = Metadata::new();
         let options = EnvOptions::new();
@@ -75,7 +75,7 @@ impl Env {
         Env {
             thread_pool,
             metadata,
-            input_filename,
+            input_pathname,
             output_dir,
             options,
         }
@@ -128,13 +128,13 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
 }
 
 fn run_job(env: &mut Env) -> Result<(), String> {
-    let filename = env.input_filename.as_str();
-    let contents = fs::read_to_string(filename).expect(&format!("Cannot open file: {}", &filename));
+    let pathname = env.input_pathname.as_str();
+    let contents = fs::read_to_string(pathname).expect(&format!("Cannot open file: {}", &pathname));
 
     let mut parser_state = ParserState::new();
 
-    let qgm_raw_filename = format!("{}/{}", env.output_dir, "qgm_raw.dot");
-    let qgm_resolved_filename = format!("{}/{}", env.output_dir, "qgm_resolved.dot");
+    let qgm_raw_pathname = format!("{}/{}", env.output_dir, "qgm_raw.dot");
+    let qgm_resolved_pathname = format!("{}/{}", env.output_dir, "qgm_resolved.dot");
 
     // Remove commented lines
     let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
@@ -150,9 +150,9 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 env.set_option(name, value)?;
             }
             AST::QGM(mut qgm) => {
-                qgm.write_qgm_to_graphviz(&qgm_raw_filename, false)?;
+                qgm.write_qgm_to_graphviz(&qgm_raw_pathname, false)?;
                 qgm.resolve(&env)?;
-                qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false)?;
+                qgm.write_qgm_to_graphviz(&qgm_resolved_pathname, false)?;
                 let flow = Flow::compile(env, &mut qgm).unwrap();
 
                 if !env.options.parse_only.unwrap_or(false) {
@@ -172,9 +172,9 @@ fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/csvdir.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/csvdir.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
-    let mut env = Env::new(1, input_filename, output_dir);
+    let mut env = Env::new(1, input_pathname, output_dir);
 
     let jobres = run_job(&mut env);
     if let Err(errstr) = jobres {
@@ -197,15 +197,15 @@ fn run_unit_tests() -> Result<(), String> {
     let mut ntotal = 0;
 
     for test in vec!["rst", "repartition", "groupby", "spja"] {
-        let input_filename = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
+        let input_pathname = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
         let output_dir = f!("/Users/adarshrp/Projects/flare/tests/output/{test}/");
 
-        println!("---------- Running subtest {}", input_filename);
+        println!("---------- Running subtest {}", input_pathname);
         std::fs::remove_dir_all(&output_dir).map_err(stringify)?;
         std::fs::create_dir_all(&output_dir).map_err(stringify)?;
 
         ntotal = ntotal + 1;
-        let mut env = Env::new(1, input_filename, output_dir.clone());
+        let mut env = Env::new(1, input_pathname, output_dir.clone());
 
         let jobres = run_job(&mut env);
         if let Err(errstr) = jobres {

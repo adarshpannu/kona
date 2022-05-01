@@ -187,7 +187,7 @@ pub enum NodeRuntime {
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CSVNode {
-    filename: String,
+    pathname: String,
     #[serde(skip)]
     colnames: Vec<String>,
     coltypes: Vec<DataType>,
@@ -204,10 +204,10 @@ impl CSVNode {
         let colnames = columns.iter().map(|col| col.name.clone()).collect();
         let coltypes = columns.iter().map(|col| col.datatype).collect();
 
-        let filename = tbldesc.filename();
-        let partitions = compute_partitions(filename, npartitions as u64).unwrap();
+        let pathname = tbldesc.pathname();
+        let partitions = compute_partitions(pathname, npartitions as u64).unwrap();
         let csvnode = NodeInner::CSVNode(CSVNode {
-            filename: filename.clone(),
+            pathname: pathname.clone(),
             colnames,
             coltypes,
             partitions,
@@ -222,13 +222,13 @@ impl CSVNode {
 
 impl CSVNode {
     fn desc(&self, supernode: &FlowNode) -> String {
-        let filename = self.filename.split("/").last().unwrap_or(&self.filename);
+        let pathname = self.pathname.split("/").last().unwrap_or(&self.pathname);
 
         format!(
             "CSVNode-#{} (p={})|{} {:?}",
             supernode.id(),
             supernode.npartitions(),
-            filename,
+            pathname,
             self.colnames
         )
         .replace("\"", "\\\"")
@@ -238,7 +238,7 @@ impl CSVNode {
         let partition_id = task.partition_id;
         let runtime = task.contexts.entry(supernode.id()).or_insert_with(|| {
             let partition = &self.partitions[partition_id];
-            let mut iter = CSVPartitionIter::new(&self.filename, partition);
+            let mut iter = CSVPartitionIter::new(&self.pathname, partition);
             if partition_id == 0 {
                 iter.next(); // Consume the header row
             }
@@ -553,13 +553,13 @@ fn write_partition(flow: &Flow, stage: &Stage, task: &Task, key: &Row, value: Op
         "{}/flow-{}/stage-{}/consumer-{}",
         TEMPDIR, flow.id, stage.head_node_id, dest_partition
     );
-    let filename = format!("{}/producer-{}.csv", dirname, task.partition_id);
+    let pathname = format!("{}/producer-{}.csv", dirname, task.partition_id);
     std::fs::create_dir_all(dirname);
 
     if value.is_some() {
-        debug!("Write to {}: {},{}", filename, key, value.unwrap())
+        debug!("Write to {}: {},{}", pathname, key, value.unwrap())
     } else {
-        debug!("Write to {}: {}", filename, key)
+        debug!("Write to {}: {}", pathname, key)
     }
 
     let mut file = std::fs::OpenOptions::new()
@@ -567,7 +567,7 @@ fn write_partition(flow: &Flow, stage: &Stage, task: &Task, key: &Row, value: Op
         .write(true)
         .append(true)
         .create(true)
-        .open(filename)
+        .open(pathname)
         .unwrap();
 
     file.write(format!("{}", key).as_bytes());
@@ -605,13 +605,13 @@ impl CSVDirNode {
 
 impl CSVDirNode {
     fn desc(&self, supernode: &FlowNode) -> String {
-        let filename = self.dirname_prefix.split("/").last().unwrap_or(&self.dirname_prefix);
+        let pathname = self.dirname_prefix.split("/").last().unwrap_or(&self.dirname_prefix);
 
         format!(
             "CSVDirNode-#{} (p={})|{} {:?}",
             supernode.id(),
             supernode.npartitions(),
-            filename,
+            pathname,
             self.colnames
         )
         .replace("\"", "\\\"")

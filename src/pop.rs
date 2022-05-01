@@ -31,15 +31,15 @@ impl Stage {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
     pub predicates: Option<Vec<PCode>>,
-    pub emit_exprs: Option<Vec<PCode>>,
+    pub emitcols: Option<Vec<PCode>>,
     pub npartitions: usize,
 }
 
 impl POPProps {
-    pub fn new(predicates: Option<Vec<PCode>>, emit_exprs: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
+    pub fn new(predicates: Option<Vec<PCode>>, emitcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
         POPProps {
             predicates,
-            emit_exprs,
+            emitcols,
             npartitions,
         }
     }
@@ -86,7 +86,7 @@ impl POPKey {
             if got_row {
                 let row_passed = Self::eval_predicates(props, &task.task_row);
                 if row_passed {
-                    Self::eval_emit_exprs(props, &task.task_row);
+                    Self::eval_emitcols(props, &task.task_row);
                 }
                 return Ok(true);
             } else {
@@ -112,9 +112,9 @@ impl POPKey {
         return true;
     }
 
-    pub fn eval_emit_exprs(props: &POPProps, registers: &Row) {
-        if let Some(emit_exprs) = props.emit_exprs.as_ref() {
-            let emit_output = emit_exprs
+    pub fn eval_emitcols(props: &POPProps, registers: &Row) {
+        if let Some(emitcols) = props.emitcols.as_ref() {
+            let emit_output = emitcols
                 .iter()
                 .map(|emit| {
                     let result = emit.eval(&registers);
@@ -130,7 +130,7 @@ impl POPKey {
 
 #[derive(Serialize, Deserialize)]
 pub struct CSV {
-    filename: String,
+    pathname: String,
     coltypes: Vec<DataType>,
     header: bool,
     separator: char,
@@ -139,11 +139,11 @@ pub struct CSV {
 }
 
 impl CSV {
-    fn new(filename: String, coltypes: Vec<DataType>, header: bool, separator: char, npartitions: usize, input_map: HashMap<ColId, RegisterId>) -> CSV {
-        let partitions = compute_partitions(&filename, npartitions as u64).unwrap();
+    fn new(pathname: String, coltypes: Vec<DataType>, header: bool, separator: char, npartitions: usize, input_map: HashMap<ColId, RegisterId>) -> CSV {
+        let partitions = compute_partitions(&pathname, npartitions as u64).unwrap();
 
         CSV {
-            filename,
+            pathname,
             coltypes,
             header,
             separator,
@@ -156,7 +156,7 @@ impl CSV {
         let partition_id = task.partition_id;
         let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
             let partition = &self.partitions[partition_id];
-            let mut iter = CSVPartitionIter::new(&self.filename, partition).unwrap();
+            let mut iter = CSVPartitionIter::new(&self.pathname, partition).unwrap();
             if partition_id == 0 {
                 iter.next(); // Consume the header row (fix: check if header exists though)
             }
@@ -197,9 +197,9 @@ impl CSV {
 
 impl fmt::Debug for CSV {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let filename = self.filename.split("/").last().unwrap();
-        //fmt.debug_struct("").field("file", &filename).field("input_map", &self.input_map).finish()
-        fmt.debug_struct("").field("file", &filename).finish()
+        let pathname = self.pathname.split("/").last().unwrap();
+        //fmt.debug_struct("").field("file", &pathname).field("input_map", &self.input_map).finish()
+        fmt.debug_struct("").field("file", &pathname).finish()
     }
 }
 
@@ -218,7 +218,7 @@ pub struct CSVDir {
 impl fmt::Debug for CSVDir {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let dirname = self.dirname_prefix.split("/").last().unwrap();
-        //fmt.debug_struct("").field("file", &filename).field("input_map", &self.input_map).finish()
+        //fmt.debug_struct("").field("file", &pathname).field("input_map", &self.input_map).finish()
         fmt.debug_struct("").field("dir", &dirname).finish()
     }
 }
@@ -297,8 +297,8 @@ impl Flow {
 
         debug!("Root stage {:?}", root_stage);
 
-        let plan_filename = format!("{}/{}", env.output_dir, "pop.dot");
-        QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_filename)?;
+        let plan_pathname = format!("{}/{}", env.output_dir, "pop.dot");
+        QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_pathname)?;
 
         let flow = Flow { pop_graph, root_pop_key };
         return Ok(flow);
@@ -355,10 +355,10 @@ impl Flow {
         let predicates = None;
         assert!(lopprops.preds.len() == 0);
 
-        // Compile cols or emit_exprs. We will have one or the other
-        let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut child_stage.register_allocator);
+        // Compile cols or emitcols. We will have one or the other
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut child_stage.register_allocator);
 
-        let output_map: Option<Vec<RegisterId>> = if emit_exprs.is_none() {
+        let output_map: Option<Vec<RegisterId>> = if emitcols.is_none() {
             let output_map = lopprops
                 .cols
                 .elements()
@@ -373,7 +373,7 @@ impl Flow {
             None
         };
 
-        let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
         let pop_key = pop_graph.add_node_with_props(POP::Repartition { output_map }, props, Some(pop_children));
 
@@ -389,11 +389,11 @@ impl Flow {
         //debug!("Compile predicate for lopkey: {:?}", lop_key);
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
 
-        // Compile emit_exprs
+        // Compile emitcols
         //debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut stage.register_allocator);
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut stage.register_allocator);
 
-        let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
         let pop_key = pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children));
 
@@ -409,11 +409,11 @@ impl Flow {
         debug!("Compile predicate for lopkey: {:?}", lop_key);
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
 
-        // Compile emit_exprs
+        // Compile emitcols
         debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut stage.register_allocator);
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut stage.register_allocator);
 
-        let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
         let pop_key = pop_graph.add_node_with_props(POP::Aggregation, props, Some(pop_children));
 
@@ -473,11 +473,11 @@ impl Flow {
             }
         };
 
-        // Compile emit_exprs
+        // Compile emitcols
         //debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut stage.register_allocator);
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut stage.register_allocator);
 
-        let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
         let pop_key = pop_graph.add_node_with_props(pop, props, None);
         Ok(pop_key)
@@ -497,10 +497,10 @@ impl Flow {
         }
     }
 
-    pub fn compile_emit_exprs(qgm: &QGM, emit_exprs: Option<&Vec<EmitExpr>>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
-        if let Some(emit_exprs) = emit_exprs {
+    pub fn compile_emitcols(qgm: &QGM, emitcols: Option<&Vec<EmitCol>>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
+        if let Some(emitcols) = emitcols {
             let pcode = PCode::new();
-            let pcodevec = emit_exprs
+            let pcodevec = emitcols
                 .iter()
                 .map(|ne| {
                     let mut pcode = PCode::new();
@@ -516,8 +516,8 @@ impl Flow {
 }
 
 impl QGM {
-    pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> Result<(), String> {
-        let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
+    pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, pathname: &str) -> Result<(), String> {
+        let mut file = std::fs::File::create(pathname).map_err(|err| f!("{:?}: {}", err, pathname))?;
 
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
@@ -531,14 +531,14 @@ impl QGM {
 
         drop(file);
 
-        let ofilename = format!("{}.jpg", filename);
-        let oflag = format!("-o{}.jpg", filename);
+        let opathname = format!("{}.jpg", pathname);
+        let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
         let _cmd = Command::new("dot")
             .arg("-Tjpg")
             .arg(oflag)
-            .arg(filename)
+            .arg(pathname)
             .status()
             .expect("failed to execute process");
 
@@ -559,10 +559,10 @@ impl QGM {
 
         let (label, extrastr) = match &pop {
             POP::CSV(csv) => {
-                let filename = csv.filename.split("/").last().unwrap_or(&csv.filename);
+                let pathname = csv.pathname.split("/").last().unwrap_or(&csv.pathname);
                 let mut input_map = csv.input_map.iter().collect::<Vec<_>>();
                 input_map.sort_by(|a, b| a.cmp(b));
-                let extrastr = format!("file: {}, map: {:?}", filename, input_map).replace("{", "(").replace("}", ")");
+                let extrastr = format!("file: {}, map: {:?}", pathname, input_map).replace("{", "(").replace("}", ")");
                 (String::from("CSV"), extrastr)
             }
             POP::CSVDir(csvdir) => {

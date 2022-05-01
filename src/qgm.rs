@@ -356,8 +356,8 @@ impl QGM {
         qblock
     }
 
-    pub fn write_qgm_to_graphviz(&self, filename: &str, open_jpg: bool) -> Result<(), String> {
-        let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
+    pub fn write_qgm_to_graphviz(&self, pathname: &str, open_jpg: bool) -> Result<(), String> {
+        let mut file = std::fs::File::create(pathname).map_err(|err| f!("{:?}: {}", err, pathname))?;
 
         fprint!(file, "digraph example1 {{\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
@@ -382,19 +382,19 @@ impl QGM {
 
         drop(file);
 
-        let ofilename = format!("{}.jpg", filename);
-        let oflag = format!("-o{}.jpg", filename);
+        let opathname = format!("{}.jpg", pathname);
+        let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
         let _cmd = Command::new("dot")
             .arg("-Tjpg")
             .arg(oflag)
-            .arg(filename)
+            .arg(pathname)
             .status()
             .expect("failed to execute process");
 
         if open_jpg {
-            let _cmd = Command::new("open").arg(ofilename).status().expect("failed to execute process");
+            let _cmd = Command::new("open").arg(opathname).status().expect("failed to execute process");
         }
         Ok(())
     }

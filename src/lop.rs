@@ -50,7 +50,7 @@ pub enum LOP {
 
 /***************************************************************************************************/
 #[derive(Debug, Clone)]
-pub struct EmitExpr {
+pub struct EmitCol {
     pub quncol: QunCol,
     pub expr_key: ExprKey,
 }
@@ -61,17 +61,17 @@ pub struct LOPProps {
     pub cols: Bitset<QunCol>,
     pub preds: Bitset<ExprKey>,
     pub partdesc: PartDesc,
-    pub emit_exprs: Option<Vec<EmitExpr>>,
+    pub emitcols: Option<Vec<EmitCol>>,
 }
 
 impl LOPProps {
-    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, emit_exprs: Option<Vec<EmitExpr>>) -> Self {
+    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, emitcols: Option<Vec<EmitCol>>) -> Self {
         LOPProps {
             quns,
             cols,
             preds,
             partdesc,
-            emit_exprs,
+            emitcols,
         }
     }
 }
@@ -191,8 +191,8 @@ impl QGM {
 
         let lop_key = self.build_qblock_logical_plan(env, 0, self.main_qblock_key, &aps_context, &mut lop_graph, None);
         if let Ok(lop_key) = lop_key {
-            let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
-            self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
+            let plan_pathname = format!("{}/{}", env.output_dir, "lop.dot");
+            self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_pathname)?;
             Ok((lop_graph, lop_key))
         } else {
             Err("Something bad happened lol".to_string())
@@ -485,14 +485,14 @@ impl QGM {
                             cols: lhs_props.cols.clone(),
                             preds: lhs_props.preds.clone_n_clear(),
                             partdesc,
-                            emit_exprs: None,
+                            emitcols: None,
                         });
                         let rhs_repart_props = rhs_partdesc.map(|partdesc| LOPProps {
                             quns: rhs_props.quns.clone(),
                             cols: rhs_props.cols.clone(),
                             preds: rhs_props.preds.clone_n_clear(),
                             partdesc,
-                            emit_exprs: None,
+                            emitcols: None,
                         });
 
                         //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
@@ -558,7 +558,7 @@ impl QGM {
                         cols: props.cols.clone(),
                         preds: props.preds.clone_n_clear(),
                         partdesc,
-                        emit_exprs: None,
+                        emitcols: None,
                     };
                     root_lop_key = lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![root_lop_key]));
                 }
@@ -571,20 +571,20 @@ impl QGM {
             props.preds = props.preds.clear();
 
             // Add emitter
-            let emit_exprs = qblock.select_list.clone();
-            let root_lop_key = lop_graph.add_node_with_props(LOP::Emit { emit_exprs }, props, Some(vec![root_lop_key]));
+            let emitcols = qblock.select_list.clone();
+            let root_lop_key = lop_graph.add_node_with_props(LOP::Emit { emitcols }, props, Some(vec![root_lop_key]));
             */
             let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
-            let emit_exprs = qblock
+            let emitcols = qblock
                 .select_list
                 .iter()
                 .enumerate()
-                .map(|(ix, ne)| EmitExpr {
+                .map(|(ix, ne)| EmitCol {
                     quncol: QunCol(parent_qun_id, ix),
                     expr_key: ne.expr_key,
                 })
                 .collect::<Vec<_>>();
-            props.emit_exprs = Some(emit_exprs);
+            props.emitcols = Some(emitcols);
 
             info!("Created logical plan for qblock id: {}", qblock.id);
 
@@ -675,8 +675,8 @@ impl QGM {
         (lhs_partdesc, rhs_partdesc, 4)
     }
 
-    pub fn write_logical_plan_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, filename: &str) -> Result<(), String> {
-        let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
+    pub fn write_logical_plan_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pathname: &str) -> Result<(), String> {
+        let mut file = std::fs::File::create(pathname).map_err(|err| f!("{:?}: {}", err, pathname))?;
 
         fprint!(file, "digraph example1 {{\n");
         fprint!(file, "    node [shape=record];\n");
@@ -690,13 +690,13 @@ impl QGM {
 
         drop(file);
 
-        let oflag = format!("-o{}.jpg", filename);
+        let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
         let _cmd = Command::new("dot")
             .arg("-Tjpg")
             .arg(oflag)
-            .arg(filename)
+            .arg(pathname)
             .status()
             .expect("failed to execute process");
 
@@ -714,9 +714,9 @@ impl QGM {
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let colstring = if let Some(emit_exprs) = props.emit_exprs.as_ref() {
-            let emit_exprs = emit_exprs.iter().map(|e| e.expr_key).collect::<Vec<_>>();
-            printable_preds(&emit_exprs, self, true)
+        let colstring = if let Some(emitcols) = props.emitcols.as_ref() {
+            let emitcols = emitcols.iter().map(|e| e.expr_key).collect::<Vec<_>>();
+            printable_preds(&emitcols, self, true)
         } else {
             props.cols.printable(self)
         };
