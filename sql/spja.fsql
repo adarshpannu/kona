@@ -7,6 +7,7 @@ DESCRIBE TABLE dept;
 DESCRIBE TABLE dept_details;
 
 set PARALLEL_DEGREE = 5;
+set PARSE_ONLY = "true";
 
 select sum(E.age + 50)*99 / count(E.age + 50), avg(distinct E.age), D.dept_id
 from emp E, dept D, dept_details DD

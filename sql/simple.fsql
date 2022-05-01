@@ -1,8 +1,8 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv");
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 4);
 
 DESCRIBE TABLE emp;
 
-SELECT name, age from emp
-where dept_id = 4
+SELECT name, age, emp_dept_id*100 from emp
+where emp_dept_id = 4
 ;
 

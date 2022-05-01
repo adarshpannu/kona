@@ -1,14 +1,13 @@
 // LOP: Physical operators
-#![allow(warnings)]
+#![allow(unused_variables)]
 
-use std::cell::RefCell;
 use std::fmt;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 use std::rc::Rc;
 
-pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, pcode::*, pcode::*, qgm::*, row::*, task::*};
+pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, task::*};
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
@@ -31,13 +30,13 @@ impl Stage {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
-    pub predicates: Option<PCode>,
+    pub predicates: Option<Vec<PCode>>,
     pub emit_exprs: Option<Vec<PCode>>,
     pub npartitions: usize,
 }
 
 impl POPProps {
-    pub fn new(predicates: Option<PCode>, emit_exprs: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
+    pub fn new(predicates: Option<Vec<PCode>>, emit_exprs: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
         POPProps {
             predicates,
             emit_exprs,
@@ -60,55 +59,60 @@ impl POPKey {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum POP {
     CSV(CSV),
+    CSVDir(CSVDir),
     HashJoin,
-    Repartition,
-    RepartitionRead,
+    Repartition { output_map: Option<Vec<RegisterId>> },
     Aggregation,
 }
 
 impl POP {
     pub fn is_stage_root(&self) -> bool {
-        matches!(self, POP::Repartition)
+        matches!(self, POP::Repartition { .. })
     }
 }
 
 impl POPKey {
-    pub fn next(&self, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> bool {
+    pub fn next(&self, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         let (pop, props, ..) = flow.pop_graph.get3(*self);
 
         loop {
             let got_row = match pop {
-                POP::CSV(inner_node) => inner_node.next(*self, flow, stage, task, is_head),
+                POP::CSV(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
+                POP::CSVDir(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
                 _ => unimplemented!(),
             };
 
             // Run predicates and emits, if any
             if got_row {
-                let row_passed = Self::eval_predicates(pop, props, &task.task_row);
+                let row_passed = Self::eval_predicates(props, &task.task_row);
                 if row_passed {
-                    Self::eval_emit_exprs(pop, props, &task.task_row);
+                    Self::eval_emit_exprs(props, &task.task_row);
                 }
-                return true;
+                return Ok(true);
             } else {
                 // No more rows to drain
-                return false;
+                return Ok(false);
             }
         }
     }
 
-    pub fn eval_predicates(pop: &POP, props: &POPProps, registers: &Row) -> bool {
+    pub fn eval_predicates(props: &POPProps, registers: &Row) -> bool {
         if let Some(preds) = props.predicates.as_ref() {
-            let result = preds.eval(&registers);
-            if let Datum::BOOL(b) = result {
-                return b;
-            } else {
-                panic!("No bool?")
+            for pred in preds.iter() {
+                let result = pred.eval(&registers);
+                if let Datum::BOOL(b) = result {
+                    if !b {
+                        return false; // short circuit
+                    }
+                } else {
+                    panic!("No bool?")
+                }
             }
         }
         return true;
     }
 
-    pub fn eval_emit_exprs(pop: &POP, props: &POPProps, registers: &Row) {
+    pub fn eval_emit_exprs(props: &POPProps, registers: &Row) {
         if let Some(emit_exprs) = props.emit_exprs.as_ref() {
             let emit_output = emit_exprs
                 .iter()
@@ -124,23 +128,14 @@ impl POPKey {
 
 /***************************************************************************************************/
 
-struct CSVContext {
-    iter: CSVPartitionIter,
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct CSV {
     filename: String,
-    #[serde(skip)]
     coltypes: Vec<DataType>,
-
     header: bool,
     separator: char,
     partitions: Vec<TextFilePartition>,
     input_map: HashMap<ColId, RegisterId>,
-
-    #[serde(skip)]
-    ctx: RefCell<Option<CSVContext>>,
 }
 
 impl CSV {
@@ -154,15 +149,14 @@ impl CSV {
             separator,
             partitions,
             input_map,
-            ctx: RefCell::new(None),
         }
     }
 
-    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> bool {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         let partition_id = task.partition_id;
         let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
             let partition = &self.partitions[partition_id];
-            let mut iter = CSVPartitionIter::new(&self.filename, partition);
+            let mut iter = CSVPartitionIter::new(&self.filename, partition).unwrap();
             if partition_id == 0 {
                 iter.next(); // Consume the header row (fix: check if header exists though)
             }
@@ -172,12 +166,11 @@ impl CSV {
         if let NodeRuntime::CSV { iter } = runtime {
             if let Some(line) = iter.next() {
                 // debug!("line = :{}:", &line.trim_end());
-                let cols = line
-                    .trim_end()
+                line.trim_end()
                     .split(self.separator)
                     .enumerate()
                     .filter(|(ix, col)| self.input_map.get(ix).is_some())
-                    .map(|(ix, col)| {
+                    .for_each(|(ix, col)| {
                         let ttuple_ix = *self.input_map.get(&ix).unwrap();
                         let datum = match self.coltypes[ix] {
                             DataType::INT => {
@@ -192,13 +185,10 @@ impl CSV {
                             _ => todo!(),
                         };
                         task.task_row.set_column(ttuple_ix, &datum);
-                        datum
-                    })
-                    .collect::<Vec<Datum>>();
-
-                return true;
+                    });
+                return Ok(true);
             } else {
-                return false;
+                return Ok(false);
             }
         }
         panic!("Cannot get NodeRuntime::CSV")
@@ -210,6 +200,78 @@ impl fmt::Debug for CSV {
         let filename = self.filename.split("/").last().unwrap();
         //fmt.debug_struct("").field("file", &filename).field("input_map", &self.input_map).finish()
         fmt.debug_struct("").field("file", &filename).finish()
+    }
+}
+
+/***************************************************************************************************/
+
+#[derive(Serialize, Deserialize)]
+pub struct CSVDir {
+    dirname_prefix: String, // E.g.: $TEMPDIR/flow-99/stage  i.e. everything except the "-{partition#}"
+    coltypes: Vec<DataType>,
+    header: bool,
+    separator: char,
+    npartitions: usize,
+    input_map: HashMap<ColId, RegisterId>,
+}
+
+impl fmt::Debug for CSVDir {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let dirname = self.dirname_prefix.split("/").last().unwrap();
+        //fmt.debug_struct("").field("file", &filename).field("input_map", &self.input_map).finish()
+        fmt.debug_struct("").field("dir", &dirname).finish()
+    }
+}
+
+impl CSVDir {
+    fn new(dirname_prefix: String, coltypes: Vec<DataType>, header: bool, separator: char, npartitions: usize, input_map: HashMap<ColId, RegisterId>) -> Self {
+        CSVDir {
+            dirname_prefix,
+            coltypes,
+            header,
+            separator,
+            npartitions,
+            input_map,
+        }
+    }
+
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+        let partition_id = task.partition_id;
+        let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
+            let full_dirname = format!("{}-{}", self.dirname_prefix, partition_id);
+            let iter = CSVDirIter::new(&full_dirname).unwrap();
+            NodeRuntime::CSVDir { iter }
+        });
+
+        if let NodeRuntime::CSVDir { iter } = runtime {
+            if let Some(line) = iter.next() {
+                // debug!("line = :{}:", &line.trim_end());
+                line.trim_end()
+                    .split(self.separator)
+                    .enumerate()
+                    .filter(|(ix, col)| self.input_map.get(ix).is_some())
+                    .for_each(|(ix, col)| {
+                        let ttuple_ix = *self.input_map.get(&ix).unwrap();
+                        let datum = match self.coltypes[ix] {
+                            DataType::INT => {
+                                let ival = col.parse::<isize>();
+                                if ival.is_err() {
+                                    panic!("{} is not an INT", &col);
+                                } else {
+                                    Datum::INT(ival.unwrap())
+                                }
+                            }
+                            DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                            _ => todo!(),
+                        };
+                        task.task_row.set_column(ttuple_ix, &datum);
+                    });
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        }
+        panic!("Cannot get NodeRuntime::CSV")
     }
 }
 
@@ -245,32 +307,35 @@ impl Flow {
     pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage: &mut Stage) -> Result<POPKey, String> {
         let (lop, lopprops, lop_children) = lop_graph.get3(lop_key);
 
-        let mut new_stage;
-        let mut stage = if matches!(lop, LOP::Repartition { .. }) {
-            new_stage = Stage::new(lop_key);
-            &mut new_stage
+        let child_stage;
+        let mut child_stage = if matches!(lop, LOP::Repartition { .. }) {
+            child_stage = Stage::new(lop_key);
+            Some(child_stage)
         } else {
-            &mut *stage
+            None
         };
 
         // Compile children first
         let mut pop_children = vec![];
         if let Some(lop_children) = lop_children {
             for lop_child_key in lop_children {
-                let pop_key = Self::compile_lop(qgm, lop_graph, *lop_child_key, pop_graph, stage)?;
+                let pop_key = Self::compile_lop(qgm, lop_graph, *lop_child_key, pop_graph, child_stage.as_mut().unwrap_or(stage))?;
                 pop_children.push(pop_key);
             }
+        }
+
+        if let Some(child_stage) = child_stage.as_ref() {
+            debug!("Stage {:?}", child_stage);
         }
 
         let npartitions = lopprops.partdesc.npartitions;
 
         let pop_key = match lop {
             LOP::TableScan { input_cols } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph, stage)?,
-            LOP::HashJoin { equi_join_preds } => {
-                let props = POPProps::new(None, None, npartitions);
-                pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children))
+            LOP::HashJoin { equi_join_preds } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children, stage)?,
+            LOP::Repartition { cpartitions } => {
+                Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children, stage, child_stage.as_mut().unwrap())?
             }
-            LOP::Repartition { cpartitions } => Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children, stage)?,
             LOP::Aggregation { .. } => {
                 let props = POPProps::new(None, None, npartitions);
                 pop_graph.add_node_with_props(POP::Aggregation, props, Some(pop_children))
@@ -281,21 +346,56 @@ impl Flow {
     }
 
     pub fn compile_repartition(
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage: &mut Stage, child_stage: &mut Stage,
+    ) -> Result<POPKey, String> {
+        // Repartition split into Repartition + CSVDirScan
+        let (lop, lopprops, ..) = lop_graph.get3(lop_key);
+
+        // We shouldn't have any predicates
+        let predicates = None;
+        assert!(lopprops.preds.len() == 0);
+
+        // Compile cols or emit_exprs. We will have one or the other
+        let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut child_stage.register_allocator);
+
+        let output_map: Option<Vec<RegisterId>> = if emit_exprs.is_none() {
+            let output_map = lopprops
+                .cols
+                .elements()
+                .iter()
+                .map(|&quncol| {
+                    let regid = stage.register_allocator.get_id(quncol);
+                    regid
+                })
+                .collect();
+            Some(output_map)
+        } else {
+            None
+        };
+
+        let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
+
+        let pop_key = pop_graph.add_node_with_props(POP::Repartition { output_map }, props, Some(pop_children));
+
+        Ok(pop_key)
+    }
+
+    pub fn compile_join(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage: &mut Stage,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
 
         // Compile predicates
-        debug!("Compile predicate for lopkey: {:?}", lop_key);
+        //debug!("Compile predicate for lopkey: {:?}", lop_key);
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
 
         // Compile emit_exprs
-        debug!("Compile emits for lopkey: {:?}", lop_key);
+        //debug!("Compile emits for lopkey: {:?}", lop_key);
         let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut stage.register_allocator);
 
         let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
 
-        let pop_key = pop_graph.add_node_with_props(POP::Repartition, props, Some(pop_children));
+        let pop_key = pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children));
 
         Ok(pop_key)
     }
@@ -344,47 +444,62 @@ impl Flow {
         };
 
         // Compile predicates
-        debug!("Compile predicate for lopkey: {:?}", lop_key);
+        //debug!("Compile predicate for lopkey: {:?}", lop_key);
 
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
 
-        let pop = CSV::new(
-            tbldesc.filename().clone(),
-            coltypes,
-            tbldesc.header(),
-            tbldesc.separator(),
-            lopprops.partdesc.npartitions,
-            input_map,
-        );
+        let pop = match tbldesc.get_type() {
+            TableType::CSV => {
+                let inner = CSV::new(
+                    tbldesc.pathname().clone(),
+                    coltypes,
+                    tbldesc.header(),
+                    tbldesc.separator(),
+                    lopprops.partdesc.npartitions,
+                    input_map,
+                );
+                POP::CSV(inner)
+            }
+            TableType::CSVDIR => {
+                let inner = CSVDir::new(
+                    tbldesc.pathname().clone(),
+                    coltypes,
+                    tbldesc.header(),
+                    tbldesc.separator(),
+                    lopprops.partdesc.npartitions,
+                    input_map,
+                );
+                POP::CSVDir(inner)
+            }
+        };
 
         // Compile emit_exprs
-        debug!("Compile emits for lopkey: {:?}", lop_key);
+        //debug!("Compile emits for lopkey: {:?}", lop_key);
         let emit_exprs = Self::compile_emit_exprs(qgm, lopprops.emit_exprs.as_ref(), &mut stage.register_allocator);
 
         let props = POPProps::new(predicates, emit_exprs, lopprops.partdesc.npartitions);
 
-        let pop_key = pop_graph.add_node_with_props(POP::CSV(pop), props, None);
+        let pop_key = pop_graph.add_node_with_props(pop, props, None);
         Ok(pop_key)
     }
 
-    pub fn compile_predicates(qgm: &QGM, preds: &Bitset<ExprKey>, register_allocator: &mut RegisterAllocator) -> Option<PCode> {
+    pub fn compile_predicates(qgm: &QGM, preds: &Bitset<ExprKey>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
+        let mut pcodevec = vec![];
         if preds.len() > 0 {
-            let mut pcode = PCode::new();
-            for (ix, pred_key) in preds.elements().iter().enumerate() {
+            for pred_key in preds.elements().iter() {
+                let mut pcode = PCode::new();
                 pred_key.compile(&qgm.expr_graph, &mut pcode, register_allocator);
-                if ix > 0 {
-                    pcode.push(PInstruction::ControlOp(ControlOp::ReturnIfFalse));
-                }
+                pcodevec.push(pcode);
             }
-            Some(pcode)
+            Some(pcodevec)
         } else {
             None
         }
     }
 
-    pub fn compile_emit_exprs(qgm: &QGM, emit_exprs: Option<&Vec<NamedExpr>>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
+    pub fn compile_emit_exprs(qgm: &QGM, emit_exprs: Option<&Vec<EmitExpr>>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
         if let Some(emit_exprs) = emit_exprs {
-            let mut pcode = PCode::new();
+            let pcode = PCode::new();
             let pcodevec = emit_exprs
                 .iter()
                 .map(|ne| {
@@ -400,7 +515,6 @@ impl Flow {
     }
 }
 
-#[macro_use]
 impl QGM {
     pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, filename: &str) -> Result<(), String> {
         let mut file = std::fs::File::create(filename).map_err(|err| f!("{:?}: {}", err, filename))?;
@@ -442,17 +556,44 @@ impl QGM {
                 self.write_pop_to_graphviz(pop_graph, child_key, file)?;
             }
         }
-        let label = format!("{:?}", &pop);
+
+        let (label, extrastr) = match &pop {
+            POP::CSV(csv) => {
+                let filename = csv.filename.split("/").last().unwrap_or(&csv.filename);
+                let mut input_map = csv.input_map.iter().collect::<Vec<_>>();
+                input_map.sort_by(|a, b| a.cmp(b));
+                let extrastr = format!("file: {}, map: {:?}", filename, input_map).replace("{", "(").replace("}", ")");
+                (String::from("CSV"), extrastr)
+            }
+            POP::CSVDir(csvdir) => {
+                let dirname = csvdir.dirname_prefix.split("/").last().unwrap_or(&csvdir.dirname_prefix);
+                let mut input_map = csvdir.input_map.iter().collect::<Vec<_>>();
+                input_map.sort_by(|a, b| a.cmp(b));
+                let extrastr = format!("file: {}, map: {:?}", dirname, input_map).replace("{", "(").replace("}", ")");
+                (String::from("CSVDir"), extrastr)
+            }
+            POP::HashJoin { .. } => {
+                let extrastr = format!("");
+                (String::from("HashJoin"), extrastr)
+            }
+            POP::Repartition { output_map } => {
+                let extrastr = format!("output_map = {:?}", output_map);
+                (String::from("Repartition"), extrastr)
+            }
+            POP::Aggregation => {
+                let extrastr = format!("");
+                (String::from("Aggregation"), extrastr)
+            }
+        };
+
         let label = label.replace("\"", "").replace("{", "").replace("}", "");
-        fprint!(file, "    popkey{}[label=\"{}\"];\n", id, label);
+        fprint!(file, "    popkey{}[label=\"{}|p = {}|{}\"];\n", id, label, props.npartitions, extrastr);
 
         Ok(())
     }
 }
 
 use std::collections::HashMap;
-
-type RegisterId = usize;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterAllocator {

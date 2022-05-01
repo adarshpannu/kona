@@ -50,16 +50,22 @@ pub enum LOP {
 
 /***************************************************************************************************/
 #[derive(Debug, Clone)]
+pub struct EmitExpr {
+    pub quncol: QunCol,
+    pub expr_key: ExprKey,
+}
+
+#[derive(Debug, Clone)]
 pub struct LOPProps {
     pub quns: Bitset<QunId>,
     pub cols: Bitset<QunCol>,
     pub preds: Bitset<ExprKey>,
     pub partdesc: PartDesc,
-    pub emit_exprs: Option<Vec<NamedExpr>>,
+    pub emit_exprs: Option<Vec<EmitExpr>>,
 }
 
 impl LOPProps {
-    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, emit_exprs: Option<Vec<NamedExpr>>) -> Self {
+    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, emit_exprs: Option<Vec<EmitExpr>>) -> Self {
         LOPProps {
             quns,
             cols,
@@ -183,7 +189,7 @@ impl QGM {
         let aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
-        let lop_key = self.build_qblock_logical_plan(env, self.main_qblock_key, &aps_context, &mut lop_graph, None);
+        let lop_key = self.build_qblock_logical_plan(env, 0, self.main_qblock_key, &aps_context, &mut lop_graph, None);
         if let Ok(lop_key) = lop_key {
             let plan_filename = format!("{}/{}", env.output_dir, "lop.dot");
             self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_filename)?;
@@ -345,7 +351,7 @@ impl QGM {
                     debug!("expected: {:?}", e.printable(&self.expr_graph, false))
                 }
 
-                let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
+                let child_lop_key = self.build_qblock_logical_plan(env, qun.id, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
 
                 let children = Some(vec![child_lop_key]);
 
@@ -371,7 +377,8 @@ impl QGM {
     }
 
     pub fn build_qblock_logical_plan(
-        self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph, expected_partitioning: Option<Vec<ExprKey>>,
+        self: &QGM, env: &Env, parent_qun_id: QunId, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph,
+        expected_partitioning: Option<Vec<ExprKey>>,
     ) -> Result<LOPKey, String> {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
@@ -568,7 +575,15 @@ impl QGM {
             let root_lop_key = lop_graph.add_node_with_props(LOP::Emit { emit_exprs }, props, Some(vec![root_lop_key]));
             */
             let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
-            let emit_exprs = qblock.select_list.clone();
+            let emit_exprs = qblock
+                .select_list
+                .iter()
+                .enumerate()
+                .map(|(ix, ne)| EmitExpr {
+                    quncol: QunCol(parent_qun_id, ix),
+                    expr_key: ne.expr_key,
+                })
+                .collect::<Vec<_>>();
             props.emit_exprs = Some(emit_exprs);
 
             info!("Created logical plan for qblock id: {}", qblock.id);

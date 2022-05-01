@@ -153,10 +153,10 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_raw_filename, false)?;
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_filename, false)?;
+                let flow = Flow::compile(env, &mut qgm).unwrap();
 
                 if !env.options.parse_only.unwrap_or(false) {
-                    let _flow = Flow::compile(env, &mut qgm).unwrap();
-                    //run_flow(env, &flow)?;
+                    run_flow(env, &flow)?;
                 }
             }
         }
@@ -172,13 +172,13 @@ fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_filename = "/Users/adarshrp/Projects/flare/sql/join.fsql".to_string();
+    let input_filename = "/Users/adarshrp/Projects/flare/sql/csvdir.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_filename, output_dir);
 
     let jobres = run_job(&mut env);
-    if let Err(flare_err) = jobres {
-        let errstr = format!("{}", &flare_err);
+    if let Err(errstr) = jobres {
+        let errstr = format!("{}", &errstr);
         error!("{}", errstr);
         return Err(errstr);
     }
@@ -208,8 +208,8 @@ fn run_unit_tests() -> Result<(), String> {
         let mut env = Env::new(1, input_filename, output_dir.clone());
 
         let jobres = run_job(&mut env);
-        if let Err(flare_err) = jobres {
-            let errstr = format!("{}", &flare_err);
+        if let Err(errstr) = jobres {
+            let errstr = format!("{}", &errstr);
             error!("{}", errstr);
         }
         // Compare with gold output

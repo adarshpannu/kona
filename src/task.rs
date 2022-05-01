@@ -1,4 +1,3 @@
-
 use crate::includes::*;
 
 use std::collections::HashMap;
@@ -12,17 +11,11 @@ use crate::pop::*;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OldStage {
     pub root_pop_key: POPKey,
-    pub npartitions_producer: usize,
-    pub npartitions_consumer: usize,
 }
 
 impl OldStage {
     pub fn new(_flow: &Flow, top: POPKey) -> OldStage {
-        OldStage {
-            root_pop_key: top,
-            npartitions_producer: 0,
-            npartitions_consumer: 0,
-        }
+        OldStage { root_pop_key: top }
     }
 
     pub fn run(&self, env: &Env, flow: &Flow) {
@@ -70,7 +63,7 @@ impl Task {
         }
     }
 
-    pub fn run(&mut self, flow: &Flow, stage: &OldStage) {
+    pub fn run(&mut self, flow: &Flow, stage: &OldStage) -> Result<(), String> {
         /*
         debug!(
             "Running task: stage = {:?}, partition = {}/{}",
@@ -78,7 +71,13 @@ impl Task {
         );
         */
         self.task_row = Row::from(vec![Datum::NULL; 32]); // FIXME
-        while stage.root_pop_key.next(flow, stage, self, true) {}
+        loop {
+            let retval = stage.root_pop_key.next(flow, stage, self, true)?;
+            if ! retval {
+                break
+            }
+        }
+        Ok(())
     }
 }
 
@@ -92,7 +91,7 @@ pub enum ThreadPoolMessage {
 pub struct ThreadPool {
     threads: Option<Vec<JoinHandle<()>>>,
     s2t_channels_sx: Vec<mpsc::Sender<ThreadPoolMessage>>, // scheduler -> threads (T channels i.e. one per thread)
-    //t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>,     // threads -> scheduler (1 channel, shared by all threads)
+                                                           //t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>,     // threads -> scheduler (1 channel, shared by all threads)
 }
 
 impl ThreadPool {
@@ -146,7 +145,7 @@ impl ThreadPool {
                                 task.partition_id
                             );
                             */
-                            task.run(&flow, &stage);
+                            task.run(&flow, &stage).unwrap();
 
                             // The following send may not succeed if the scheduler is gone
                             t2s_channel_tx_clone.send(ThreadPoolMessage::TaskEnded).unwrap_or_default()

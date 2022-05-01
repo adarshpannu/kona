@@ -36,8 +36,8 @@ impl QGMMetadata {
         }
     }
 
-    pub fn get_tabledesc(&self, qunid: QunId) -> Option<&Rc<dyn TableDesc>> {
-        self.tabledescmap.get(&qunid)
+    pub fn get_tabledesc(&self, qunid: QunId) -> Option<Rc<dyn TableDesc>> {
+        self.tabledescmap.get(&qunid).map(|td| Rc::clone(td))
     }
 }
 

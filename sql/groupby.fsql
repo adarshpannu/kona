@@ -2,6 +2,8 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
+set PARSE_ONLY = "true";
+
 select sum(age + 10)*99 / count(age + 50), emp_dept_id + 55, avg(distinct age), emp_dept_id + 55
 from emp E
 where 

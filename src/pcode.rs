@@ -56,7 +56,7 @@ impl PCode {
         PCode { instructions: vec![] }
     }
     pub fn push(&mut self, inst: PInstruction) {
-        //debug!("Instruction: {:?}", inst);
+        debug!("Instruction: {:?}", inst);
         self.instructions.push(inst)
     }
 
@@ -114,6 +114,7 @@ impl PCode {
                     }
                 }
                 _ => {
+                    debug!("Instruction inst: {:?} not implemented yet. Possibly invalid?", inst);
                     todo!()
                 }
             }
