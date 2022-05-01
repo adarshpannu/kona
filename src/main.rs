@@ -172,7 +172,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/csvdir.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/join.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 

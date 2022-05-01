@@ -5,6 +5,7 @@ pub struct Flow {
     pub pop_graph: POPGraph,
     pub root_pop_key: POPKey,
 }
+
 impl Flow {
     pub fn get_node(&self, pop_key: POPKey) -> &POP {
         &self.pop_graph.get(pop_key).value

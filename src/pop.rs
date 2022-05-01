@@ -28,6 +28,41 @@ impl Stage {
     }
 }
 
+#[derive(Debug)]
+struct StageStatus {
+    pub id: usize,
+    pub dependent_id: usize,  // 0 == no stage depends on this
+    pub orig_dep_count: usize,
+    pub active_dep_count: usize
+}
+
+#[derive(Debug)]
+pub struct StageManager {
+    status_vec: Vec<StageStatus> // Stage hierarchy encoded in this array
+}
+
+impl StageManager {
+    fn new() -> Self {
+        let status_vec = vec![StageStatus { id: 0, dependent_id: 0, orig_dep_count: 0, active_dep_count: 0 }]; // zeroth entry is not used
+        StageManager { status_vec }
+    }
+
+    pub fn add_stage(&mut self, dependent_id: usize) -> usize {
+        // `dependent_stage` must exist, and it will become dependent on newly created stage
+        // newly created stage goes at the end of the vector, and its `id` is essentially its index
+        let new_id = self.status_vec.len();
+        assert!(dependent_id < self.status_vec.len());
+        let new_ss = StageStatus { id: new_id, dependent_id, orig_dep_count: 0, active_dep_count: 0 };
+        self.status_vec.push(new_ss);
+
+        let dependent_ss = &mut self.status_vec[dependent_id];
+        dependent_ss.orig_dep_count = dependent_ss.orig_dep_count + 1;
+        dependent_ss.active_dep_count = dependent_ss.active_dep_count + 1;
+
+        new_id
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
     pub predicates: Option<Vec<PCode>>,
@@ -60,8 +95,8 @@ impl POPKey {
 pub enum POP {
     CSV(CSV),
     CSVDir(CSVDir),
-    HashJoin,
-    Repartition { output_map: Option<Vec<RegisterId>> },
+    HashJoin(HashJoin),
+    Repartition(Repartition),
     Aggregation,
 }
 
@@ -79,6 +114,8 @@ impl POPKey {
             let got_row = match pop {
                 POP::CSV(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
                 POP::CSVDir(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
+                POP::Repartition(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
+                POP::HashJoin(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
                 _ => unimplemented!(),
             };
 
@@ -112,7 +149,7 @@ impl POPKey {
         return true;
     }
 
-    pub fn eval_emitcols(props: &POPProps, registers: &Row) {
+    pub fn eval_emitcols(props: &POPProps, registers: &Row) -> Option<Row> {
         if let Some(emitcols) = props.emitcols.as_ref() {
             let emit_output = emitcols
                 .iter()
@@ -121,13 +158,59 @@ impl POPKey {
                     result
                 })
                 .collect::<Vec<_>>();
-            debug!("Emitted: {:?}", emit_output);
+            Some(Row::from(emit_output))
+        } else {
+            None
         }
+    }
+}
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Repartition {
+    output_map: Option<Vec<RegisterId>>,
+}
+
+impl Repartition {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+        debug!("Repartition:next(): {:?}, is_head: {}", pop_key, is_head);
+
+        todo!()
     }
 }
 
 /***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HashJoin {
+}
 
+impl HashJoin {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+        let children = flow.pop_graph.get(pop_key).children.as_ref().unwrap();
+        let probe_child_key = children[0];
+        let build_child_key = children[1];
+
+        // Drain both children for now: todo
+        for child_key in vec![probe_child_key, build_child_key] {
+            debug!("HashJoin:next(): Drain {:?}", child_key);
+            while child_key.next(flow, stage, task, false).unwrap() {}
+        }
+        Ok(true)
+    }
+}
+
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Aggregation {
+}
+
+impl Aggregation {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+        todo!()
+    }
+}
+
+
+/***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
 pub struct CSV {
     pathname: String,
@@ -375,7 +458,8 @@ impl Flow {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_key = pop_graph.add_node_with_props(POP::Repartition { output_map }, props, Some(pop_children));
+        let pop_inner = Repartition { output_map };
+        let pop_key = pop_graph.add_node_with_props(POP::Repartition(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
     }
@@ -395,7 +479,8 @@ impl Flow {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_key = pop_graph.add_node_with_props(POP::HashJoin, props, Some(pop_children));
+        let pop_inner = HashJoin {};
+        let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
     }
@@ -576,8 +661,8 @@ impl QGM {
                 let extrastr = format!("");
                 (String::from("HashJoin"), extrastr)
             }
-            POP::Repartition { output_map } => {
-                let extrastr = format!("output_map = {:?}", output_map);
+            POP::Repartition(inner) => {
+                let extrastr = format!("output_map = {:?}", inner.output_map);
                 (String::from("Repartition"), extrastr)
             }
             POP::Aggregation => {
