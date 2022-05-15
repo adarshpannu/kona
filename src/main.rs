@@ -169,10 +169,15 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 ********************************** main ****************************************************************
 */
 fn main() -> Result<(), String> {
+
+    //std::env::set_var("RUST_LOG", "flare::pcode=info");
+
+    std::env::set_var("RUST_LOG", "flare");
+
     // Initialize logger with INFO as default
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/join.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/groupby.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
@@ -195,6 +200,8 @@ fn run_unit_tests() -> Result<(), String> {
     logging::init("error");
     let mut npassed = 0;
     let mut ntotal = 0;
+    //let diffcmd = "/Applications/DiffMerge.app/Contents/MacOS/DiffMerge";
+    let diffcmd = "diff";
 
     for test in vec!["rst", "repartition", "groupby", "spja"] {
         let input_pathname = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
@@ -215,7 +222,7 @@ fn run_unit_tests() -> Result<(), String> {
         // Compare with gold output
         let gold_dir = f!("/Users/adarshrp/Projects/flare/tests/gold/{test}/");
 
-        let output = Command::new("diff").arg(gold_dir).arg(output_dir).output().expect("failed to execute process");
+        let output = Command::new(diffcmd).arg(gold_dir).arg(output_dir).output().expect("failed to execute process");
 
         let mut mismatch = false;
         for (tag, buf) in vec![("out", output.stdout), ("err", output.stderr)].iter() {

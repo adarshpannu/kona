@@ -52,7 +52,7 @@ where
     pub fn new() -> Self {
         Graph {
             sm: SlotMap::with_key(),
-            next_id: 0,
+            next_id: 1,   // Starts at 1. There's code out these that handles zero-valued things differently. So keep this at 1.
         }
     }
 

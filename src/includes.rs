@@ -12,6 +12,7 @@ pub type QunId = usize;
 pub type QBId = usize;
 pub type PartitionId = usize;
 pub type RegisterId = usize;
+pub type StageId = usize;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct QunCol(pub QunId, pub ColId);

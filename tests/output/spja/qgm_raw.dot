@@ -2,9 +2,9 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
-  subgraph cluster_QB_0 {
-    "QB_0_selectlist"[label="select_list",shape=box,style=filled];
-  subgraph cluster_select_listQB_0 {
+  subgraph cluster_QB_1 {
+    "QB_1_selectlist"[label="select_list",shape=box,style=filled];
+  subgraph cluster_select_listQB_1 {
     exprnodeExprKey11v1[label="/: 0"];
     exprnodeExprKey6v1 -> exprnodeExprKey11v1;
     exprnodeExprKey6v1[label="*"];
@@ -26,18 +26,18 @@ digraph example1 {
     exprnodeExprKey7v1[label="E.AGE ($0.0)"];
     exprnodeExprKey8v1 -> exprnodeExprKey9v1;
     exprnodeExprKey8v1[label="50"];
-    exprnodeExprKey11v1 -> "QB_0_selectlist";
+    exprnodeExprKey11v1 -> "QB_1_selectlist";
     exprnodeExprKey13v1[label="AVG: 1"];
     exprnodeExprKey12v1 -> exprnodeExprKey13v1;
     exprnodeExprKey12v1[label="E.AGE ($0.0)"];
-    exprnodeExprKey13v1 -> "QB_0_selectlist";
+    exprnodeExprKey13v1 -> "QB_1_selectlist";
     exprnodeExprKey14v1[label="D.DEPT_ID ($0.0): 2"];
-    exprnodeExprKey14v1 -> "QB_0_selectlist";
+    exprnodeExprKey14v1 -> "QB_1_selectlist";
 }
-    "QUN_2"[label="QUN_2 DEPT_DETAILS/DD", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_1"[label="QUN_1 DEPT/D", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_0"[label="QUN_0 EMP/E", fillcolor=black, fontcolor=white, style=filled]
-  subgraph cluster_pred_listQB_0 {
+    "QUN_3"[label="QUN_3 DEPT_DETAILS/DD", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_2"[label="QUN_2 DEPT/D", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_1"[label="QUN_1 EMP/E", fillcolor=black, fontcolor=white, style=filled]
+  subgraph cluster_pred_listQB_1 {
     exprnodeExprKey33v1[label="And"];
     exprnodeExprKey29v1 -> exprnodeExprKey33v1;
     exprnodeExprKey29v1[label="And"];
@@ -75,15 +75,15 @@ digraph example1 {
     exprnodeExprKey30v1[label="D.NAME ($0.0)"];
     exprnodeExprKey31v1 -> exprnodeExprKey32v1;
     exprnodeExprKey31v1[label="\"Engineering\""];
-    exprnodeExprKey33v1 -> QB_0_pred_list;
-    "QB_0_pred_list"[label="pred_list",shape=box,style=filled];
+    exprnodeExprKey33v1 -> QB_1_pred_list;
+    "QB_1_pred_list"[label="pred_list",shape=box,style=filled];
 }
-  subgraph cluster_group_byQB_0 {
-    "QB_0_group_by"[label="group_by",shape=box,style=filled];
+  subgraph cluster_group_byQB_1 {
+    "QB_1_group_by"[label="group_by",shape=box,style=filled];
     exprnodeExprKey34v1[label="D.DEPT_ID ($0.0): 0"];
-    exprnodeExprKey34v1 -> "QB_0_group_by";
+    exprnodeExprKey34v1 -> "QB_1_group_by";
 }
-  subgraph cluster_having_clauseQB_0 {
+  subgraph cluster_having_clauseQB_1 {
     exprnodeExprKey42v1[label="And"];
     exprnodeExprKey38v1 -> exprnodeExprKey42v1;
     exprnodeExprKey38v1[label=">"];
@@ -99,9 +99,9 @@ digraph example1 {
     exprnodeExprKey39v1[label="D.DEPT_ID ($0.0)"];
     exprnodeExprKey40v1 -> exprnodeExprKey41v1;
     exprnodeExprKey40v1[label="10"];
-    exprnodeExprKey42v1 -> QB_0_having_clause;
-    "QB_0_having_clause"[label="having_clause",shape=box,style=filled];
+    exprnodeExprKey42v1 -> QB_1_having_clause;
+    "QB_1_having_clause"[label="having_clause",shape=box,style=filled];
 }
-    label = "QB_0 type=Select";
+    label = "QB_1 type=Select";
 }
 }

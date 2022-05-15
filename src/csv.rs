@@ -118,7 +118,6 @@ pub struct CSVDirIter {
 
 impl CSVDirIter {
     pub fn new(dirname: &String) -> Result<CSVDirIter, String> {
-        dbg!(&dirname);
         let pathnames = fs::read_dir(dirname).map_err(|err| stringify1(err, dirname))?;
         let mut pathnames: Vec<_> = pathnames.map(|res| res.map(|e| e.path())).collect::<Result<Vec<_>, io::Error>>().unwrap();
 

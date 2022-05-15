@@ -715,8 +715,8 @@ impl QGM {
             }
         }
         let colstring = if let Some(emitcols) = props.emitcols.as_ref() {
-            let emitcols = emitcols.iter().map(|e| e.expr_key).collect::<Vec<_>>();
-            printable_preds(&emitcols, self, true)
+            //let emitcols = emitcols.iter().map(|e| e.expr_key).collect::<Vec<_>>();
+            printable_emitcols(&emitcols, self, true)
         } else {
             props.cols.printable(self)
         };
@@ -763,7 +763,14 @@ impl QGM {
 
 impl Bitset<QunCol> {
     fn printable(&self, qgm: &QGM) -> String {
-        let cols = self.elements().iter().map(|&quncol| qgm.metadata.get_colname(quncol)).collect::<Vec<String>>();
+        let cols = self
+            .elements()
+            .iter()
+            .map(|&quncol| {
+                let colname = qgm.metadata.get_colname(quncol);
+                format!("{} ({}.{})", colname, quncol.0, quncol.1)
+            })
+            .collect::<Vec<String>>();
         let mut colstring = String::from("");
         for col in cols {
             colstring.push_str(&col);
@@ -792,20 +799,19 @@ fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool) -> String {
     predstring
 }
 
-#[derive(Debug)]
-struct Foo {
-    id: usize,
-    name: String,
-}
+fn printable_emitcols(preds: &Vec<EmitCol>, qgm: &QGM, do_escape: bool) -> String {
+    let mut predstring = String::from("{");
+    for (ix, EmitCol { quncol, expr_key }) in preds.iter().enumerate() {
+        let predstr = expr_key.printable(&qgm.expr_graph, do_escape);
+        predstring.push_str(&predstr);
+        if quncol.0 > 0 {
+            predstring.push_str(&format!(" [${}.{}] ", quncol.0, quncol.1));
+        }
 
-#[test]
-fn partitions_test() {
-    let mut partition_vec = PartitionVec::with_capacity(10);
-    let foo = Foo {
-        id: 1,
-        name: "adarsh".to_string(),
-    };
-
-    // We can add more elements but this will reallocate.
-    partition_vec.push(foo);
+        if ix < preds.len() - 1 {
+            predstring.push_str("|")
+        }
+    }
+    predstring.push_str("}");
+    predstring
 }

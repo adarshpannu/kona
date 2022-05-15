@@ -51,33 +51,6 @@ impl FlowNode {
         retval
     }
 
-    pub fn project<'a>(&self, arena: &'a NodeArena, colids: Vec<ColId>) -> &'a FlowNode {
-        let npartitions = self.npartitions;
-        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, ProjectNode::new(colids));
-        retval
-    }
-
-    pub fn filter<'a>(&self, arena: &'a NodeArena, expr_key: ExprKey) -> &'a FlowNode {
-        let npartitions = self.npartitions;
-        let retval = FlowNode::new(&arena, vec![self.id()], npartitions, FilterNode::new(expr_key));
-        retval
-    }
-
-    pub fn join<'a>(
-        &self, arena: &'a NodeArena, other_children: Vec<&FlowNode>, preds: Vec<JoinPredicate>,
-    ) -> &'a FlowNode {
-        let mut children: Vec<_> = other_children.iter().map(|e| e.id()).collect();
-        children.push(self.id);
-
-        let retval = FlowNode::new(
-            &arena,
-            children,
-            self.npartitions, // TBD: Partitions need to be decided
-            JoinNode::new(preds),
-        );
-        retval
-    }
-
     pub fn agg<'a>(
         &self, arena: &'a NodeArena, keycols: Vec<(ColId, DataType)>, aggcols: Vec<(AggType, ColId, DataType)>,
         npartitions: usize,
@@ -283,90 +256,6 @@ impl CSVNode {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-struct ProjectNode {
-    colids: Vec<ColId>,
-}
-
-impl ProjectNode {
-    fn new(colids: Vec<ColId>) -> NodeInner {
-        NodeInner::ProjectNode(ProjectNode { colids })
-    }
-
-    fn desc(&self, supernode: &FlowNode) -> String {
-        format!("ProjectNode-#{}|{:?}", supernode.id(), self.colids)
-    }
-
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        //let flow = task.stage().flow();
-        //let flow = &*(&*task.stage).flow;
-
-        if let Some(row) = supernode.child(flow, 0).next(flow, stage, task, false) {
-            return Some(row.project(&self.colids));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl ProjectNode {}
-
-/***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
-struct FilterNode {
-    expr: ExprKey,
-}
-
-impl FilterNode {
-    fn desc(&self, supernode: &FlowNode) -> String {
-        let s = format!("FilterNode-#{}|{:?}", supernode.id(), self.expr);
-        htmlify(s)
-    }
-
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        while let Some(row) = supernode.child(flow, 0).next(flow, stage, task, false) {
-            if let Datum::BOOL(b) = Expr::eval(&flow.graph, self.expr, &task.task_row) {
-                if b {
-                    return Some(row);
-                }
-            }
-        }
-        return None;
-    }
-}
-
-impl FilterNode {
-    fn new(expr: ExprKey) -> NodeInner {
-        NodeInner::FilterNode(FilterNode { expr })
-    }
-}
-
-/***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
-struct JoinNode {
-    preds: Vec<JoinPredicate>, // (left-column,[eq],right-column)*
-}
-
-type JoinPredicate = (ColId, RelOp, ColId);
-
-impl JoinNode {
-    fn new(preds: Vec<JoinPredicate>) -> NodeInner {
-        NodeInner::JoinNode(JoinNode { preds })
-    }
-
-    fn desc(&self, supernode: &FlowNode) -> String {
-        let s = format!("JoinNode-#{}|{:?}", supernode.id(), self.preds);
-        htmlify(s)
-    }
-
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        None
-    }
-}
-
-impl JoinNode {}
-
-/***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
 struct AggNode {
     keycols: Vec<(ColId, DataType)>,
     aggcols: Vec<(AggType, ColId, DataType)>,
@@ -463,41 +352,6 @@ impl AggNode {
         htable
     }
 }
-
-/***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
-struct EmitNode {
-    select_list: Vec<ExprKey>,
-}
-
-impl EmitNode {
-    fn new(select_list: Vec<ExprKey>) -> NodeInner {
-        NodeInner::EmitNode(EmitNode { select_list })
-    }
-
-    fn desc(&self, supernode: &FlowNode) -> String {
-        format!("EmitNode-#{}", supernode.id())
-    }
-
-    fn next(&self, supernode: &FlowNode, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Option<Row> {
-        loop {
-            let row = supernode.child(flow, 0).next(flow, stage, task, false);
-            if let Some(row) = row.as_ref() {
-                // Compute select-list
-                let projcols: Vec<Datum> = self.select_list.iter().map(|&expr_key| {
-                    Expr::eval(&flow.graph, expr_key, &task.task_row)
-                }).collect();
-                let row = Row::from(projcols);
-                debug!("emit: {}", row);
-            } else {
-                break;
-            }
-        }
-        None
-    }
-}
-
-impl EmitNode {}
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]

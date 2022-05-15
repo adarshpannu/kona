@@ -6,6 +6,6 @@ CATALOG TABLE emp ( "TYPE" = "CSVDIR", "PATH" = "/Users/adarshrp/Projects/flare/
 DESCRIBE TABLE emp;
 
 SELECT name, age, emp_dept_id*100 from emp
-where emp_dept_id = 4 and name = "rani"
+where emp_dept_id = 4 or name = "rani"
 ;
 

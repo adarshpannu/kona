@@ -13,15 +13,22 @@ pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
 #[derive(Debug)]
 pub struct Stage {
+    stage_id: StageId,
+    dependent_id: StageId, // 0 == no stage depends on this
+    orig_dep_count: usize,
+    active_dep_count: usize,
     root_lop_key: LOPKey,
-    register_allocator: RegisterAllocator,
+    pub register_allocator: RegisterAllocator,
 }
 
 impl Stage {
-    pub fn new(root_lop_key: LOPKey) -> Stage {
+    fn new(stage_id: usize, dependent_id: usize, root_lop_key: LOPKey) -> Self {
         debug!("New stage with root_lop_key: {:?}", root_lop_key);
-
         Stage {
+            stage_id,
+            dependent_id,
+            orig_dep_count: 0,
+            active_dep_count: 0,
             root_lop_key,
             register_allocator: RegisterAllocator::new(),
         }
@@ -29,37 +36,43 @@ impl Stage {
 }
 
 #[derive(Debug)]
-struct StageStatus {
-    pub id: usize,
-    pub dependent_id: usize,  // 0 == no stage depends on this
-    pub orig_dep_count: usize,
-    pub active_dep_count: usize
-}
-
-#[derive(Debug)]
 pub struct StageManager {
-    status_vec: Vec<StageStatus> // Stage hierarchy encoded in this array
+    status_vec: Vec<Stage>, // Stage hierarchy encoded in this array
 }
 
 impl StageManager {
     fn new() -> Self {
-        let status_vec = vec![StageStatus { id: 0, dependent_id: 0, orig_dep_count: 0, active_dep_count: 0 }]; // zeroth entry is not used
+        let status_vec = vec![]; // zeroth entry is not used
         StageManager { status_vec }
     }
 
-    pub fn add_stage(&mut self, dependent_id: usize) -> usize {
+    pub fn add_stage(&mut self, root_lop_key: LOPKey, dependent_id: usize) -> usize {
         // `dependent_stage` must exist, and it will become dependent on newly created stage
         // newly created stage goes at the end of the vector, and its `id` is essentially its index
         let new_id = self.status_vec.len();
-        assert!(dependent_id < self.status_vec.len());
-        let new_ss = StageStatus { id: new_id, dependent_id, orig_dep_count: 0, active_dep_count: 0 };
+        assert!(dependent_id <= self.status_vec.len());
+        let new_ss = Stage::new(new_id, dependent_id, root_lop_key);
         self.status_vec.push(new_ss);
 
-        let dependent_ss = &mut self.status_vec[dependent_id];
-        dependent_ss.orig_dep_count = dependent_ss.orig_dep_count + 1;
-        dependent_ss.active_dep_count = dependent_ss.active_dep_count + 1;
+        if new_id > 0 {
+            let dependent_ss = &mut self.status_vec[dependent_id];
+            dependent_ss.orig_dep_count = dependent_ss.orig_dep_count + 1;
+            dependent_ss.active_dep_count = dependent_ss.active_dep_count + 1;
+        }
 
+        debug!("Added new stage: {:?}", new_id);
         new_id
+    }
+
+    fn get_register_allocator(&mut self, stage_id: StageId) -> &mut RegisterAllocator {
+        let stage = &mut self.status_vec[stage_id];
+        &mut stage.register_allocator
+    }
+
+    fn print(&self) {
+        for stage in self.status_vec.iter() {
+            debug!("--- Stage: {:?}", stage)
+        }
     }
 }
 
@@ -97,7 +110,7 @@ pub enum POP {
     CSVDir(CSVDir),
     HashJoin(HashJoin),
     Repartition(Repartition),
-    Aggregation,
+    Aggregation(Aggregation),
 }
 
 impl POP {
@@ -116,7 +129,7 @@ impl POPKey {
                 POP::CSVDir(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
                 POP::Repartition(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
                 POP::HashJoin(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
-                _ => unimplemented!(),
+                POP::Aggregation(inner_node) => inner_node.next(*self, flow, stage, task, is_head)?,
             };
 
             // Run predicates and emits, if any
@@ -180,8 +193,7 @@ impl Repartition {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-pub struct HashJoin {
-}
+pub struct HashJoin {}
 
 impl HashJoin {
     fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
@@ -200,15 +212,13 @@ impl HashJoin {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Aggregation {
-}
+pub struct Aggregation {}
 
 impl Aggregation {
     fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         todo!()
     }
 }
-
 
 /***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
@@ -373,12 +383,13 @@ impl Flow {
     pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
         let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
         let mut pop_graph: POPGraph = Graph::new();
+        let mut stage_mgr = StageManager::new();
 
-        let mut root_stage = Stage::new(lop_key);
+        let root_stage = stage_mgr.add_stage(lop_key, 0);
 
-        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut root_stage)?;
+        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut stage_mgr, root_stage)?;
 
-        debug!("Root stage {:?}", root_stage);
+        stage_mgr.print();
 
         let plan_pathname = format!("{}/{}", env.output_dir, "pop.dot");
         QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_pathname)?;
@@ -387,49 +398,42 @@ impl Flow {
         return Ok(flow);
     }
 
-    pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage: &mut Stage) -> Result<POPKey, String> {
+    pub fn compile_lop(
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_mgr: &mut StageManager, stage_id: StageId,
+    ) -> Result<POPKey, String> {
         let (lop, lopprops, lop_children) = lop_graph.get3(lop_key);
 
-        let child_stage;
-        let mut child_stage = if matches!(lop, LOP::Repartition { .. }) {
-            child_stage = Stage::new(lop_key);
-            Some(child_stage)
+        let child_stage_id = if matches!(lop, LOP::Repartition { .. }) {
+            stage_mgr.add_stage(lop_key, stage_id)
         } else {
-            None
+            stage_id
         };
 
         // Compile children first
         let mut pop_children = vec![];
         if let Some(lop_children) = lop_children {
             for lop_child_key in lop_children {
-                let pop_key = Self::compile_lop(qgm, lop_graph, *lop_child_key, pop_graph, child_stage.as_mut().unwrap_or(stage))?;
+                let pop_key = Self::compile_lop(qgm, lop_graph, *lop_child_key, pop_graph, stage_mgr, child_stage_id)?;
                 pop_children.push(pop_key);
             }
-        }
-
-        if let Some(child_stage) = child_stage.as_ref() {
-            debug!("Stage {:?}", child_stage);
         }
 
         let npartitions = lopprops.partdesc.npartitions;
 
         let pop_key = match lop {
-            LOP::TableScan { input_cols } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph, stage)?,
-            LOP::HashJoin { equi_join_preds } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children, stage)?,
+            LOP::TableScan { input_cols } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph, stage_mgr, stage_id)?,
+            LOP::HashJoin { equi_join_preds } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id)?,
             LOP::Repartition { cpartitions } => {
-                Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children, stage, child_stage.as_mut().unwrap())?
+                Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id, child_stage_id)?
             }
-            LOP::Aggregation { .. } => {
-                let props = POPProps::new(None, None, npartitions);
-                pop_graph.add_node_with_props(POP::Aggregation, props, Some(pop_children))
-                //Self::compile_aggregation(qgm, lop_graph, lop_key, pop_graph, pop_children, stage)?
-            }
+            LOP::Aggregation { .. } => Self::compile_aggregation(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id)?,
         };
         Ok(pop_key)
     }
 
     pub fn compile_repartition(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage: &mut Stage, child_stage: &mut Stage,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_mgr: &mut StageManager,
+        stage_id: StageId, child_stage_id: StageId,
     ) -> Result<POPKey, String> {
         // Repartition split into Repartition + CSVDirScan
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
@@ -438,8 +442,10 @@ impl Flow {
         let predicates = None;
         assert!(lopprops.preds.len() == 0);
 
+        let ra = stage_mgr.get_register_allocator(stage_id);
+
         // Compile cols or emitcols. We will have one or the other
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut child_stage.register_allocator);
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), ra);
 
         let output_map: Option<Vec<RegisterId>> = if emitcols.is_none() {
             let output_map = lopprops
@@ -447,7 +453,7 @@ impl Flow {
                 .elements()
                 .iter()
                 .map(|&quncol| {
-                    let regid = stage.register_allocator.get_id(quncol);
+                    let regid = ra.get_id(quncol);
                     regid
                 })
                 .collect();
@@ -465,17 +471,20 @@ impl Flow {
     }
 
     pub fn compile_join(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage: &mut Stage,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_mgr: &mut StageManager,
+        stage_id: StageId,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
 
         // Compile predicates
         //debug!("Compile predicate for lopkey: {:?}", lop_key);
-        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
+        let ra = stage_mgr.get_register_allocator(stage_id);
+
+        let predicates = Self::compile_predicates(qgm, &lopprops.preds, ra);
 
         // Compile emitcols
         //debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut stage.register_allocator);
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), ra);
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
@@ -486,27 +495,33 @@ impl Flow {
     }
 
     pub fn compile_aggregation(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage: &mut Stage,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_mgr: &mut StageManager,
+        stage_id: StageId,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
+        let ra = stage_mgr.get_register_allocator(stage_id);
 
         // Compile predicates
         debug!("Compile predicate for lopkey: {:?}", lop_key);
-        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
+        let predicates = None; // todo Self::compile_predicates(qgm, &lopprops.preds, ra);
 
         // Compile emitcols
         debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut stage.register_allocator);
+        let emitcols = None; // todo Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), ra);
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_key = pop_graph.add_node_with_props(POP::Aggregation, props, Some(pop_children));
+        let pop_inner = Aggregation {};
+        let pop_key = pop_graph.add_node_with_props(POP::Aggregation(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
     }
 
-    pub fn compile_scan(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage: &mut Stage) -> Result<POPKey, String> {
+    pub fn compile_scan(
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_mgr: &mut StageManager, stage_id: StageId,
+    ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
+        let ra = stage_mgr.get_register_allocator(stage_id);
 
         let qunid = lopprops.quns.elements()[0];
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
@@ -520,7 +535,7 @@ impl Flow {
                 .elements()
                 .iter()
                 .map(|&quncol| {
-                    let regid = stage.register_allocator.get_id(quncol);
+                    let regid = ra.get_id(quncol);
                     (quncol.1, regid)
                 })
                 .collect()
@@ -531,7 +546,7 @@ impl Flow {
         // Compile predicates
         //debug!("Compile predicate for lopkey: {:?}", lop_key);
 
-        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut stage.register_allocator);
+        let predicates = Self::compile_predicates(qgm, &lopprops.preds, ra);
 
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
@@ -560,7 +575,7 @@ impl Flow {
 
         // Compile emitcols
         //debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &mut stage.register_allocator);
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), ra);
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
@@ -665,7 +680,7 @@ impl QGM {
                 let extrastr = format!("output_map = {:?}", inner.output_map);
                 (String::from("Repartition"), extrastr)
             }
-            POP::Aggregation => {
+            POP::Aggregation(inner) => {
                 let extrastr = format!("");
                 (String::from("Aggregation"), extrastr)
             }
