@@ -1,4 +1,4 @@
-// QGM Iterators
+// qgmiter: Various iterators over QGM
 
 use crate::expr::{Expr::*, *};
 use crate::graph::*;

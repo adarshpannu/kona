@@ -1,4 +1,5 @@
-// LOP: Physical operators
+// pop: Physical operators
+
 #![allow(unused_variables)]
 
 use std::fmt;

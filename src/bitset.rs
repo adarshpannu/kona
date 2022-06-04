@@ -1,4 +1,4 @@
-// Use bitmaps on arbitrary bitmaps
+// bitset: Thin wrapper over bitmaps::Bitmap so they work over datatypes
 
 use bitmaps::Bitmap;
 use std::cell::RefCell;

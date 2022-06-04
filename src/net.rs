@@ -1,5 +1,4 @@
-// net.rs
-#![allow(warnings)]
+// net
 
 use mio::event::Event;
 use mio::net::{TcpListener, TcpStream};

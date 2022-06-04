@@ -1,17 +1,16 @@
-use crate::includes::*;
-
-use crate::expr::*;
-use crate::graph::*;
-use crate::metadata::*;
+// qgm: query graph model
 
 use std::collections::HashMap;
-
 use std::fs::File;
 use std::io::Write;
 use std::rc::Rc;
-
 use std::fmt;
 use std::process::Command;
+
+use crate::includes::*;
+use crate::expr::*;
+use crate::graph::*;
+use crate::metadata::*;
 
 pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlock, ()>;
 

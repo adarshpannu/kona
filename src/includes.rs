@@ -19,7 +19,7 @@ pub struct QunCol(pub QunId, pub ColId);
 
 pub type ColMap = std::collections::HashMap<ColId, ColId>;
 
-pub use crate::Env;
+pub use crate::env::Env;
 
 pub use serde::{Serialize, Deserialize};
 

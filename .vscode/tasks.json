@@ -2,16 +2,34 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "run main",
 			"type": "cargo",
-			"command": "build",
+			"command": "run",
 			"problemMatcher": [
 				"$rustc"
 			],
 			"group": {
 				"kind": "build",
-				"isDefault": true
+				"isDefault": false
 			},
-			"label": "rust: cargo build",
-		}
+		},
+		{
+			"label": "run_unit_tests",
+			"type": "cargo",
+			"command": "test",
+            "args": [
+				"run_unit_tests",
+				"--",
+				"--nocapture"
+            ],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			},
+		},
+
 	]
 }

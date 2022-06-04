@@ -1,4 +1,4 @@
-// LOP: Logical operators
+// lop: Logical operators
 
 use bimap::BiMap;
 use partitions::PartitionVec;
@@ -177,10 +177,6 @@ impl ExprEqClass {
             id
         }
     }
-}
-#[test]
-fn sizes() {
-    dbg!(std::mem::size_of::<PredDesc>());
 }
 
 impl QGM {
@@ -362,7 +358,7 @@ impl QGM {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
                     tabledesc.get_part_desc().npartitions
                 } else {
-                    env.options.parallel_degree.unwrap_or(1) * 2 // todo: temporary hack to force different partition counts in a plan
+                    env.settings.parallel_degree.unwrap_or(1) * 2 // todo: temporary hack to force different partition counts in a plan
                 };
                 let partdesc = PartDesc::new(npartitions, PartType::RAW);
 
@@ -659,7 +655,7 @@ impl QGM {
             None
         } else {
             Some(PartDesc {
-                npartitions: env.options.parallel_degree.unwrap_or(1),
+                npartitions: env.settings.parallel_degree.unwrap_or(1),
                 part_type: PartType::HASHEXPR(lhs_expected_keys),
             })
         };
@@ -668,7 +664,7 @@ impl QGM {
             None
         } else {
             Some(PartDesc {
-                npartitions: env.options.parallel_degree.unwrap_or(1),
+                npartitions: env.settings.parallel_degree.unwrap_or(1),
                 part_type: PartType::HASHEXPR(rhs_expected_keys),
             })
         };

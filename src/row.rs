@@ -1,8 +1,8 @@
-#![allow(dead_code)]
+// row: Representation of N-tuples
 
-use crate::includes::*;
 use std::fmt;
 use std::rc::Rc;
+use crate::includes::*;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
 pub enum Datum {

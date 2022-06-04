@@ -1,8 +1,10 @@
-// csv.rs
+// csv
+
 use std::fs;
+use std::fs::File;
+use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::io::SeekFrom;
-
 use crate::includes::*;
 
 pub struct CSVPartitionIter {
@@ -45,8 +47,6 @@ impl Iterator for CSVPartitionIter {
     }
 }
 
-use std::fs::File;
-use std::io::{self, BufReader};
 
 pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
     let f = fs::File::open(&pathname).map_err(|err| stringify1(err, &pathname))?;

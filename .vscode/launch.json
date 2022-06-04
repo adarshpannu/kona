@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'flare'",
+            "name": "Run main executable 'flare'",
             "cargo": {
                 "args": [
                     "build",
@@ -25,13 +25,13 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'flare'",
+            "name": "Run unit tests",
             "cargo": {
                 "args": [
                     "test",
-                    "--no-run",
-                    "--bin=flare",
-                    "--package=flare"
+                    "run_unit_tests",
+                    "--",
+                    "--nocapture"
                 ],
                 "filter": {
                     "name": "flare",
@@ -41,17 +41,5 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "run flare",
-            "program": "${workspaceRoot}/target/debug/flare",
-            "args": [],
-            "cwd": "${workspaceRoot}",
-            "sourceMap": {},
-            "sourceLanguages": [
-                "rust"
-            ]
-        }
     ]
 }

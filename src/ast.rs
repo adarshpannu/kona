@@ -1,5 +1,6 @@
+// ast: abstract syntax tree definitions
 
-use crate::qgm::*;
+use crate::qgm::QGM;
 use crate::row::Datum;
 
 #[derive(Debug)]
