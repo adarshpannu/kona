@@ -7,17 +7,17 @@ digraph example1 {
     popkeyPOPKey5v1 -> popkeyPOPKey6v1;
     popkeyPOPKey2v1 -> popkeyPOPKey5v1;
     popkeyPOPKey1v1 -> popkeyPOPKey2v1;
-    popkeyPOPKey1v1[label="CSV|p = 3|file: R.csv, map: [(0, 0), (1, 2), (2, 1), (4, 3)]"];
-    popkeyPOPKey2v1[label="Repartition|p = 4|output_map = Some([0, 1, 2])"];
+    popkeyPOPKey1v1[label="CSV-1v1|p = 3|file: R.csv, map: [(0, 0), (1, 2), (2, 1), (4, 3)]"];
+    popkeyPOPKey2v1[label="Repartition-2v1|p = 4|output_map = Some([0, 1, 2])"];
     popkeyPOPKey4v1 -> popkeyPOPKey5v1;
     popkeyPOPKey3v1 -> popkeyPOPKey4v1;
-    popkeyPOPKey3v1[label="CSV|p = 3|file: S.csv, map: [(1, 2), (2, 1), (3, 0)]"];
-    popkeyPOPKey4v1[label="Repartition|p = 4|output_map = Some([3, 4, 5])"];
-    popkeyPOPKey5v1[label="HashJoin|p = 4|"];
-    popkeyPOPKey6v1[label="Repartition|p = 4|output_map = Some([0, 1, 2, 3])"];
+    popkeyPOPKey3v1[label="CSV-3v1|p = 3|file: S.csv, map: [(1, 2), (2, 1), (3, 0)]"];
+    popkeyPOPKey4v1[label="Repartition-4v1|p = 4|output_map = Some([3, 4, 5])"];
+    popkeyPOPKey5v1[label="HashJoin-5v1|p = 4|"];
+    popkeyPOPKey6v1[label="Repartition-6v1|p = 4|output_map = Some([0, 1, 2, 3])"];
     popkeyPOPKey8v1 -> popkeyPOPKey9v1;
     popkeyPOPKey7v1 -> popkeyPOPKey8v1;
-    popkeyPOPKey7v1[label="CSV|p = 3|file: T.csv, map: [(2, 0), (3, 1)]"];
-    popkeyPOPKey8v1[label="Repartition|p = 4|output_map = Some([4, 5])"];
-    popkeyPOPKey9v1[label="HashJoin|p = 4|"];
+    popkeyPOPKey7v1[label="CSV-7v1|p = 3|file: T.csv, map: [(2, 0), (3, 1)]"];
+    popkeyPOPKey8v1[label="Repartition-8v1|p = 4|output_map = Some([4, 5])"];
+    popkeyPOPKey9v1[label="HashJoin-9v1|p = 4|"];
 }
