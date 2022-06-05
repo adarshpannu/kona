@@ -34,6 +34,7 @@ pub mod csv;
 pub mod flow;
 pub mod pop;
 pub mod row;
+pub mod stage;
 pub mod task;
 pub mod pcode;
 pub mod scratch;
@@ -99,14 +100,14 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 */
 fn main() -> Result<(), String> {
 
-    //std::env::set_var("RUST_LOG", "flare::pcode=info");
+    std::env::set_var("RUST_LOG", "flare::pcode=info");
 
-    std::env::set_var("RUST_LOG", "flare");
+    std::env::set_var("RUST_LOG", "flare=info,flare::pop=debug,flare::flow=debug");
 
-    // Initialize logger with INFO as default
+    // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/groupby.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/join.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
@@ -165,6 +166,7 @@ fn run_unit_tests() -> Result<(), String> {
             npassed = npassed + 1
         }
     }
+
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
     Ok(())
 }

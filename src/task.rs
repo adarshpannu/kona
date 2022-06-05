@@ -9,40 +9,6 @@ use crate::includes::*;
 use crate::pop::*;
 
 /***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OldStage {
-    pub root_pop_key: POPKey,
-}
-
-impl OldStage {
-    pub fn new(_flow: &Flow, top: POPKey) -> OldStage {
-        OldStage { root_pop_key: top }
-    }
-
-    pub fn run(&self, env: &Env, flow: &Flow) {
-        let (_, props, ..) = flow.pop_graph.get3(self.root_pop_key);
-        let npartitions = props.npartitions;
-        for partition_id in 0..npartitions {
-            let task = Task::new(partition_id);
-            //task.run(flow, self);
-
-            let thread_id = partition_id % (env.thread_pool.size());
-
-            //let t2sa = Task2SendAcross { flow: flow.clone() };
-            let t2sa = &(flow, self, task);
-            let encoded: Vec<u8> = bincode::serialize(&t2sa).unwrap();
-            debug!("Serialized task len = {}", encoded.len());
-
-            let _decoded: (Flow, OldStage, Task) = bincode::deserialize(&encoded[..]).unwrap();
-
-            //dbg!(&decoded.0);
-
-            env.thread_pool.s2t_channels_sx[thread_id].send(ThreadPoolMessage::RunTask(encoded)).unwrap();
-        }
-    }
-}
-
-/***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
 pub struct Task {
     pub partition_id: PartitionId,
@@ -64,7 +30,7 @@ impl Task {
         }
     }
 
-    pub fn run(&mut self, flow: &Flow, stage: &OldStage) -> Result<(), String> {
+    pub fn run(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
         /*
         debug!(
             "Running task: stage = {:?}, partition = {}/{}",
@@ -73,9 +39,9 @@ impl Task {
         */
         self.task_row = Row::from(vec![Datum::NULL; 32]); // FIXME
         loop {
-            let retval = stage.root_pop_key.next(flow, stage, self, true)?;
-            if ! retval {
-                break
+            let retval = stage.root_pop_key.unwrap().next(flow, stage, self, true)?;
+            if !retval {
+                break;
             }
         }
         Ok(())
@@ -90,9 +56,9 @@ pub enum ThreadPoolMessage {
 
 /***************************************************************************************************/
 pub struct ThreadPool {
-    threads: Option<Vec<JoinHandle<()>>>,
-    s2t_channels_sx: Vec<mpsc::Sender<ThreadPoolMessage>>, // scheduler -> threads (T channels i.e. one per thread)
-                                                           //t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>,     // threads -> scheduler (1 channel, shared by all threads)
+    pub threads: Option<Vec<JoinHandle<()>>>,
+    pub s2t_channels_sx: Vec<mpsc::Sender<ThreadPoolMessage>>, // scheduler -> threads (T channels i.e. one per thread)
+    pub t2s_channel_rx: mpsc::Receiver<ThreadPoolMessage>,     // threads -> scheduler (1 channel, shared by all threads)
 }
 
 impl ThreadPool {
@@ -103,7 +69,7 @@ impl ThreadPool {
         }
     }
 
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         if let Some(threads) = &self.threads {
             threads.len()
         } else {
@@ -121,7 +87,7 @@ impl ThreadPool {
         let mut threads = vec![];
         let mut s2t_channels_sx = vec![];
 
-        let (t2s_channel_tx, _t2s_channel_rx) = mpsc::channel::<ThreadPoolMessage>();
+        let (t2s_channel_tx, t2s_channel_rx) = mpsc::channel::<ThreadPoolMessage>();
 
         for i in 0..nthreads {
             let t2s_channel_tx_clone = t2s_channel_tx.clone();
@@ -136,7 +102,7 @@ impl ThreadPool {
                             break;
                         }
                         ThreadPoolMessage::RunTask(encoded) => {
-                            let (flow, stage, mut task): (Flow, OldStage, Task) = bincode::deserialize(&encoded[..]).unwrap();
+                            let (flow, stage, mut task): (Flow, Stage, Task) = bincode::deserialize(&encoded[..]).unwrap();
 
                             /*
                             debug!(
@@ -165,7 +131,7 @@ impl ThreadPool {
         ThreadPool {
             threads: Some(threads),
             s2t_channels_sx,
-            //t2s_channel_rx,
+            t2s_channel_rx,
         }
     }
 }

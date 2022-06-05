@@ -8,74 +8,9 @@ use std::io::Write;
 use std::process::Command;
 use std::rc::Rc;
 
-pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, task::*};
+pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
-
-#[derive(Debug)]
-pub struct Stage {
-    stage_id: StageId,
-    dependent_id: StageId, // 0 == no stage depends on this
-    orig_dep_count: usize,
-    active_dep_count: usize,
-    root_lop_key: LOPKey,
-    pub register_allocator: RegisterAllocator,
-}
-
-impl Stage {
-    fn new(stage_id: usize, dependent_id: usize, root_lop_key: LOPKey) -> Self {
-        debug!("New stage with root_lop_key: {:?}", root_lop_key);
-        Stage {
-            stage_id,
-            dependent_id,
-            orig_dep_count: 0,
-            active_dep_count: 0,
-            root_lop_key,
-            register_allocator: RegisterAllocator::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct StageManager {
-    status_vec: Vec<Stage>, // Stage hierarchy encoded in this array
-}
-
-impl StageManager {
-    fn new() -> Self {
-        let status_vec = vec![]; // zeroth entry is not used
-        StageManager { status_vec }
-    }
-
-    pub fn add_stage(&mut self, root_lop_key: LOPKey, dependent_id: usize) -> usize {
-        // `dependent_stage` must exist, and it will become dependent on newly created stage
-        // newly created stage goes at the end of the vector, and its `id` is essentially its index
-        let new_id = self.status_vec.len();
-        assert!(dependent_id <= self.status_vec.len());
-        let new_ss = Stage::new(new_id, dependent_id, root_lop_key);
-        self.status_vec.push(new_ss);
-
-        if new_id > 0 {
-            let dependent_ss = &mut self.status_vec[dependent_id];
-            dependent_ss.orig_dep_count = dependent_ss.orig_dep_count + 1;
-            dependent_ss.active_dep_count = dependent_ss.active_dep_count + 1;
-        }
-
-        debug!("Added new stage: {:?}", new_id);
-        new_id
-    }
-
-    fn get_register_allocator(&mut self, stage_id: StageId) -> &mut RegisterAllocator {
-        let stage = &mut self.status_vec[stage_id];
-        &mut stage.register_allocator
-    }
-
-    fn print(&self) {
-        for stage in self.status_vec.iter() {
-            debug!("--- Stage: {:?}", stage)
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
@@ -94,16 +29,6 @@ impl POPProps {
     }
 }
 
-impl POPKey {
-    pub fn printable_key(&self) -> String {
-        format!("{:?}", *self).replace("(", "").replace(")", "")
-    }
-
-    pub fn printable(&self, pop_graph: &POPGraph) -> String {
-        let pop = &pop_graph.get(*self).value;
-        format!("{:?}-{:?}", *pop, *self)
-    }
-}
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub enum POP {
@@ -121,7 +46,7 @@ impl POP {
 }
 
 impl POPKey {
-    pub fn next(&self, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+    pub fn next(&self, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         let (pop, props, ..) = flow.pop_graph.get3(*self);
 
         loop {
@@ -137,7 +62,10 @@ impl POPKey {
             if got_row {
                 let row_passed = Self::eval_predicates(props, &task.task_row);
                 if row_passed {
-                    Self::eval_emitcols(props, &task.task_row);
+                    let emitrow = Self::eval_emitcols(props, &task.task_row);
+                    if let Some(emitrow) = emitrow {
+                        debug!("Emit row: {}", emitrow);
+                    }
                 }
                 return Ok(true);
             } else {
@@ -185,7 +113,7 @@ pub struct Repartition {
 }
 
 impl Repartition {
-    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         debug!("Repartition:next(): {:?}, is_head: {}", pop_key, is_head);
 
         todo!()
@@ -197,7 +125,7 @@ impl Repartition {
 pub struct HashJoin {}
 
 impl HashJoin {
-    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         let children = flow.pop_graph.get(pop_key).children.as_ref().unwrap();
         let probe_child_key = children[0];
         let build_child_key = children[1];
@@ -216,7 +144,7 @@ impl HashJoin {
 pub struct Aggregation {}
 
 impl Aggregation {
-    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         todo!()
     }
 }
@@ -246,7 +174,7 @@ impl CSV {
         }
     }
 
-    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         let partition_id = task.partition_id;
         let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
             let partition = &self.partitions[partition_id];
@@ -329,7 +257,7 @@ impl CSVDir {
         }
     }
 
-    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &OldStage, task: &mut Task, is_head: bool) -> Result<bool, String> {
+    fn next(&self, pop_key: POPKey, flow: &Flow, stage: &Stage, task: &mut Task, is_head: bool) -> Result<bool, String> {
         let partition_id = task.partition_id;
         let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
             let full_dirname = format!("{}-{}", self.dirname_prefix, partition_id);
@@ -386,16 +314,18 @@ impl Flow {
         let mut pop_graph: POPGraph = Graph::new();
         let mut stage_mgr = StageManager::new();
 
-        let root_stage = stage_mgr.add_stage(lop_key, 0);
+        let root_stage_id = stage_mgr.add_stage(lop_key, None);
 
-        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut stage_mgr, root_stage)?;
+        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut stage_mgr, root_stage_id)?;
+
+        stage_mgr.set_pop_key(root_stage_id, root_pop_key);
 
         stage_mgr.print();
 
         let plan_pathname = format!("{}/{}", env.output_dir, "pop.dot");
         QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_pathname)?;
 
-        let flow = Flow { pop_graph, root_pop_key };
+        let flow = Flow { pop_graph, stage_mgr };
         return Ok(flow);
     }
 
@@ -405,7 +335,7 @@ impl Flow {
         let (lop, lopprops, lop_children) = lop_graph.get3(lop_key);
 
         let child_stage_id = if matches!(lop, LOP::Repartition { .. }) {
-            stage_mgr.add_stage(lop_key, stage_id)
+            stage_mgr.add_stage(lop_key, Some(stage_id))
         } else {
             stage_id
         };
@@ -429,6 +359,11 @@ impl Flow {
             }
             LOP::Aggregation { .. } => Self::compile_aggregation(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id)?,
         };
+
+        if stage_id != child_stage_id {
+            stage_mgr.set_pop_key(child_stage_id, pop_key)
+        }
+
         Ok(pop_key)
     }
 
@@ -688,7 +623,15 @@ impl QGM {
         };
 
         let label = label.replace("\"", "").replace("{", "").replace("}", "");
-        fprint!(file, "    popkey{}[label=\"{}|p = {}|{}\"];\n", id, label, props.npartitions, extrastr);
+        fprint!(
+            file,
+            "    popkey{}[label=\"{}-{}|p = {}|{}\"];\n",
+            id,
+            label,
+            pop_key.printable_id(),
+            props.npartitions,
+            extrastr
+        );
 
         Ok(())
     }
@@ -700,6 +643,12 @@ use std::collections::HashMap;
 pub struct RegisterAllocator {
     pub hashmap: HashMap<QunCol, RegisterId>,
     next_id: RegisterId,
+}
+
+impl std::default::Default for RegisterAllocator {
+    fn default() -> Self {
+        RegisterAllocator::new()
+    }
 }
 
 impl RegisterAllocator {
@@ -718,5 +667,28 @@ impl RegisterAllocator {
         }
         //debug!("Assigned {:?} -> {}", &quncol, *e);
         *e
+    }
+}
+
+use regex::Regex;
+
+impl POPKey {
+    pub fn printable_key(&self) -> String {
+        format!("{:?}", *self).replace("(", "").replace(")", "")
+    }
+
+    pub fn printable(&self, pop_graph: &POPGraph) -> String {
+        let pop = &pop_graph.get(*self).value;
+        format!("{:?}-{:?}", *pop, *self)
+    }
+
+    pub fn printable_id(&self) -> String {
+        let re1 = Regex::new(r"^.*\(").unwrap();
+        let re2 = Regex::new(r"\).*$").unwrap();
+
+        let id = format!("{:?}", *self);
+        let id = re1.replace_all(&id, "");
+        let id = re2.replace_all(&id, "");
+        id.to_string()
     }
 }

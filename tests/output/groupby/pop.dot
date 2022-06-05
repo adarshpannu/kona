@@ -5,7 +5,7 @@ digraph example1 {
     ordering="in";
     popkeyPOPKey2v1 -> popkeyPOPKey3v1;
     popkeyPOPKey1v1 -> popkeyPOPKey2v1;
-    popkeyPOPKey1v1[label="CSV|p = 1|file: emp.csv, map: [(1, 1), (2, 0)]"];
-    popkeyPOPKey2v1[label="Repartition|p = 4|output_map = None"];
-    popkeyPOPKey3v1[label="Aggregation|p = 4|"];
+    popkeyPOPKey1v1[label="CSV-1v1|p = 1|file: emp.csv, map: [(1, 1), (2, 0)]"];
+    popkeyPOPKey2v1[label="Repartition-2v1|p = 4|output_map = None"];
+    popkeyPOPKey3v1[label="Aggregation-3v1|p = 4|"];
 }
