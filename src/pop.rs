@@ -318,7 +318,7 @@ impl Flow {
 
         let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut stage_mgr, root_stage_id)?;
 
-        stage_mgr.set_pop_key(root_stage_id, root_pop_key);
+        stage_mgr.set_pop_key(&pop_graph, root_stage_id, root_pop_key);
 
         stage_mgr.print();
 
@@ -361,7 +361,7 @@ impl Flow {
         };
 
         if stage_id != child_stage_id {
-            stage_mgr.set_pop_key(child_stage_id, pop_key)
+            stage_mgr.set_pop_key(pop_graph, child_stage_id, pop_key)
         }
 
         Ok(pop_key)

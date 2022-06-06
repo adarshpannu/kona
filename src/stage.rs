@@ -2,30 +2,49 @@
 
 use crate::includes::*;
 use crate::pop::*;
+use crate::scheduler::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stage {
-    stage_id: StageId,
-    parent_stage_id: Option<StageId>, // 0 == no stage depends on this
-    orig_child_count: usize,
-    active_child_count: usize,
-    root_lop_key: LOPKey,
+    // Compile-time details
+    pub stage_id: StageId,
+    pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
+    pub root_lop_key: LOPKey,
     pub root_pop_key: Option<POPKey>,
     pub register_allocator: RegisterAllocator,
+    pub orig_child_count: usize,
+    pub npartitions: usize,
+}
+
+#[derive(Debug)]
+pub struct StageStatus {
+    // Runtime details
+    pub completed_child_count: usize,
+    pub completed_npartitions: usize,
+}
+
+impl StageStatus {
+    pub fn new() -> Self {
+        StageStatus {
+            completed_child_count: 0,
+            completed_npartitions: 0,
+        }
+    }
 }
 
 /***************************************************************************************************/
 impl Stage {
     pub fn new(stage_id: usize, parent_stage_id: Option<usize>, root_lop_key: LOPKey) -> Self {
         debug!("New stage with root_lop_key: {:?}", root_lop_key);
+
         Stage {
             stage_id,
             parent_stage_id,
-            orig_child_count: 0,
-            active_child_count: 0,
             root_lop_key,
             root_pop_key: None,
             register_allocator: RegisterAllocator::new(),
+            orig_child_count: 0,
+            npartitions: 0,
         }
     }
 
@@ -36,47 +55,42 @@ impl Stage {
             let task = Task::new(partition_id);
             //task.run(flow, self);
 
-            let thread_id = partition_id % (env.thread_pool.size());
+            let thread_id = partition_id % (env.scheduler.size());
 
-            //let t2sa = Task2SendAcross { flow: flow.clone() };
-            let t2sa = &(flow, self, task);
-            let encoded: Vec<u8> = bincode::serialize(&t2sa).unwrap();
-            debug!("Serialized task len = {}", encoded.len());
+            let task_triplet = &(flow, self, task);
+            let task_serialized: Vec<u8> = bincode::serialize(&task_triplet).unwrap();
 
-            let _decoded: (Flow, Stage, Task) = bincode::deserialize(&encoded[..]).unwrap();
-
-            //dbg!(&decoded.0);
-
-            env.thread_pool.s2t_channels_sx[thread_id].send(ThreadPoolMessage::RunTask(encoded)).unwrap();
+            env.scheduler.s2t_channels_sx[thread_id]
+                .send(SchedulerMessage::RunTask(task_serialized))
+                .unwrap();
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StageManager {
-    status_vec: Vec<Stage>, // Stage hierarchy encoded in this array
+    pub stages: Vec<Stage>, // Stage hierarchy encoded in this array
 }
 
 impl StageManager {
     pub fn new() -> Self {
         let status_vec = vec![]; // zeroth entry is not used
-        StageManager { status_vec }
+        StageManager { stages: status_vec }
     }
 
     pub fn add_stage(&mut self, root_lop_key: LOPKey, parent_stage_id: Option<usize>) -> usize {
         // `parent_stage_id` must exist, and it will become dependent on newly created stage
         // newly created stage goes at the end of the vector, and its `id` is essentially its index
-        let new_id = self.status_vec.len();
+        let new_id = self.stages.len();
 
         let new_ss = Stage::new(new_id, parent_stage_id, root_lop_key);
-        self.status_vec.push(new_ss);
+        self.stages.push(new_ss);
 
         if let Some(parent_stage_id) = parent_stage_id {
-            assert!(parent_stage_id <= self.status_vec.len());
+            assert!(parent_stage_id <= self.stages.len());
 
-            let parent_stage = &mut self.status_vec[parent_stage_id];
+            let parent_stage = &mut self.stages[parent_stage_id];
             parent_stage.orig_child_count = parent_stage.orig_child_count + 1;
-            parent_stage.active_child_count = parent_stage.active_child_count + 1;
         }
 
         debug!("Added new stage: {:?}", new_id);
@@ -84,17 +98,19 @@ impl StageManager {
     }
 
     pub fn get_register_allocator(&mut self, stage_id: StageId) -> &mut RegisterAllocator {
-        let stage = &mut self.status_vec[stage_id];
+        let stage = &mut self.stages[stage_id];
         &mut stage.register_allocator
     }
 
-    pub fn set_pop_key(&mut self, stage_id: StageId, pop_key: POPKey) {
-        let stage = &mut self.status_vec[stage_id];
+    pub fn set_pop_key(&mut self, pop_graph: &POPGraph, stage_id: StageId, pop_key: POPKey) {
+        let stage = &mut self.stages[stage_id];
+        let props = &pop_graph.get(pop_key).properties;
+        stage.npartitions = props.npartitions;
         stage.root_pop_key = Some(pop_key)
     }
 
     pub fn print(&self) {
-        for stage in self.status_vec.iter() {
+        for stage in self.stages.iter() {
             debug!("--- Stage: {:?}", stage)
         }
     }

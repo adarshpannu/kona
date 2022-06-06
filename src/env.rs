@@ -1,7 +1,7 @@
 // env
 
 use crate::includes::*;
-use crate::task::ThreadPool;
+use crate::scheduler::Scheduler;
 use crate::metadata::Metadata;
 use crate::row::Datum;
 
@@ -20,7 +20,7 @@ impl EnvSettings {
 }
 
 pub struct Env {
-    pub thread_pool: ThreadPool,
+    pub scheduler: Scheduler,
     pub metadata: Metadata,
     pub input_pathname: String,
     pub output_dir: String,
@@ -29,12 +29,12 @@ pub struct Env {
 
 impl Env {
     pub fn new(nthreads: usize, input_pathname: String, output_dir: String) -> Self {
-        let thread_pool = ThreadPool::new(nthreads);
+        let scheduler = Scheduler::new(nthreads);
         let metadata = Metadata::new();
         let options = EnvSettings::new();
 
         Env {
-            thread_pool,
+            scheduler,
             metadata,
             input_pathname,
             output_dir,

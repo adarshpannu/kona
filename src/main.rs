@@ -36,6 +36,7 @@ pub mod pop;
 pub mod row;
 pub mod stage;
 pub mod task;
+pub mod scheduler;
 pub mod pcode;
 pub mod scratch;
 
@@ -51,10 +52,10 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     std::fs::remove_dir_all(&dirname).unwrap_or_default();
 
     // Run the flow
-    flow.run(&env);
+    env.scheduler.run_flow(env, flow, &flow.stage_mgr);
 
-    env.thread_pool.close_all();
-    env.thread_pool.join();
+    env.scheduler.close_all();
+    env.scheduler.join();
     Ok(())
 }
 
@@ -100,9 +101,9 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 */
 fn main() -> Result<(), String> {
 
-    std::env::set_var("RUST_LOG", "flare::pcode=info");
+    //std::env::set_var("RUST_LOG", "flare::pcode=info");
 
-    std::env::set_var("RUST_LOG", "flare=info,flare::pop=debug,flare::flow=debug");
+    //std::env::set_var("RUST_LOG", "flare=info,flare::pop=debug,flare::flow=debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
