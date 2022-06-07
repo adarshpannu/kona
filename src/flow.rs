@@ -5,7 +5,7 @@ use crate::{graph::*, includes::*, pop::*, stage::*};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
     pub pop_graph: POPGraph,
-    pub stage_mgr: StageManager,
+    pub stage_graph: StageGraph,
 }
 
 impl Flow {

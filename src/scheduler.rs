@@ -115,24 +115,24 @@ impl Scheduler {
         v
     }
 
-    pub fn run_flow(&self, env: &Env, flow: &Flow, stage_mgr: &StageManager) {
-        let mut stage_status = (0..stage_mgr.stages.len()).map(|_| StageStatus::new()).collect::<Vec<_>>();
+    pub fn run_flow(&self, env: &Env, flow: &Flow, stage_graph: &StageGraph) {
+        let mut stage_status = (0..stage_graph.stages.len()).map(|_| StageStatus::new()).collect::<Vec<_>>();
 
-        let stages = Self::runnable(&stage_mgr.stages, &stage_status);
+        let stages = Self::runnable(&stage_graph.stages, &stage_status);
         for stage in stages {
             debug!("Running stage: {}", stage.stage_id);
             stage.run(env, flow);
         }
-        
+
         for msg in &self.t2s_channel_rx {
             let mut stage_ended = None;
 
             debug!("run_flow message recv: {:?}", msg);
 
             match msg {
-                SchedulerMessage::TaskEnded { stage_id, partition_id } => {
+                SchedulerMessage::TaskEnded { stage_id, .. } => {
                     let mut ss = &mut stage_status[stage_id];
-                    let stage = &stage_mgr.stages[stage_id];
+                    let stage = &stage_graph.stages[stage_id];
 
                     ss.completed_npartitions = ss.completed_npartitions + 1;
                     if stage.npartitions == ss.completed_npartitions {

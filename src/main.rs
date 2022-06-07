@@ -43,6 +43,7 @@ pub mod scratch;
 use ast::*;
 use flow::*;
 use qgm::*;
+use pop::POP;
 
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
@@ -52,7 +53,7 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     std::fs::remove_dir_all(&dirname).unwrap_or_default();
 
     // Run the flow
-    env.scheduler.run_flow(env, flow, &flow.stage_mgr);
+    env.scheduler.run_flow(env, flow, &flow.stage_graph);
 
     env.scheduler.close_all();
     env.scheduler.join();
@@ -85,7 +86,7 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_raw_pathname, false)?;
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_pathname, false)?;
-                let flow = Flow::compile(env, &mut qgm).unwrap();
+                let flow = POP::compile(env, &mut qgm).unwrap();
 
                 if !env.settings.parse_only.unwrap_or(false) {
                     run_flow(env, &flow)?;

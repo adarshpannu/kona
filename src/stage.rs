@@ -68,14 +68,14 @@ impl Stage {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct StageManager {
+pub struct StageGraph {
     pub stages: Vec<Stage>, // Stage hierarchy encoded in this array
 }
 
-impl StageManager {
+impl StageGraph {
     pub fn new() -> Self {
         let status_vec = vec![]; // zeroth entry is not used
-        StageManager { stages: status_vec }
+        StageGraph { stages: status_vec }
     }
 
     pub fn add_stage(&mut self, root_lop_key: LOPKey, parent_stage_id: Option<usize>) -> usize {

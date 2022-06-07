@@ -308,34 +308,34 @@ pub enum NodeRuntime {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashJoinPOP {}
 
-impl Flow {
+impl POP {
     pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
         let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
         let mut pop_graph: POPGraph = Graph::new();
-        let mut stage_mgr = StageManager::new();
+        let mut stage_graph = StageGraph::new();
 
-        let root_stage_id = stage_mgr.add_stage(lop_key, None);
+        let root_stage_id = stage_graph.add_stage(lop_key, None);
 
-        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut stage_mgr, root_stage_id)?;
+        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut pop_graph, &mut stage_graph, root_stage_id)?;
 
-        stage_mgr.set_pop_key(&pop_graph, root_stage_id, root_pop_key);
+        stage_graph.set_pop_key(&pop_graph, root_stage_id, root_pop_key);
 
-        stage_mgr.print();
+        stage_graph.print();
 
         let plan_pathname = format!("{}/{}", env.output_dir, "pop.dot");
         QGM::write_physical_plan_to_graphviz(qgm, &pop_graph, root_pop_key, &plan_pathname)?;
 
-        let flow = Flow { pop_graph, stage_mgr };
+        let flow = Flow { pop_graph, stage_graph };
         return Ok(flow);
     }
 
     pub fn compile_lop(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_mgr: &mut StageManager, stage_id: StageId,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_graph: &mut StageGraph, stage_id: StageId,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, lop_children) = lop_graph.get3(lop_key);
 
         let child_stage_id = if matches!(lop, LOP::Repartition { .. }) {
-            stage_mgr.add_stage(lop_key, Some(stage_id))
+            stage_graph.add_stage(lop_key, Some(stage_id))
         } else {
             stage_id
         };
@@ -344,7 +344,7 @@ impl Flow {
         let mut pop_children = vec![];
         if let Some(lop_children) = lop_children {
             for lop_child_key in lop_children {
-                let pop_key = Self::compile_lop(qgm, lop_graph, *lop_child_key, pop_graph, stage_mgr, child_stage_id)?;
+                let pop_key = Self::compile_lop(qgm, lop_graph, *lop_child_key, pop_graph, stage_graph, child_stage_id)?;
                 pop_children.push(pop_key);
             }
         }
@@ -352,23 +352,23 @@ impl Flow {
         let npartitions = lopprops.partdesc.npartitions;
 
         let pop_key = match lop {
-            LOP::TableScan { input_cols } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph, stage_mgr, stage_id)?,
-            LOP::HashJoin { equi_join_preds } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id)?,
+            LOP::TableScan { input_cols } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph, stage_graph, stage_id)?,
+            LOP::HashJoin { equi_join_preds } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_graph, stage_id)?,
             LOP::Repartition { cpartitions } => {
-                Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id, child_stage_id)?
+                Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_graph, stage_id, child_stage_id)?
             }
-            LOP::Aggregation { .. } => Self::compile_aggregation(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_mgr, stage_id)?,
+            LOP::Aggregation { .. } => Self::compile_aggregation(qgm, lop_graph, lop_key, pop_graph, pop_children, stage_graph, stage_id)?,
         };
 
         if stage_id != child_stage_id {
-            stage_mgr.set_pop_key(pop_graph, child_stage_id, pop_key)
+            stage_graph.set_pop_key(pop_graph, child_stage_id, pop_key)
         }
 
         Ok(pop_key)
     }
 
     pub fn compile_repartition(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_mgr: &mut StageManager,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_graph: &mut StageGraph,
         stage_id: StageId, child_stage_id: StageId,
     ) -> Result<POPKey, String> {
         // Repartition split into Repartition + CSVDirScan
@@ -378,7 +378,7 @@ impl Flow {
         let predicates = None;
         assert!(lopprops.preds.len() == 0);
 
-        let ra = stage_mgr.get_register_allocator(stage_id);
+        let ra = stage_graph.get_register_allocator(stage_id);
 
         // Compile cols or emitcols. We will have one or the other
         let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), ra);
@@ -407,14 +407,14 @@ impl Flow {
     }
 
     pub fn compile_join(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_mgr: &mut StageManager,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_graph: &mut StageGraph,
         stage_id: StageId,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
 
         // Compile predicates
         //debug!("Compile predicate for lopkey: {:?}", lop_key);
-        let ra = stage_mgr.get_register_allocator(stage_id);
+        let ra = stage_graph.get_register_allocator(stage_id);
 
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, ra);
 
@@ -431,11 +431,11 @@ impl Flow {
     }
 
     pub fn compile_aggregation(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_mgr: &mut StageManager,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, stage_graph: &mut StageGraph,
         stage_id: StageId,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
-        let ra = stage_mgr.get_register_allocator(stage_id);
+        let ra = stage_graph.get_register_allocator(stage_id);
 
         // Compile predicates
         debug!("Compile predicate for lopkey: {:?}", lop_key);
@@ -454,10 +454,10 @@ impl Flow {
     }
 
     pub fn compile_scan(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_mgr: &mut StageManager, stage_id: StageId,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_graph: &mut StageGraph, stage_id: StageId,
     ) -> Result<POPKey, String> {
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
-        let ra = stage_mgr.get_register_allocator(stage_id);
+        let ra = stage_graph.get_register_allocator(stage_id);
 
         let qunid = lopprops.quns.elements()[0];
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
