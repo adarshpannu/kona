@@ -110,6 +110,7 @@ impl POPKey {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Repartition {
     output_map: Option<Vec<RegisterId>>,
+    repart_key: Vec<PCode>,
 }
 
 impl Repartition {
@@ -400,7 +401,15 @@ impl POP {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_inner = Repartition { output_map };
+        let repart_key = if let PartType::HASHEXPR(exprs) = &lopprops.partdesc.part_type {
+            debug!("Compile pkey start");
+            Self::compile_exprs(qgm, &exprs, ra).unwrap()
+        } else {
+            panic!("Invalid partitioning type")
+        };
+        debug!("Compile pkey end");
+
+        let pop_inner = Repartition { output_map, repart_key };
         let pop_key = pop_graph.add_node_with_props(POP::Repartition(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
@@ -520,11 +529,20 @@ impl POP {
     }
 
     pub fn compile_predicates(qgm: &QGM, preds: &Bitset<ExprKey>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
-        let mut pcodevec = vec![];
         if preds.len() > 0 {
-            for pred_key in preds.elements().iter() {
+            let exprs = preds.elements();
+            Self::compile_exprs(qgm, &exprs, register_allocator)
+        } else {
+            None
+        }
+    }
+
+    pub fn compile_exprs(qgm: &QGM, exprs: &Vec<ExprKey>, register_allocator: &mut RegisterAllocator) -> Option<Vec<PCode>> {
+        let mut pcodevec = vec![];
+        if exprs.len() > 0 {
+            for expr_key in exprs.iter() {
                 let mut pcode = PCode::new();
-                pred_key.compile(&qgm.expr_graph, &mut pcode, register_allocator);
+                expr_key.compile(&qgm.expr_graph, &mut pcode, register_allocator);
                 pcodevec.push(pcode);
             }
             Some(pcodevec)

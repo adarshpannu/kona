@@ -46,6 +46,7 @@ impl PartDesc {
     }
 }
 
+#[allow(dead_code)] // FIXME
 #[derive(Debug)]
 pub struct TableStats {
     nrows: usize,

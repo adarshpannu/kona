@@ -11,25 +11,24 @@
 			"group": {
 				"kind": "build",
 				"isDefault": false
-			},
+			}
 		},
 		{
 			"label": "run_unit_tests",
 			"type": "cargo",
 			"command": "test",
-            "args": [
+			"args": [
 				"run_unit_tests",
 				"--",
 				"--nocapture"
-            ],
+			],
 			"problemMatcher": [
 				"$rustc"
 			],
 			"group": {
 				"kind": "build",
 				"isDefault": false
-			},
+			}
 		},
-
 	]
 }

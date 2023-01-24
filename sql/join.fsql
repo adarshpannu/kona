@@ -4,6 +4,8 @@ CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/da
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
 
+set PARALLEL_DEGREE = 4;
+
 // All engineers aged 35+ 
 SELECT EMP.name, DEPT.DEPT_ID 
 from EMP, DEPT
