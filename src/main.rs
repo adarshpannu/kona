@@ -114,7 +114,7 @@ fn main() -> Result<(), String> {
     let mut env = Env::new(1, input_pathname, output_dir);
 
     let jobres = run_job(&mut env);
-    if let Err(errstr) = jobres {
+    if let Err(errstr) = &jobres {
         let errstr = format!("{}", &errstr);
         error!("{}", errstr);
         return Err(errstr);

@@ -106,7 +106,6 @@ pub struct Quantifier {
     pub tablename: Option<String>,
     pub qblock: Option<QueryBlockKey>,
     pub alias: Option<String>,
-    pub pred_list: Option<ExprKey>,
 
     #[serde(skip)]
     pub tabledesc: Option<Rc<dyn TableDesc>>,
@@ -132,7 +131,6 @@ impl Quantifier {
             tablename: name,
             qblock,
             alias,
-            pred_list: None,
             tabledesc: None,
         }
     }
