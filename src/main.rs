@@ -14,36 +14,36 @@ extern crate fstrings;
 
 lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
-pub mod includes;
-pub mod env;
-pub mod metadata;
 pub mod bitset;
+pub mod env;
 pub mod graph;
 pub mod graphviz;
+pub mod includes;
 pub mod logging;
+pub mod metadata;
 
 pub mod ast;
 pub mod expr;
 pub mod qgm;
 pub mod qgmiter;
 
-pub mod qst;
 pub mod lop;
+pub mod qst;
 
 pub mod csv;
 pub mod flow;
+pub mod pcode;
 pub mod pop;
 pub mod row;
+pub mod scheduler;
+pub mod scratch;
 pub mod stage;
 pub mod task;
-pub mod scheduler;
-pub mod pcode;
-pub mod scratch;
 
 use ast::*;
 use flow::*;
-use qgm::*;
 use pop::POP;
+use qgm::*;
 
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
@@ -61,7 +61,7 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
 }
 
 fn run_job(env: &mut Env) -> Result<(), String> {
-    let pathname = env.input_pathname.as_str();
+    let pathname = &env.input_pathname;
     let contents = fs::read_to_string(pathname).expect(&format!("Cannot open file: {}", &pathname));
 
     let mut parser_state = ParserState::new();
@@ -101,7 +101,6 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 ********************************** main ****************************************************************
 */
 fn main() -> Result<(), String> {
-
     //std::env::set_var("RUST_LOG", "flare::pcode=info");
 
     //std::env::set_var("RUST_LOG", "flare=info,flare::pop=debug,flare::flow=debug");
@@ -172,3 +171,4 @@ fn run_unit_tests() -> Result<(), String> {
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
     Ok(())
 }
+
