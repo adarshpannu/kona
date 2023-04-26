@@ -1,15 +1,15 @@
 // qgm: query graph model
 
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::File;
 use std::io::Write;
-use std::rc::Rc;
-use std::fmt;
 use std::process::Command;
+use std::rc::Rc;
 
-use crate::includes::*;
 use crate::expr::*;
 use crate::graph::*;
+use crate::includes::*;
 use crate::metadata::*;
 
 pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlock, ()>;
@@ -52,7 +52,6 @@ pub struct QGM {
     pub cte_list: Vec<QueryBlockKey>,
     pub qblock_graph: QueryBlockGraph,
     pub expr_graph: ExprGraph,
-
     pub metadata: QGMMetadata,
 }
 
@@ -103,8 +102,11 @@ pub enum QueryBlockType {
 #[derive(Serialize, Deserialize)]
 pub struct Quantifier {
     pub id: QunId,
+
+    // Either we have a named base table, or we have a queryblock (but not both)
     pub tablename: Option<String>,
     pub qblock: Option<QueryBlockKey>,
+    
     pub alias: Option<String>,
 
     #[serde(skip)]

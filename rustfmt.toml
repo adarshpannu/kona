@@ -4,3 +4,4 @@ brace_style = "PreferSameLine"
 fn_args_layout = "Compressed"
 use_field_init_shorthand = true
 max_width = 160
+enum_variant_style = "Compact"

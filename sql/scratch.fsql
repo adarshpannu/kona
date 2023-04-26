@@ -2,8 +2,9 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-SELECT name, age + 55, emp_dept_id 
+SELECT name 
 from emp
-where emp_dept_id = 4 or -emp_dept_id = -5
+where age = 20 and emp_dept_id = 4
 ;
+
 

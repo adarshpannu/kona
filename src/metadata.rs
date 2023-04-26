@@ -1,9 +1,9 @@
 // metadata
 
-use std::collections::HashMap;
-use std::rc::Rc;
 use crate::includes::*;
 use crate::{expr::*, graph::*, row::*};
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy)]
 pub enum TableType {
@@ -348,10 +348,12 @@ impl Metadata {
                 let part_desc = Self::get_part_desc(&hm)?;
                 let table_stats = Self::get_table_stats(&hm)?;
 
-                let columns = if matches!(tp, TableType::CSV) {
+                let columns = if hm.get("COLUMNS").is_some() {
+                    Self::parse_columns(&hm)?
+                } else if matches!(tp, TableType::CSV) {
                     CSVDesc::infer_metadata(&path, separator, header)
                 } else {
-                    Self::parse_columns(&hm)?
+                    unimplemented!()
                 };
 
                 let csvdesc = Rc::new(CSVDesc::new(tp, path, columns, separator, header, part_desc, table_stats)?);

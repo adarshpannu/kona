@@ -131,7 +131,9 @@ pub enum Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            CID(qunid, colid) => format!("${}.{}", *qunid, *colid),
+            CID(qunid, colid) => {
+                format!("${}.{}", *qunid, *colid)
+            }
             Column { prefix, colname, qunid, colid } => {
                 if let Some(prefix) = prefix {
                     format!("{}.{} (${}.{})", prefix, colname, *qunid, *colid)
@@ -141,17 +143,35 @@ impl Expr {
             }
             Star => format!("*"),
             Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
-            BinaryExpr(op) => format!("{}", op),
+            BinaryExpr(op) => {
+                format!("{}", op)
+            }
             NegatedExpr => "-".to_string(),
-            RelExpr(op) => format!("{}", op),
-            BetweenExpr => format!("BETWEEEN"),
+            RelExpr(op) => {
+                format!("{}", op)
+            }
+            BetweenExpr => {
+                format!("BETWEEEN")
+            }
             InListExpr => format!("IN"),
-            InSubqExpr => format!("IN_SUBQ"),
-            ExistsExpr => format!("EXISTS"),
-            LogExpr(op) => format!("{:?}", op),
-            Subquery(_) => format!("(subquery)"),
-            AggFunction(aggtype, ..) => format!("{:?}", aggtype),
-            ScalarFunction(name) => format!("{}()", name),
+            InSubqExpr => {
+                format!("IN_SUBQ")
+            }
+            ExistsExpr => {
+                format!("EXISTS")
+            }
+            LogExpr(op) => {
+                format!("{:?}", op)
+            }
+            Subquery(_) => {
+                format!("(subquery)")
+            }
+            AggFunction(aggtype, ..) => {
+                format!("{:?}", aggtype)
+            }
+            ScalarFunction(name) => {
+                format!("{}()", name)
+            }
         }
     }
 
@@ -251,7 +271,9 @@ impl ExprKey {
     pub fn printable(&self, graph: &ExprGraph, do_escape: bool) -> String {
         let (expr, _, children) = graph.get3(*self);
         let retval = match expr {
-            CID(qunid, colid) => format!("${}.{}", *qunid, *colid),
+            CID(qunid, colid) => {
+                format!("${}.{}", *qunid, *colid)
+            }
             Column { prefix, colname, .. } => {
                 if let Some(prefix) = prefix {
                     format!("{}.{}", prefix, colname)
@@ -268,7 +290,7 @@ impl ExprKey {
             NegatedExpr => {
                 let lhs_key = children.unwrap()[0];
                 format!("-{}", lhs_key.printable(graph, false))
-            },
+            }
             RelExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
                 format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
@@ -277,16 +299,26 @@ impl ExprKey {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
                 format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
             }
-            BetweenExpr => format!("BETWEEEN"),
+            BetweenExpr => {
+                format!("BETWEEEN")
+            }
             InListExpr => format!("IN"),
-            InSubqExpr => format!("IN_SUBQ"),
-            ExistsExpr => format!("EXISTS"),
-            Subquery(_) => format!("(subquery)"),
+            InSubqExpr => {
+                format!("IN_SUBQ")
+            }
+            ExistsExpr => {
+                format!("EXISTS")
+            }
+            Subquery(_) => {
+                format!("(subquery)")
+            }
             AggFunction(aggtype, _) => {
                 let child_id = children.unwrap()[0];
                 format!("{:?}({})", aggtype, child_id.printable(graph, false))
             }
-            ScalarFunction(name) => format!("{}()", name),
+            ScalarFunction(name) => {
+                format!("{}()", name)
+            }
         };
         if do_escape {
             let re = Regex::new(r"([><])").unwrap();
