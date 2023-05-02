@@ -4,6 +4,7 @@ digraph example1 {
     ordering="in";
   subgraph cluster_QB_1 {
     "QB_1_selectlist"[label="select_list",shape=box,style=filled];
+    color = "red"
   subgraph cluster_select_listQB_1 {
     exprnodeExprKey3v1[label="/: 0"];
     exprnodeExprKey1v1 -> exprnodeExprKey3v1;

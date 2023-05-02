@@ -143,35 +143,17 @@ impl Expr {
             }
             Star => format!("*"),
             Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
-            BinaryExpr(op) => {
-                format!("{}", op)
-            }
+            BinaryExpr(op) => format!("{}", op),
             NegatedExpr => "-".to_string(),
-            RelExpr(op) => {
-                format!("{}", op)
-            }
-            BetweenExpr => {
-                format!("BETWEEEN")
-            }
+            RelExpr(op) => format!("{}", op),
+            BetweenExpr => format!("BETWEEEN"),
             InListExpr => format!("IN"),
-            InSubqExpr => {
-                format!("IN_SUBQ")
-            }
-            ExistsExpr => {
-                format!("EXISTS")
-            }
-            LogExpr(op) => {
-                format!("{:?}", op)
-            }
-            Subquery(_) => {
-                format!("(subquery)")
-            }
-            AggFunction(aggtype, ..) => {
-                format!("{:?}", aggtype)
-            }
-            ScalarFunction(name) => {
-                format!("{}()", name)
-            }
+            InSubqExpr => format!("IN_SUBQ"),
+            ExistsExpr => format!("EXISTS"),
+            LogExpr(op) => format!("{:?}", op),
+            Subquery(_) => format!("(subquery)"),
+            AggFunction(aggtype, ..) => format!("{:?}", aggtype),
+            ScalarFunction(name) => format!("{}()", name),
         }
     }
 

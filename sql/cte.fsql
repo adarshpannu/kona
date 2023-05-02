@@ -5,7 +5,7 @@ DESCRIBE TABLE emp;
 
 SET parse_only = "true";
 
-WITH CTE(nm) AS (
+WITH CTE AS (
 SELECT name from EMP
 where dept_id = 4
 )

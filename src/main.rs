@@ -86,9 +86,10 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 qgm.write_qgm_to_graphviz(&qgm_raw_pathname, false)?;
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_pathname, false)?;
-                let flow = POP::compile(env, &mut qgm).unwrap();
 
                 if !env.settings.parse_only.unwrap_or(false) {
+                    let flow = POP::compile(env, &mut qgm).unwrap();
+
                     run_flow(env, &flow)?;
                 }
             }
@@ -108,7 +109,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/simple.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 

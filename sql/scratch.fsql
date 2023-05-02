@@ -1,10 +1,14 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 3);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE emp;
 
-SELECT name 
-from emp
-where age = 20 and emp_dept_id = 4
-;
+set PARSE_ONLY = "true";
 
+select emp_dept_id, sum(age), (SELECT max(age) from EMP)
+from emp E
+where 
+    age > 50 
+    and age <= ALL (SELECT age from EMP)
+group by emp_dept_id
+;
 

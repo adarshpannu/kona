@@ -1,8 +1,13 @@
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 3);
 
-WITH CTE1 AS (SELECT COL1a FROM T1)
-SELECT COL1a, COL2a 
-FROM CTE1, T2, (SELECT COL3a FROM T3 WHERE COL3b >= (SELECT MAX(COL4) FROM T4 WHERE COL4b = 999)) SQ1
-WHERE COL2B > 100
-GROUP BY GRP1
-HAVING MAX(GRP1) > 200
+DESCRIBE TABLE emp;
+
+set PARALLEL_DEGREE = 4;
+
+// All engineers aged 35+ 
+SELECT EMP.name 
+from EMP
+where EMP.age = (SELECT max(age) from EMP)
+and exists (SELECT count(*) from EMP where age >= 25)
 ;
+

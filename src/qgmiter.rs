@@ -31,13 +31,17 @@ impl<'a> Iterator for QueryBlockIter<'a> {
 }
 
 impl QGM {
-    pub fn iter_qblocks(&self) -> QueryBlockIter {
+    pub fn iter_qblocks0(&self) -> QueryBlockIter {
         let mut queue = vec![self.main_qblock_key];
         queue.append(&mut self.cte_list.clone());
         QueryBlockIter {
             qblock_graph: &self.qblock_graph,
             queue,
         }
+    }
+
+    pub fn iter_qblocks(&self) -> Box<dyn Iterator<Item = QueryBlockKey> + '_> {
+        Box::new(self.qblock_graph.sm.keys())
     }
 
     pub fn iter_quncols(&self) -> Box<dyn Iterator<Item = QunCol> + '_> {

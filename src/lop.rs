@@ -195,183 +195,6 @@ impl QGM {
         }
     }
 
-    pub fn classify_predicate(eqjoin_desc: &EqJoinDesc, lhs_props: &LOPProps, rhs_props: &LOPProps) -> (PredicateType, PredicateAlignment) {
-        let (lhs_pred_quns, rhs_pred_quns) = (&eqjoin_desc.lhs_quns, &eqjoin_desc.rhs_quns);
-
-        // pred-quns must be subset of plan quns
-        if lhs_pred_quns.is_subset_of(&lhs_props.quns) && rhs_pred_quns.is_subset_of(&rhs_props.quns) {
-            (PredicateType::EquiJoin, PredicateAlignment::Aligned)
-        } else if lhs_pred_quns.is_subset_of(&rhs_props.quns) && rhs_pred_quns.is_subset_of(&lhs_props.quns) {
-            // Swapped scenario
-            (PredicateType::EquiJoin, PredicateAlignment::Reversed)
-        } else {
-            (PredicateType::Other, PredicateAlignment::Inapplicable)
-        }
-    }
-
-    fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
-        let mut select_list_quncol = aps_context.all_quncols.clone_n_clear();
-        qblock
-            .select_list
-            .iter()
-            .flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph))
-            .for_each(|quncol| select_list_quncol.set(quncol));
-        select_list_quncol
-    }
-
-    fn collect_preds(&self, aps_context: &APSContext, qblock: &QueryBlock) -> (PredMap, ExprEqClass) {
-        let expr_graph = &self.expr_graph;
-        let mut pred_map: PredMap = HashMap::new();
-
-        let mut eqclass = ExprEqClass::new();
-        let mut eqpred_legs = vec![];
-
-        if let Some(pred_list) = qblock.pred_list.as_ref() {
-            for &pred_key in pred_list.iter() {
-                // Collect quns and quncols for each predicate
-                let mut quncols = aps_context.all_quncols.clone_n_clear();
-                let mut quns = aps_context.all_quns.clone_n_clear();
-
-                for quncol in pred_key.iter_quncols(&self.expr_graph) {
-                    quncols.set(quncol);
-                    quns.set(quncol.0);
-                }
-
-                // For equijoin candidates, collect lhs and rhs quns
-                let expr = expr_graph.get(pred_key);
-                let eqjoin_desc = if let RelExpr(RelOp::Eq) = expr.value {
-                    let children = expr.children.as_ref().unwrap();
-                    let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
-                    let lhs_quns = aps_context.all_quns.clone_n_clear().init(lhs_child_key.iter_quns(expr_graph));
-                    let rhs_quns = aps_context.all_quns.clone_n_clear().init(rhs_child_key.iter_quns(expr_graph));
-
-                    if lhs_quns.len() > 0 && rhs_quns.len() > 0 {
-                        let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
-                        eqpred_legs.push((lhs_hash, lhs_child_key));
-                        eqpred_legs.push((rhs_hash, rhs_child_key));
-                        eqclass.set_eq(lhs_child_key, rhs_child_key);
-                        Some(Box::new(EqJoinDesc { lhs_quns, rhs_quns }))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                pred_map.insert(pred_key, PredDesc { quncols, quns, eqjoin_desc });
-            }
-        }
-
-        // SELECT expressions are also added to eq-class. These come into play when determining partitioning.
-        for ne in qblock.select_list.iter() {
-            let expr_key = ne.expr_key;
-            let expr_hash = expr_key.hash(expr_graph);
-
-            eqpred_legs.push((expr_hash, expr_key));
-        }
-
-        let mut visited = vec![false; eqpred_legs.len()];
-
-        // Go over all eqjoin legs and equate all the ones that are structurally equivalent
-        for (ix, &(expr_hash1, expr_key1)) in eqpred_legs.iter().enumerate() {
-            if !visited[ix] {
-                for (jx, &(expr_hash2, expr_key2)) in eqpred_legs.iter().enumerate() {
-                    if jx > ix && expr_hash1 == expr_hash2 && Expr::isomorphic(expr_graph, expr_key1, expr_key1) {
-                        eqclass.set_eq(expr_key1, expr_key2);
-                        visited[jx] = true;
-                    }
-                }
-            }
-        }
-
-        (pred_map, eqclass)
-    }
-
-    pub fn build_unary_plans(
-        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap,
-        select_list_quncol: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
-    ) -> Result<(), String> {
-        let APSContext {
-            all_quncols,
-            all_quns,
-            all_preds,
-        } = aps_context;
-
-        // Build unary POPs first
-        for qun in qblock.quns.iter() {
-            // Set quns
-            let mut quns = all_quns.clone_n_clear();
-            quns.set(qun.id);
-
-            // Set input cols: find all column references for this qun
-            let mut input_quncols = all_quncols.clone_n_clear();
-            aps_context
-                .all_quncols
-                .elements()
-                .iter()
-                .filter(|&quncol| quncol.0 == qun.id)
-                .for_each(|&quncol| input_quncols.set(quncol));
-
-            // Set output cols + preds
-            let mut unbound_quncols = select_list_quncol.clone();
-
-            let mut preds = all_preds.clone_n_clear();
-            pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, .. })| {
-                if quns.get(qun.id) {
-                    if quns.bitmap.len() == 1 {
-                        // Set preds: find local preds that refer to this qun
-                        preds.set(pred_key);
-                    } else {
-                        // Set output columns: Only project cols in the select-list + unbound join preds
-                        unbound_quncols.bitmap = unbound_quncols.bitmap | quncols.bitmap;
-                    }
-                }
-            });
-
-            let mut output_quncols = select_list_quncol.clone();
-            output_quncols.bitmap = unbound_quncols.bitmap & input_quncols.bitmap;
-
-            // Remove all preds that will run on this tablescan as they've been bound already
-            for pred_key in preds.elements().iter() {
-                pred_map.remove_entry(pred_key);
-            }
-
-            // Build plan for nested query blocks
-            let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
-                let child_qblock_key = qun.qblock.unwrap();
-                let child_qblock = &self.qblock_graph.get(child_qblock_key).value;
-                let group_by_len = qblock.group_by.as_ref().unwrap().len();
-                let expected_partitioning = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
-
-                // child == subplan that we'll be aggregating.
-                for e in expected_partitioning.iter() {
-                    debug!("expected: {:?}", e.printable(&self.expr_graph, false))
-                }
-
-                let child_lop_key = self.build_qblock_logical_plan(env, qun.id, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
-
-                let children = Some(vec![child_lop_key]);
-
-                let partdesc = lop_graph.get(child_lop_key).properties.partdesc.clone();
-                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
-                lop_graph.add_node_with_props(LOP::Aggregation { group_by_len }, props, children)
-            } else {
-                let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
-                    tabledesc.get_part_desc().npartitions
-                } else {
-                    env.settings.parallel_degree.unwrap_or(1) * 2 // todo: temporary hack to force different partition counts in a plan
-                };
-                let partdesc = PartDesc::new(npartitions, PartType::RAW);
-
-                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
-
-                lop_graph.add_node_with_props(LOP::TableScan { input_cols: input_quncols }, props, None)
-            };
-            //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
-            worklist.push(lopkey);
-        }
-        Ok(())
-    }
-
     pub fn build_qblock_logical_plan(
         self: &QGM, env: &Env, parent_qun_id: QunId, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph,
         expected_partitioning: Option<Vec<ExprKey>>,
@@ -588,6 +411,183 @@ impl QGM {
         } else {
             Err("Cannot find plan for qblock".to_string())
         }
+    }
+
+    pub fn classify_predicate(eqjoin_desc: &EqJoinDesc, lhs_props: &LOPProps, rhs_props: &LOPProps) -> (PredicateType, PredicateAlignment) {
+        let (lhs_pred_quns, rhs_pred_quns) = (&eqjoin_desc.lhs_quns, &eqjoin_desc.rhs_quns);
+
+        // pred-quns must be subset of plan quns
+        if lhs_pred_quns.is_subset_of(&lhs_props.quns) && rhs_pred_quns.is_subset_of(&rhs_props.quns) {
+            (PredicateType::EquiJoin, PredicateAlignment::Aligned)
+        } else if lhs_pred_quns.is_subset_of(&rhs_props.quns) && rhs_pred_quns.is_subset_of(&lhs_props.quns) {
+            // Swapped scenario
+            (PredicateType::EquiJoin, PredicateAlignment::Reversed)
+        } else {
+            (PredicateType::Other, PredicateAlignment::Inapplicable)
+        }
+    }
+
+    fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
+        let mut select_list_quncol = aps_context.all_quncols.clone_n_clear();
+        qblock
+            .select_list
+            .iter()
+            .flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph))
+            .for_each(|quncol| select_list_quncol.set(quncol));
+        select_list_quncol
+    }
+
+    fn collect_preds(&self, aps_context: &APSContext, qblock: &QueryBlock) -> (PredMap, ExprEqClass) {
+        let expr_graph = &self.expr_graph;
+        let mut pred_map: PredMap = HashMap::new();
+
+        let mut eqclass = ExprEqClass::new();
+        let mut eqpred_legs = vec![];
+
+        if let Some(pred_list) = qblock.pred_list.as_ref() {
+            for &pred_key in pred_list.iter() {
+                // Collect quns and quncols for each predicate
+                let mut quncols = aps_context.all_quncols.clone_n_clear();
+                let mut quns = aps_context.all_quns.clone_n_clear();
+
+                for quncol in pred_key.iter_quncols(&self.expr_graph) {
+                    quncols.set(quncol);
+                    quns.set(quncol.0);
+                }
+
+                // For equijoin candidates, collect lhs and rhs quns
+                let expr = expr_graph.get(pred_key);
+                let eqjoin_desc = if let RelExpr(RelOp::Eq) = expr.value {
+                    let children = expr.children.as_ref().unwrap();
+                    let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
+                    let lhs_quns = aps_context.all_quns.clone_n_clear().init(lhs_child_key.iter_quns(expr_graph));
+                    let rhs_quns = aps_context.all_quns.clone_n_clear().init(rhs_child_key.iter_quns(expr_graph));
+
+                    if lhs_quns.len() > 0 && rhs_quns.len() > 0 {
+                        let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
+                        eqpred_legs.push((lhs_hash, lhs_child_key));
+                        eqpred_legs.push((rhs_hash, rhs_child_key));
+                        eqclass.set_eq(lhs_child_key, rhs_child_key);
+                        Some(Box::new(EqJoinDesc { lhs_quns, rhs_quns }))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                pred_map.insert(pred_key, PredDesc { quncols, quns, eqjoin_desc });
+            }
+        }
+
+        // SELECT expressions are also added to eq-class. These come into play when determining partitioning.
+        for ne in qblock.select_list.iter() {
+            let expr_key = ne.expr_key;
+            let expr_hash = expr_key.hash(expr_graph);
+
+            eqpred_legs.push((expr_hash, expr_key));
+        }
+
+        let mut visited = vec![false; eqpred_legs.len()];
+
+        // Go over all eqjoin legs and equate all the ones that are structurally equivalent
+        for (ix, &(expr_hash1, expr_key1)) in eqpred_legs.iter().enumerate() {
+            if !visited[ix] {
+                for (jx, &(expr_hash2, expr_key2)) in eqpred_legs.iter().enumerate() {
+                    if jx > ix && expr_hash1 == expr_hash2 && Expr::isomorphic(expr_graph, expr_key1, expr_key1) {
+                        eqclass.set_eq(expr_key1, expr_key2);
+                        visited[jx] = true;
+                    }
+                }
+            }
+        }
+
+        (pred_map, eqclass)
+    }
+
+    pub fn build_unary_plans(
+        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap,
+        select_list_quncol: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
+    ) -> Result<(), String> {
+        let APSContext {
+            all_quncols,
+            all_quns,
+            all_preds,
+        } = aps_context;
+
+        // Build unary POPs first
+        for qun in qblock.quns.iter() {
+            // Set quns
+            let mut quns = all_quns.clone_n_clear();
+            quns.set(qun.id);
+
+            // Set input cols: find all column references for this qun
+            let mut input_quncols = all_quncols.clone_n_clear();
+            aps_context
+                .all_quncols
+                .elements()
+                .iter()
+                .filter(|&quncol| quncol.0 == qun.id)
+                .for_each(|&quncol| input_quncols.set(quncol));
+
+            // Set output cols + preds
+            let mut unbound_quncols = select_list_quncol.clone();
+
+            let mut preds = all_preds.clone_n_clear();
+            pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, .. })| {
+                if quns.get(qun.id) {
+                    if quns.bitmap.len() == 1 {
+                        // Set preds: find local preds that refer to this qun
+                        preds.set(pred_key);
+                    } else {
+                        // Set output columns: Only project cols in the select-list + unbound join preds
+                        unbound_quncols.bitmap = unbound_quncols.bitmap | quncols.bitmap;
+                    }
+                }
+            });
+
+            let mut output_quncols = select_list_quncol.clone();
+            output_quncols.bitmap = unbound_quncols.bitmap & input_quncols.bitmap;
+
+            // Remove all preds that will run on this tablescan as they've been bound already
+            for pred_key in preds.elements().iter() {
+                pred_map.remove_entry(pred_key);
+            }
+
+            // Build plan for nested query blocks
+            let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
+                let child_qblock_key = qun.qblock.unwrap();
+                let child_qblock = &self.qblock_graph.get(child_qblock_key).value;
+                let group_by_len = qblock.group_by.as_ref().unwrap().len();
+                let expected_partitioning = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
+
+                // child == subplan that we'll be aggregating.
+                for e in expected_partitioning.iter() {
+                    debug!("expected: {:?}", e.printable(&self.expr_graph, false))
+                }
+
+                let child_lop_key = self.build_qblock_logical_plan(env, qun.id, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
+
+                let children = Some(vec![child_lop_key]);
+
+                let partdesc = lop_graph.get(child_lop_key).properties.partdesc.clone();
+                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
+                lop_graph.add_node_with_props(LOP::Aggregation { group_by_len }, props, children)
+            } else {
+                let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
+                    tabledesc.get_part_desc().npartitions
+                } else {
+                    env.settings.parallel_degree.unwrap_or(1) * 2 // todo: temporary hack to force different partition counts in a plan
+                };
+                let partdesc = PartDesc::new(npartitions, PartType::RAW);
+
+                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
+
+                lop_graph.add_node_with_props(LOP::TableScan { input_cols: input_quncols }, props, None)
+            };
+            //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
+            worklist.push(lopkey);
+        }
+        Ok(())
     }
 
     pub fn compute_join_partitioning_keys(expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>) -> (Vec<ExprKey>, Vec<ExprKey>) {

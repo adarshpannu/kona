@@ -106,7 +106,7 @@ pub struct Quantifier {
     // Either we have a named base table, or we have a queryblock (but not both)
     pub tablename: Option<String>,
     pub qblock: Option<QueryBlockKey>,
-    
+
     pub alias: Option<String>,
 
     #[serde(skip)]
@@ -242,12 +242,15 @@ impl QueryBlock {
 }
 
 impl QueryBlock {
-    pub fn write_qblock_to_graphviz(&self, qgm: &QGM, file: &mut File) -> Result<(), String> {
+    pub fn write_qblock_to_graphviz(&self, is_main_qb: bool, qgm: &QGM, file: &mut File) -> Result<(), String> {
         // Write current query block first
 
         // --- begin query block cluster ---
         fprint!(file, "  subgraph cluster_{} {{\n", self.name());
         fprint!(file, "    \"{}_selectlist\"[label=\"select_list\",shape=box,style=filled];\n", self.name());
+        if is_main_qb {
+            fprint!(file, "    color = \"red\"\n");
+        }
 
         // Write select_list
         fprint!(file, "  subgraph cluster_select_list{} {{\n", self.name());
@@ -267,13 +270,6 @@ impl QueryBlock {
                 qun.name(),
                 qun.display()
             );
-            /*
-            if let Some(qbkey) = qun.qblock {
-                let qblock = &qgm.qblock_graph.get(qbkey).value;
-                //fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
-                //qblock.write_qblock_to_graphviz(qgm, file)?
-            }
-            */
         }
 
         // Write pred_list
@@ -326,7 +322,7 @@ impl QueryBlock {
             if let Some(qbkey) = qun.qblock {
                 let qblock = &qgm.qblock_graph.get(qbkey).value;
                 fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
-                qblock.write_qblock_to_graphviz(qgm, file)?
+                //qblock.write_qblock_to_graphviz(qgm, file)?
             }
         }
 
@@ -355,6 +351,10 @@ impl QGM {
         qblock
     }
 
+    pub fn is_main_qblock(&self, qbkey: QueryBlockKey) -> bool {
+        self.main_qblock_key == qbkey
+    }
+
     pub fn write_qgm_to_graphviz(&self, pathname: &str, open_jpg: bool) -> Result<(), String> {
         let mut file = std::fs::File::create(pathname).map_err(|err| f!("{:?}: {}", err, pathname))?;
 
@@ -369,12 +369,12 @@ impl QGM {
         //fprint!(file, "    color=lightgrey;\n");
         //fprint!(file, "    node [style=filled,color=white];\n");
 
-        self.main_qblock().write_qblock_to_graphviz(self, &mut file)?;
+        // self.main_qblock().write_qblock_to_graphviz(self, &mut file)?;
 
-        // Write subqueries (CTEs)
-        for &qbkey in self.cte_list.iter() {
+        // Write all query blocks
+        for qbkey in self.iter_qblocks() {
             let qblock = &self.qblock_graph.get(qbkey).value;
-            qblock.write_qblock_to_graphviz(self, &mut file)?;
+            qblock.write_qblock_to_graphviz(self.is_main_qblock(qbkey), self, &mut file)?;
         }
 
         fprint!(file, "}}\n");
@@ -404,6 +404,12 @@ impl QGM {
         let ix_str = if let Some(ix) = order_ix { format!(": {}", ix) } else { String::from("") };
 
         fprint!(file, "    exprnode{}[label=\"{}{}\"];\n", id, expr.name(), ix_str);
+
+        if let Expr::Subquery(qbkey) = expr {
+            let qblock = &qgm.qblock_graph.get(*qbkey).value;
+            fprint!(file, "    \"{}_selectlist\" -> \"exprnode{}\";\n", qblock.name(), id);
+        }
+
         if let Some(children) = children {
             for &childid in children {
                 let childid_name = childid.to_string();
