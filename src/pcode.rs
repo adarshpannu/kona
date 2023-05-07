@@ -15,7 +15,7 @@ pub enum ControlOp {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PInstruction {
-    RegisterId(usize),
+    Column(ColumnPosition),
     Literal(Datum),
     NegatedExpr,
     BinaryExpr(ArithOp),
@@ -25,22 +25,24 @@ pub enum PInstruction {
 }
 
 impl ExprKey {
-    pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, register_allocator: &mut RegisterAllocator) {
+    pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, cpt: &ColumnPositionTable) {
         let (expr, _, children) = expr_graph.get3(*self);
 
         // Post-order traversal (i.e. children before parents)
         if let Some(children) = children {
             for &child_expr_key in children {
-                child_expr_key.compile(expr_graph, pcode, register_allocator)
+                child_expr_key.compile(expr_graph, pcode, cpt)
             }
         }
 
         let inst = match expr {
-            Expr::CID(colid, ..) => PInstruction::RegisterId(*colid),
+            Expr::CID(colid, ..) => PInstruction::Column(ColumnPosition {
+                column_position: *colid,
+            }),
             Expr::Literal(value) => PInstruction::Literal(value.clone()),
             Expr::Column { qunid, colid, .. } => {
-                let regid = register_allocator.get_id(QunCol(*qunid, *colid));
-                PInstruction::RegisterId(regid)
+                let cpos = cpt.get(QunCol(*qunid, *colid));
+                PInstruction::Column(cpos)
             }
             Expr::BinaryExpr(op) => PInstruction::BinaryExpr(*op),
             Expr::RelExpr(op) => PInstruction::RelExpr(*op),
@@ -62,17 +64,22 @@ impl PCode {
         self.instructions.push(inst)
     }
 
+    pub fn eval(&self, _registers: &Row) -> Datum {
+        todo!()
+    }
+
+    /*
     pub fn eval(&self, registers: &Row) -> Datum {
         let mut stack = vec![];
         //debug!("--- Eval on row: {}", registers);
         for inst in self.instructions.iter() {
             //debug!("Run inst: {:?}, stack = {:?}", inst, stack);
             match inst {
-                PInstruction::RegisterId(id) => stack.push(registers.get_column(*id).clone()),
+                PInstruction::Column(id) => stack.push(registers.get_column(*id).clone()),
                 PInstruction::Literal(datum) => stack.push(datum.clone()),
                 PInstruction::RelExpr(op) => {
-                    let (c0, c1) = (stack.pop().unwrap(), stack.pop().unwrap());
-                    let res = match (c0, op, c1) {
+                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
+                    let res: bool = match (lhs, op, rhs) {
                         (Datum::INT(i1), RelOp::Eq, Datum::INT(i2)) => i1 == i2,
                         (Datum::INT(i1), RelOp::Ne, Datum::INT(i2)) => i1 != i2,
                         (Datum::INT(i1), RelOp::Le, Datum::INT(i2)) => i1 <= i2,
@@ -87,8 +94,8 @@ impl PCode {
                     stack.push(Datum::BOOL(res))
                 }
                 PInstruction::BinaryExpr(op) => {
-                    let (c0, c1) = (stack.pop().unwrap(), stack.pop().unwrap());
-                    let res = match (c0, op, c1) {
+                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
+                    let res: isize = match (lhs, op, rhs) {
                         (Datum::INT(i1), ArithOp::Add, Datum::INT(i2)) => i1 + i2,
                         (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
                         (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
@@ -124,4 +131,5 @@ impl PCode {
         let retval = stack.pop();
         retval.unwrap()
     }
+    */
 }

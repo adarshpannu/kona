@@ -34,11 +34,15 @@ pub mod csv;
 pub mod flow;
 pub mod pcode;
 pub mod pop;
+pub mod compile;
+
 pub mod row;
 pub mod scheduler;
 pub mod scratch;
 pub mod stage;
 pub mod task;
+
+pub mod print;
 
 use ast::*;
 use flow::*;
@@ -109,7 +113,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/simple.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
@@ -173,3 +177,49 @@ fn run_unit_tests() -> Result<(), String> {
     Ok(())
 }
 
+
+use arrow2::array::Array;
+use arrow2::chunk::Chunk;
+use arrow2::error::Result as A2Result;
+use arrow2::io::csv::read;
+
+fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn Array>>> {
+    // Create a CSV reader. This is typically created on the thread that reads the file and
+    // thus owns the read head.
+    let mut reader = read::ReaderBuilder::new().from_path(path)?;
+
+    // Infers the fields using the default inferer. The inferer is just a function that maps bytes
+    // to a `DataType`.
+    let (fields, _) = read::infer_schema(&mut reader, None, true, &read::infer)?;
+
+    println!("Fields: {:?}", &fields);
+    
+    // allocate space to read from CSV to. The size of this vec denotes how many rows are read.
+    let mut rows = vec![read::ByteRecord::default(); 100];
+
+    // skip 0 (excluding the header) and read up to 100 rows.
+    // this is IO-intensive and performs minimal CPU work. In particular,
+    // no deserialization is performed.
+    let rows_read = read::read_rows(&mut reader, 0, &mut rows)?;
+    let rows = &rows[..rows_read];
+
+    //let projection: Option<&[usize]> = projection.map(|v| &v);
+    //let projection: Option<&[usize]> = if let Some(projection) = projection.as_ref() { Some(projection) } else { None };
+
+    // parse the rows into a `Chunk`. This is CPU-intensive, has no IO,
+    // and can be performed on a different thread by passing `rows` through a channel.
+    // `deserialize_column` is a function that maps rows and a column index to an Array
+    read::deserialize_batch(rows, &fields, projection, 0, read::deserialize_column)
+}
+
+#[test]
+fn test_arrow2_csv_reader() -> A2Result<()> {
+    let file_path = "/Users/adarshrp/Projects/flare/data/emp.csv";
+    let file_path = "/Users/adarshrp/Projects/flare/data/datatypes.csv";
+
+    let projection: Vec<usize> = vec![2, 0];
+
+    let batch = read_path(file_path, Some(&projection))?;
+    println!("{:?}", batch);
+    Ok(())
+}

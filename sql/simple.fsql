@@ -2,7 +2,8 @@ CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/dat
 
 DESCRIBE TABLE emp;
 
-SELECT name, age, emp_dept_id*100 from emp
-where emp_dept_id = 4
+SELECT age, emp_dept_id * 100, name
+from emp
+where age > 60
 ;
 

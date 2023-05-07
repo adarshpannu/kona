@@ -7,7 +7,7 @@ DESCRIBE TABLE R;
 DESCRIBE TABLE S;
 DESCRIBE TABLE T;
 
-set PARSE_ONLY = "true";
+--set PARSE_ONLY = "true";
 set PARALLEL_DEGREE = 4;
 
 select r2 / r0, 88 * (r2 + t2), (t3 * 77) / s3

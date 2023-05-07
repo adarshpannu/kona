@@ -11,7 +11,6 @@ pub struct Stage {
     pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
     pub root_lop_key: LOPKey,
     pub root_pop_key: Option<POPKey>,
-    pub register_allocator: RegisterAllocator,
     pub orig_child_count: usize,
     pub npartitions: usize,
 }
@@ -42,7 +41,6 @@ impl Stage {
             parent_stage_id,
             root_lop_key,
             root_pop_key: None,
-            register_allocator: RegisterAllocator::new(),
             orig_child_count: 0,
             npartitions: 0,
         }
@@ -95,11 +93,6 @@ impl StageGraph {
 
         debug!("Added new stage: {:?}", new_id);
         new_id
-    }
-
-    pub fn get_register_allocator(&mut self, stage_id: StageId) -> &mut RegisterAllocator {
-        let stage = &mut self.stages[stage_id];
-        &mut stage.register_allocator
     }
 
     pub fn set_pop_key(&mut self, pop_graph: &POPGraph, stage_id: StageId, pop_key: POPKey) {
