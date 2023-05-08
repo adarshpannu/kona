@@ -2,6 +2,7 @@
 
 use crate::includes::*;
 use crate::{expr::*, graph::*, row::*};
+use arrow2::io::csv::read;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -56,18 +57,16 @@ pub struct TableStats {
 pub trait TableDesc {
     fn get_type(&self) -> TableType;
     fn pathname(&self) -> &String;
-    fn columns(&self) -> &Vec<ColDesc>;
+    fn columns(&self) -> &Vec<Field>;
     fn header(&self) -> bool;
     fn separator(&self) -> char;
     fn describe(&self) -> String {
         String::from("")
     }
     fn get_part_desc(&self) -> &PartDesc;
-    fn get_column(&self, colname: &String) -> Option<(usize, &ColDesc)>;
+    fn get_column(&self, colname: &String) -> Option<(usize, &Field)>;
     fn get_stats(&self) -> &TableStats;
 }
-
-pub type ColDesc = arrow2::datatypes::Field;
 
 #[derive(Debug)]
 pub struct CSVDesc {
@@ -75,14 +74,14 @@ pub struct CSVDesc {
     pathname: Rc<String>,
     header: bool,
     separator: char,
-    columns: Vec<ColDesc>,
+    columns: Vec<Field>,
     part_desc: PartDesc,
     table_stats: TableStats,
 }
 
 impl CSVDesc {
     pub fn new(
-        tp: TableType, pathname: Rc<String>, columns: Vec<ColDesc>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats,
+        tp: TableType, pathname: Rc<String>, columns: Vec<Field>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats,
     ) -> Result<Self, String> {
         let csvdesc = CSVDesc {
             tp,
@@ -96,51 +95,25 @@ impl CSVDesc {
         Ok(csvdesc)
     }
 
-    fn infer_datatype(str: &String) -> DataType {
-        let res = str.parse::<i32>();
-        if res.is_ok() {
-            DataType::Int64
-        } else if str.eq("true") || str.eq("false") {
-            DataType::Boolean
-        } else {
-            DataType::Utf8
-        }
-    }
+    pub fn infer_metadata(pathname: &str, separator: char, header: bool) -> Result<Vec<Field>, String> {
+        // Create a CSV reader. This is typically created on the thread that reads the file and
+        // thus owns the read head.
+        let mut reader = read::ReaderBuilder::new()
+            .has_headers(header)
+            .delimiter(separator as u8)
+            .from_path(pathname)
+            .map_err(|err| stringify1(err, &pathname))?;
 
-    pub fn infer_metadata(pathname: &str, separator: char, header: bool) -> Vec<ColDesc> {
-        let mut iter = read_lines(&pathname).unwrap();
-        let mut colnames: Vec<String> = vec![];
-        let mut coltypes: Vec<DataType> = vec![];
-        let mut first_row = true;
+        // Infers the fields using the default inferer. The inferer is just a function that maps bytes
+        // to a `DataType`.
+        let (fields, _) = read::infer_schema(&mut reader, None, true, &read::infer).map_err(|err| stringify1(err, &pathname))?;
 
-        while let Some(line) = iter.next() {
-            let cols: Vec<String> = line.unwrap().split(separator).map(|e| e.to_owned().to_uppercase()).collect();
-            if colnames.len() == 0 {
-                if header {
-                    colnames = cols
-                } else {
-                    // Default column names
-                    colnames = (0..cols.len()).map(|ix| format!("COL_{}", ix)).collect();
-                }
-            } else {
-                for (ix, col) in cols.iter().enumerate() {
-                    let datatype = CSVDesc::infer_datatype(col);
-                    if first_row {
-                        coltypes.push(datatype)
-                    } else if coltypes[ix] != DataType::Utf8 {
-                        coltypes[ix] = datatype;
-                    } else {
-                        coltypes[ix] = DataType::Utf8;
-                    }
-                }
-                first_row = false;
-            }
-        }
-        colnames
-            .into_iter()
-            .zip(coltypes)
-            .map(|(name, datatype)| ColDesc::new(name, datatype, false))
-            .collect()
+        let fields = fields
+            .iter()
+            .map(|f| Field::new(f.name.to_uppercase(), f.data_type.clone(), f.is_nullable))
+            .collect();
+
+        Ok(fields)
     }
 }
 
@@ -149,7 +122,7 @@ impl TableDesc for CSVDesc {
         self.tp
     }
 
-    fn columns(&self) -> &Vec<ColDesc> {
+    fn columns(&self) -> &Vec<Field> {
         &self.columns
     }
 
@@ -161,7 +134,7 @@ impl TableDesc for CSVDesc {
         format!("Type: CSV, {:?}", self)
     }
 
-    fn get_column(&self, colname: &String) -> Option<(usize, &ColDesc)> {
+    fn get_column(&self, colname: &String) -> Option<(usize, &Field)> {
         self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
     }
 
@@ -191,20 +164,20 @@ impl Metadata {
         Metadata { tables: HashMap::new() }
     }
 
-    pub fn parse_columns(hm: &HashMap<String, Datum>) -> Result<Vec<ColDesc>, String> {
+    pub fn parse_columns(hm: &HashMap<String, Datum>) -> Result<Vec<Field>, String> {
         // Parse: COLUMNS = "name=STRING,age=INT,emp_dept_id=INT"
 
         let colstr = hm.get("COLUMNS");
         let colstr = match colstr {
-            Some(Datum::STR(coldescstr)) => {
-                let coldescstr = &**coldescstr;
-                coldescstr
+            Some(Datum::STR(fieldstr)) => {
+                let fieldstr = &**fieldstr;
+                fieldstr
             }
             None => return Err(f!("CSVDIRs need a COLUMNS specification")),
             _ => return Err(f!("Invalid value for option COLUMNS: '{colstr:?}'")),
         };
 
-        let mut coldescs = vec![];
+        let mut fields = vec![];
         for part in colstr.split(",") {
             let mut colname_and_type = part.split("=");
             let err = "Cannot parse COLUMN specification".to_string();
@@ -217,10 +190,10 @@ impl Metadata {
                 "INT" => DataType::Int64,
                 _ => return Err(f!("Invalid datatype {datatype} in COLUMN specification")),
             };
-            let coldesc = ColDesc::new(name, datatype, false);
-            coldescs.push(coldesc)
+            let field = Field::new(name, datatype, false);
+            fields.push(field)
         }
-        Ok(coldescs)
+        Ok(fields)
     }
 
     fn get_table_type(hm: &HashMap<String, Datum>, name: &String) -> Result<TableType, String> {
@@ -339,7 +312,7 @@ impl Metadata {
                 let columns = if hm.get("COLUMNS").is_some() {
                     Self::parse_columns(&hm)?
                 } else if matches!(tp, TableType::CSV) {
-                    CSVDesc::infer_metadata(&path, separator, header)
+                    CSVDesc::infer_metadata(&path, separator, header)?
                 } else {
                     unimplemented!()
                 };

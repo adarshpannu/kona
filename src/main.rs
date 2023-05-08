@@ -1,6 +1,7 @@
 // main
 
-//#![allow(unused_variables)]
+#![allow(unused_variables)]
+#![allow(unused_imports)]
 
 use std::fs;
 

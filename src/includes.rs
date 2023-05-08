@@ -86,4 +86,4 @@ where
 }
 
 pub use arrow2::datatypes::DataType;
-
+pub use arrow2::datatypes::Field;

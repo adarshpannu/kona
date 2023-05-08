@@ -235,7 +235,7 @@ impl QueryBlock {
 
         for qun in self.quns.iter() {
             let desc = qun.tabledesc.as_ref().unwrap().clone();
-            let coldesc = if let Some(prefix) = prefix {
+            let field = if let Some(prefix) = prefix {
                 // Prefixed column: look at specific qun
                 if qun.matches_name_or_alias(prefix) {
                     desc.get_column(colname)
@@ -247,9 +247,9 @@ impl QueryBlock {
                 desc.get_column(colname)
             };
 
-            if let Some((colid, coldesc)) = coldesc {
+            if let Some((colid, field)) = field {
                 if retval.is_none() {
-                    retval = Some((QunCol(qun.id, colid), coldesc.data_type.clone()));
+                    retval = Some((QunCol(qun.id, colid), field.data_type.clone()));
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
