@@ -218,7 +218,7 @@ impl CSV {
                     .for_each(|(ix, col)| {
                         let ttuple_ix = *self.projection.get(&ix).unwrap();
                         let datum = match self.coltypes[ix] {
-                            DataType::INT => {
+                            DataType::Int64 => {
                                 let ival = col.parse::<isize>();
                                 if ival.is_err() {
                                     panic!("{} is not an INT", &col);
@@ -226,7 +226,7 @@ impl CSV {
                                     Datum::INT(ival.unwrap())
                                 }
                             }
-                            DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                            DataType::Utf8 => Datum::STR(Rc::new(col.to_owned())),
                             _ => todo!(),
                         };
                         task.task_row.set_column(ttuple_ix, &datum);
@@ -299,7 +299,7 @@ impl CSVDir {
                     .for_each(|(ix, col)| {
                         let ttuple_ix = *self.projection.get(&ix).unwrap();
                         let datum = match self.coltypes[ix] {
-                            DataType::INT => {
+                            DataType::Int64 => {
                                 let ival = col.parse::<isize>();
                                 if ival.is_err() {
                                     panic!("{} is not an INT", &col);
@@ -307,7 +307,7 @@ impl CSVDir {
                                     Datum::INT(ival.unwrap())
                                 }
                             }
-                            DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                            DataType::Utf8 => Datum::STR(Rc::new(col.to_owned())),
                             _ => todo!(),
                         };
                         task.task_row.set_column(ttuple_ix, &datum);

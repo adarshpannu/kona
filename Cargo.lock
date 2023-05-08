@@ -42,6 +42,8 @@ dependencies = [
  "lexical-core",
  "num-traits",
  "rustc_version",
+ "serde",
+ "serde_derive",
  "simdutf8",
 ]
 

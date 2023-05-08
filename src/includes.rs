@@ -84,3 +84,6 @@ where
     let file = File::open(pathname)?;
     Ok(io::BufReader::new(file).lines())
 }
+
+pub use arrow2::datatypes::DataType;
+

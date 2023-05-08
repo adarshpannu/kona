@@ -30,11 +30,11 @@ pub mod qgmiter;
 pub mod lop;
 pub mod qst;
 
+pub mod compile;
 pub mod csv;
 pub mod flow;
 pub mod pcode;
 pub mod pop;
-pub mod compile;
 
 pub mod row;
 pub mod scheduler;
@@ -87,15 +87,21 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 env.set_option(name, value)?;
             }
             AST::QGM(mut qgm) => {
+                // Resolve QGM
                 qgm.write_qgm_to_graphviz(&qgm_raw_pathname, false)?;
                 qgm.resolve(&env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_pathname, false)?;
 
-                if !env.settings.parse_only.unwrap_or(false) {
-                    let flow = POP::compile(env, &mut qgm).unwrap();
+                // Build LOPs
+                let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
 
+                /*
+                if !env.settings.parse_only.unwrap_or(false) {
+                    // Build POPs
+                    let flow = POP::compile(env, &mut qgm, &lop_graph, lop_key).unwrap();
                     run_flow(env, &flow)?;
                 }
+                */
             }
         }
     }
@@ -113,7 +119,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/simple.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
@@ -165,7 +171,7 @@ fn run_unit_tests() -> Result<(), String> {
             if buf.len() > 0 {
                 mismatch = true;
                 let s = String::from_utf8_lossy(buf);
-                println!("{}: {}", tag, s);
+                println!("{}:\n{}", tag, s);
             }
         }
         if !mismatch {
@@ -177,12 +183,12 @@ fn run_unit_tests() -> Result<(), String> {
     Ok(())
 }
 
-
 use arrow2::array::Array;
 use arrow2::chunk::Chunk;
 use arrow2::error::Result as A2Result;
 use arrow2::io::csv::read;
 
+#[allow(dead_code)]
 fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn Array>>> {
     // Create a CSV reader. This is typically created on the thread that reads the file and
     // thus owns the read head.
@@ -193,7 +199,7 @@ fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn
     let (fields, _) = read::infer_schema(&mut reader, None, true, &read::infer)?;
 
     println!("Fields: {:?}", &fields);
-    
+
     // allocate space to read from CSV to. The size of this vec denotes how many rows are read.
     let mut rows = vec![read::ByteRecord::default(); 100];
 
@@ -215,7 +221,6 @@ fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn
 #[test]
 fn test_arrow2_csv_reader() -> A2Result<()> {
     let file_path = "/Users/adarshrp/Projects/flare/data/emp.csv";
-    let file_path = "/Users/adarshrp/Projects/flare/data/datatypes.csv";
 
     let projection: Vec<usize> = vec![2, 0];
 
@@ -223,3 +228,12 @@ fn test_arrow2_csv_reader() -> A2Result<()> {
     println!("{:?}", batch);
     Ok(())
 }
+
+/*
+use arrow2::datatypes::DataType as A2DataType;
+
+#[derive(Debug, Eq, PartialEq, PartialOrd, Serialize, Deserialize, Clone, Hash)]
+pub struct DataType0 {
+    dt: A2DataType
+}
+*/

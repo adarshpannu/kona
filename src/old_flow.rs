@@ -64,7 +64,7 @@ impl FlowNode {
         let mut csvcoltypes: Vec<DataType> = keycols.iter().map(|(_, tp)| *tp).collect();
         for (aggtype, _, datatype) in aggcols.iter() {
             match *aggtype {
-                AggType::COUNT => csvcoltypes.push(DataType::INT),
+                AggType::COUNT => csvcoltypes.push(DataType::Int64),
                 _ => csvcoltypes.push(*datatype),
             };
         }
@@ -79,7 +79,7 @@ impl FlowNode {
             .map(|(id, (aggtype, _, coltype))| {
                 // COUNT turns into SUM with a type of INT
                 let (aggtype, coltype) = match *aggtype {
-                    AggType::COUNT => (AggType::SUM, DataType::INT),
+                    AggType::COUNT => (AggType::SUM, DataType::Int64),
                     _ => (*aggtype, *coltype),
                 };
                 (aggtype, id + keycols.len(), coltype)
@@ -229,7 +229,7 @@ impl CSVNode {
                     .map(|(ix, col)| {
                         let ttuple_ix = *self.colmap.get(&ix).unwrap();
                         let datum = match self.coltypes[ix] {
-                            DataType::INT => {
+                            DataType::Int64 => {
                                 let ival = col.parse::<isize>();
                                 if ival.is_err() {
                                     panic!("{} is not an INT", &col);
@@ -237,7 +237,7 @@ impl CSVNode {
                                     Datum::INT(ival.unwrap())
                                 }
                             }
-                            DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                            DataType::Utf8 => Datum::STR(Rc::new(col.to_owned())),
                             _ => todo!(),
                         };
                         task.task_row.set_column(ttuple_ix, &datum);
@@ -487,7 +487,7 @@ impl CSVDirNode {
                     .split('|')
                     .enumerate()
                     .map(|(ix, col)| match self.coltypes[ix] {
-                        DataType::INT => {
+                        DataType::Int64 => {
                             let ival = col.parse::<isize>();
                             if ival.is_err() {
                                 panic!("{} is not an INT", &col);
@@ -495,7 +495,7 @@ impl CSVDirNode {
                                 Datum::INT(ival.unwrap())
                             }
                         }
-                        DataType::STR => Datum::STR(Rc::new(col.to_owned())),
+                        DataType::Utf8 => Datum::STR(Rc::new(col.to_owned())),
                         _ => unimplemented!(),
                     })
                     .collect::<Vec<Datum>>();

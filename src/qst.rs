@@ -3,7 +3,7 @@
 use crate::expr::{Expr::*, *};
 use crate::graph::*;
 use crate::qgm::*;
-use crate::row::{DataType, Datum};
+use crate::row::Datum;
 
 use crate::includes::*;
 use std::rc::Rc;
@@ -247,9 +247,9 @@ impl QueryBlock {
                 desc.get_column(colname)
             };
 
-            if let Some(coldesc) = coldesc {
+            if let Some((colid, coldesc)) = coldesc {
                 if retval.is_none() {
-                    retval = Some((QunCol(qun.id, coldesc.colid), coldesc.datatype));
+                    retval = Some((QunCol(qun.id, colid), coldesc.data_type.clone()));
                 } else {
                     return Err(format!(
                         "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
@@ -278,7 +278,7 @@ impl QueryBlock {
 
     pub fn resolve_expr(
         &self, env: &Env, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata, expr_key: ExprKey, agg_fns_allowed: bool,
-    ) -> Result<DataType, String> {
+    ) -> Result<(), String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_key).value {
             // Nested aggregate functions not allowed
             false
@@ -292,32 +292,32 @@ impl QueryBlock {
 
         if let Some(children) = children {
             for child_key in children {
-                let datatype = self.resolve_expr(env, expr_graph, metadata, child_key, children_agg_fns_allowed)?;
+                self.resolve_expr(env, expr_graph, metadata, child_key, children_agg_fns_allowed)?;
+                let datatype = expr_graph.get(child_key).properties.datatype.clone();
                 children_datatypes.push(datatype);
             }
         }
 
-        let mut node = expr_graph.get_mut(expr_key);
+        let mut node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
         let expr = &mut node.value;
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
-            CID(_, _) => node.properties.datatype,
+            CID(_, _) => node.properties.datatype.clone(),
             RelExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
                     return Err("Datatype mismatch".to_string());
                 } else {
-                    DataType::BOOL
+                    DataType::Boolean
                 }
             }
             BinaryExpr(..) => {
                 // Check argument types
-                if children_datatypes[0] != DataType::INT || children_datatypes[0] != DataType::INT {
-                    return Err("Binary operands must be numeric types".to_string());
-                // FIXME for other numeric types. Also support string addition?
+                if is_numeric(&children_datatypes[0]) && is_numeric(&children_datatypes[1]) {
+                    children_datatypes[0].clone()
                 } else {
-                    children_datatypes[0]
+                    return Err("Binary operands must be numeric types".to_string());
                 }
             }
             Column {
@@ -333,31 +333,32 @@ impl QueryBlock {
                 //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
                 datatype
             }
-            LogExpr(..) => DataType::BOOL,
-            Literal(Datum::STR(_)) => DataType::STR,
-            Literal(Datum::INT(_)) => DataType::INT,
-            Literal(Datum::DOUBLE(_, _)) => DataType::DOUBLE,
-            Literal(Datum::BOOL(_)) => DataType::BOOL,
+            LogExpr(..) => DataType::Boolean,
+            Literal(Datum::STR(_)) => DataType::Utf8,
+            Literal(Datum::INT(_)) => DataType::Int64,
+            Literal(Datum::BOOL(_)) => DataType::Boolean,
             AggFunction(aggtype, ..) => {
                 if !agg_fns_allowed {
                     return Err(format!("Aggregate function {:?} not allowed.", aggtype));
                 }
                 match aggtype {
-                    AggType::COUNT => DataType::INT,
-                    AggType::MIN | AggType::MAX => children_datatypes[0],
+                    AggType::COUNT => DataType::Int64,
+                    AggType::MIN | AggType::MAX => children_datatypes[0].clone(),
                     AggType::SUM | AggType::AVG => {
-                        if children_datatypes[0] != DataType::INT && children_datatypes[0] != DataType::DOUBLE {
+                        if is_numeric(&children_datatypes[0]) {
+                            children_datatypes[0].clone()
+                        } else {
                             return Err(format!("SUM() {:?} only allowed for numeric datatypes.", aggtype));
                         }
-                        children_datatypes[0]
                     }
                 }
-            },
+            }
             NegatedExpr => {
-                if children_datatypes[0] != DataType::INT && children_datatypes[0] != DataType::DOUBLE {
+                if is_numeric(&children_datatypes[0]) {
+                    children_datatypes[0].clone()
+                } else {
                     return Err(format!("Only numeric datatypes can be negated."));
                 }
-                children_datatypes[0]
             }
             _ => {
                 debug!("TODO: {:?}", &expr);
@@ -365,6 +366,13 @@ impl QueryBlock {
             }
         };
         node.properties.datatype = datatype;
-        Ok(datatype)
+        Ok(())
+    }
+}
+
+fn is_numeric(dt: &DataType) -> bool {
+    match dt {
+        DataType::Int64 => true,
+        _ => false,
     }
 }

@@ -91,7 +91,7 @@ pub enum AggType {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ExprProp {
     pub datatype: DataType,
 }
@@ -99,7 +99,7 @@ pub struct ExprProp {
 impl std::default::Default for ExprProp {
     fn default() -> Self {
         ExprProp {
-            datatype: DataType::UNASSIGNED,
+            datatype: DataType::Null,
         }
     }
 }

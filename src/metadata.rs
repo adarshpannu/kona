@@ -63,22 +63,11 @@ pub trait TableDesc {
         String::from("")
     }
     fn get_part_desc(&self) -> &PartDesc;
-    fn get_column(&self, colname: &String) -> Option<&ColDesc>;
+    fn get_column(&self, colname: &String) -> Option<(usize, &ColDesc)>;
     fn get_stats(&self) -> &TableStats;
 }
 
-#[derive(Debug)]
-pub struct ColDesc {
-    pub colid: ColId,
-    pub name: String,
-    pub datatype: DataType,
-}
-
-impl ColDesc {
-    pub fn new(colid: ColId, name: String, datatype: DataType) -> ColDesc {
-        ColDesc { colid, name, datatype }
-    }
-}
+pub type ColDesc = arrow2::datatypes::Field;
 
 #[derive(Debug)]
 pub struct CSVDesc {
@@ -110,11 +99,11 @@ impl CSVDesc {
     fn infer_datatype(str: &String) -> DataType {
         let res = str.parse::<i32>();
         if res.is_ok() {
-            DataType::INT
+            DataType::Int64
         } else if str.eq("true") || str.eq("false") {
-            DataType::BOOL
+            DataType::Boolean
         } else {
-            DataType::STR
+            DataType::Utf8
         }
     }
 
@@ -138,10 +127,10 @@ impl CSVDesc {
                     let datatype = CSVDesc::infer_datatype(col);
                     if first_row {
                         coltypes.push(datatype)
-                    } else if coltypes[ix] != DataType::STR {
+                    } else if coltypes[ix] != DataType::Utf8 {
                         coltypes[ix] = datatype;
                     } else {
-                        coltypes[ix] = DataType::STR;
+                        coltypes[ix] = DataType::Utf8;
                     }
                 }
                 first_row = false;
@@ -150,8 +139,7 @@ impl CSVDesc {
         colnames
             .into_iter()
             .zip(coltypes)
-            .enumerate()
-            .map(|(id, (name, datatype))| ColDesc { colid: id, name, datatype })
+            .map(|(name, datatype)| ColDesc::new(name, datatype, false))
             .collect()
     }
 }
@@ -173,8 +161,8 @@ impl TableDesc for CSVDesc {
         format!("Type: CSV, {:?}", self)
     }
 
-    fn get_column(&self, colname: &String) -> Option<&ColDesc> {
-        self.columns.iter().find(|&cd| cd.name == *colname)
+    fn get_column(&self, colname: &String) -> Option<(usize, &ColDesc)> {
+        self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
     }
 
     fn get_part_desc(&self) -> &PartDesc {
@@ -217,7 +205,7 @@ impl Metadata {
         };
 
         let mut coldescs = vec![];
-        for (colid, part) in colstr.split(",").enumerate() {
+        for part in colstr.split(",") {
             let mut colname_and_type = part.split("=");
             let err = "Cannot parse COLUMN specification".to_string();
             let (name, datatype) = (
@@ -225,11 +213,11 @@ impl Metadata {
                 colname_and_type.next().ok_or(err)?,
             );
             let datatype = match datatype {
-                "STRING" => DataType::STR,
-                "INT" => DataType::INT,
+                "STRING" => DataType::Utf8,
+                "INT" => DataType::Int64,
                 _ => return Err(f!("Invalid datatype {datatype} in COLUMN specification")),
             };
-            let coldesc = ColDesc { colid, name, datatype };
+            let coldesc = ColDesc::new(name, datatype, false);
             coldescs.push(coldesc)
         }
         Ok(coldescs)
@@ -379,7 +367,7 @@ impl Metadata {
         info!("  STATS = {:?}", tbldesc.get_stats());
         info!("  {} COLUMNS", tbldesc.columns().len());
         for cd in tbldesc.columns() {
-            info!("      {} {:?}", cd.name, cd.datatype);
+            info!("      {} {:?}", cd.name, cd.data_type);
         }
         Ok(())
     }

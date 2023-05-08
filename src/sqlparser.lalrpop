@@ -121,10 +121,6 @@ CatalogTableOptionValue: Datum = {
         .map(|i| Datum::INT(i))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
-    Double =>? { f64::from_str(<>)
-        .map(|d| Datum::DOUBLE(111, 222))
-        .map_err(|_| ParseError::User { error: "Invalid double" }) 
-    },
     <str:IdentifierOrQuotedString> =>? {
         let str = Rc::new(str);
         Ok(Datum::STR(str))
@@ -409,10 +405,6 @@ Number: ExprKey = {
     Integer =>? { isize::from_str(<>)
         .map(|i| parser_state.expr_graph.add_node(Literal(Datum::INT(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
-    },
-    Double =>? { f64::from_str(<>)
-        .map(|d| parser_state.expr_graph.add_node(Literal(Datum::DOUBLE(111, 222)), None))
-        .map_err(|_| ParseError::User { error: "Invalid double" }) 
     },
 }
 

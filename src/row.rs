@@ -9,7 +9,6 @@ pub enum Datum {
     NULL,
     STR(Rc<String>),
     INT(isize),
-    DOUBLE(isize, isize), // integral and fractional parts
     BOOL(bool),
 }
 
@@ -40,21 +39,10 @@ impl Datum {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, PartialOrd, Serialize, Deserialize, Clone, Copy, Hash)]
-pub enum DataType {
-    UNASSIGNED,
-    NULL,
-    STR,
-    INT,
-    DOUBLE,
-    BOOL,
-}
-
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Column::INT(il) => write!(f, "{}", il),
-            Column::DOUBLE(i1, i2) => write!(f, "{}.{}", i1, i2),
             Column::STR(sl) => write!(f, "\"{}\"", sl),
             Column::BOOL(bl) => write!(f, "{}", bl),
             Column::NULL => write!(f, "{}", "NULL"),

@@ -5,9 +5,7 @@
 pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
 
 impl POP {
-    pub fn compile(env: &Env, qgm: &mut QGM) -> Result<Flow, String> {
-        // Build logical plan
-        let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
+    pub fn compile(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
 
         // Build physical plan
         let mut pop_graph: POPGraph = Graph::new();
@@ -74,7 +72,7 @@ impl POP {
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
         let columns = tbldesc.columns();
 
-        let coltypes = columns.iter().map(|col| col.datatype).collect();
+        let coltypes = columns.iter().map(|col| col.data_type.clone()).collect();
 
         // Build input map
         let projection: Vec<ColId> = if let LOP::TableScan { input_cols } = lop {
