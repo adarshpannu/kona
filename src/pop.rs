@@ -8,7 +8,6 @@ use std::fmt;
 pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
-use arrow2::array::BooleanArray;
 use arrow2::compute::filter::filter_chunk;
 
 /***************************************************************************************************/
@@ -120,7 +119,7 @@ impl POPKey {
         if let Some(preds) = props.predicates.as_ref() {
             for pred in preds.iter() {
                 let bool_chunk = pred.eval(&filtered_chunk);
-                let bool_array = bool_chunk[0].as_any().downcast_ref::<BooleanArray>().unwrap();
+                let bool_array = bool_chunk.as_any().downcast_ref::<BooleanArray>().unwrap();
 
                 filtered_chunk = filter_chunk(&filtered_chunk, &bool_array).unwrap();
             }

@@ -85,10 +85,10 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
-pub use arrow2::datatypes::DataType;
-pub use arrow2::datatypes::Field;
+pub use arrow2::datatypes::{DataType, Field};
 pub use arrow2::chunk::Chunk;
-pub use arrow2::array::Array;
+pub use arrow2::array::{Array, PrimitiveArray, BooleanArray};
+pub use arrow2::compute::{arithmetics, comparison, boolean};
 
 pub type ChunkBox = Chunk<Box<dyn Array>>;
 pub use std::collections::HashMap;

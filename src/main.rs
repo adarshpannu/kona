@@ -184,7 +184,6 @@ fn run_unit_tests() -> Result<(), String> {
     Ok(())
 }
 
-use arrow2::array::Array;
 use arrow2::error::Result as A2Result;
 use arrow2::io::csv::read;
 

@@ -54,9 +54,25 @@ impl ExprKey {
     }
 }
 
+#[derive(Debug)]
+enum Column<'a> {
+    Ref(&'a Box<dyn Array>),
+    Owned(Box<dyn Array>),
+}
+
+impl<'a> Column<'a> {
+    fn get(&self) -> &Box<dyn Array> {
+        match self {
+            Column::Ref(r) => *r,
+            Column::Owned(o) => &o,
+        }
+    }
+}
+
+#[derive(Debug)]
 enum PCodeStack<'a> {
     Datum(Datum),
-    Column(&'a Box<dyn Array>),
+    Column(Column<'a>),
 }
 
 impl PCode {
@@ -68,33 +84,94 @@ impl PCode {
         self.instructions.push(inst)
     }
 
-    pub fn eval(&self, input: &ChunkBox) -> ChunkBox {
+    pub fn eval(&self, input: &ChunkBox) -> Box<dyn Array> {
         let mut stack: Vec<PCodeStack> = vec![];
         for inst in self.instructions.iter() {
             match inst {
-                PInstruction::Column(id) => stack.push(PCodeStack::Column(&input[id.column_position])),
+                PInstruction::Column(id) => stack.push(PCodeStack::Column(Column::Ref(&input[id.column_position]))),
                 PInstruction::Literal(datum) => stack.push(PCodeStack::Datum(datum.clone())),
+                PInstruction::BinaryExpr(op) => {
+                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
+                    match (lhs, op, rhs) {
+                        (PCodeStack::Column(lhs), arithop, PCodeStack::Column(rhs)) => {
+                            let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
+                            let rhs = rhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
+                            let array: Box<dyn Array> = match arithop {
+                                ArithOp::Add => Box::new(arithmetics::basic::add(lhs, rhs)),
+                                _ => todo!(),
+                            };
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        (PCodeStack::Column(lhs), arithop, PCodeStack::Datum(Datum::INT(i))) => {
+                            let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
+                            let rhs = &(i as i64);
+                            let array: Box<dyn Array> = match arithop {
+                                ArithOp::Add => Box::new(arithmetics::basic::add_scalar(lhs, rhs)),
+                                _ => todo!(),
+                            };
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        _ => todo!(),
+                    }
+                }
                 PInstruction::RelExpr(op) => {
                     let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
                     match (lhs, op, rhs) {
-                        (PCodeStack::Column(lhs), RelOp::Gt, PCodeStack::Column(rhs)) => {
-                            todo!()
-                        }
-                        (PCodeStack::Column(lhs), relop, PCodeStack::Datum(Datum::INT(i))) => {
-                            let scalar = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
-                            let lhs = &**lhs;
-                            let rhs = &scalar;
+                        (PCodeStack::Column(lhs), relop, PCodeStack::Column(rhs)) => {
+                            let lhs = &**lhs.get();
+                            let rhs = &**rhs.get();
                             let array: Box<dyn Array> = match relop {
-                                RelOp::Lt => Box::new(arrow2::compute::comparison::lt_scalar(lhs, rhs)),
-                                RelOp::Le => Box::new(arrow2::compute::comparison::lt_eq_scalar(lhs, rhs)),
-                                RelOp::Eq => Box::new(arrow2::compute::comparison::eq_scalar(lhs, rhs)),
-                                RelOp::Ne => Box::new(arrow2::compute::comparison::neq_scalar(lhs, rhs)),
-                                RelOp::Ge => Box::new(arrow2::compute::comparison::gt_eq_scalar(lhs, rhs)),
-                                RelOp::Gt => Box::new(arrow2::compute::comparison::gt_scalar(lhs, rhs)),
+                                RelOp::Lt => Box::new(comparison::lt(lhs, rhs)),
+                                RelOp::Le => Box::new(comparison::lt_eq(lhs, rhs)),
+                                RelOp::Eq => Box::new(comparison::eq(lhs, rhs)),
+                                RelOp::Ne => Box::new(comparison::neq(lhs, rhs)),
+                                RelOp::Ge => Box::new(comparison::gt_eq(lhs, rhs)),
+                                RelOp::Gt => Box::new(comparison::gt(lhs, rhs)),
                                 _ => todo!(),
                             };
-                            let retval: ChunkBox = Chunk::new(vec![array]);
-                            return retval;
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        (PCodeStack::Column(lhs), relop, PCodeStack::Datum(Datum::INT(i))) => {
+                            let lhs = &**lhs.get();
+                            let scalar = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
+                            let rhs = &scalar;
+                            let array: Box<dyn Array> = match relop {
+                                RelOp::Lt => Box::new(comparison::lt_scalar(lhs, rhs)),
+                                RelOp::Le => Box::new(comparison::lt_eq_scalar(lhs, rhs)),
+                                RelOp::Eq => Box::new(comparison::eq_scalar(lhs, rhs)),
+                                RelOp::Ne => Box::new(comparison::neq_scalar(lhs, rhs)),
+                                RelOp::Ge => Box::new(comparison::gt_eq_scalar(lhs, rhs)),
+                                RelOp::Gt => Box::new(comparison::gt_scalar(lhs, rhs)),
+                                _ => todo!(),
+                            };
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        _ => todo!(),
+                    }
+                }
+                PInstruction::LogExpr(op) => {
+                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
+                    match (lhs, op, rhs) {
+                        (PCodeStack::Column(lhs), relop, PCodeStack::Column(rhs)) => {
+                            let lhs = lhs.get().as_any().downcast_ref::<BooleanArray>().unwrap();
+                            let rhs = rhs.get().as_any().downcast_ref::<BooleanArray>().unwrap();
+                            let array: Box<dyn Array> = match relop {
+                                LogOp::And => Box::new(boolean::and(lhs, rhs)),
+                                LogOp::Or => Box::new(boolean::or(lhs, rhs)),
+                                _ => todo!(),
+                            };
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        _ => todo!(),
+                    }
+                }
+                PInstruction::NegatedExpr => {
+                    let lhs = stack.pop().unwrap();
+                    match lhs {
+                        PCodeStack::Column(lhs) => {
+                            let lhs = &**lhs.get();
+                            let array = arithmetics::neg(lhs);
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
                         _ => todo!(),
                     }
@@ -105,71 +182,11 @@ impl PCode {
                 }
             }
         }
-        todo!()
-    }
-
-    /*
-    pub fn eval(&self, registers: &Row) -> Datum {
-        let mut stack = vec![];
-        //debug!("--- Eval on row: {}", registers);
-        for inst in self.instructions.iter() {
-            //debug!("Run inst: {:?}, stack = {:?}", inst, stack);
-            match inst {
-                PInstruction::Column(id) => stack.push(registers.get_column(*id).clone()),
-                PInstruction::Literal(datum) => stack.push(datum.clone()),
-                PInstruction::RelExpr(op) => {
-                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
-                    let res: bool = match (lhs, op, rhs) {
-                        (Datum::INT(i1), RelOp::Eq, Datum::INT(i2)) => i1 == i2,
-                        (Datum::INT(i1), RelOp::Ne, Datum::INT(i2)) => i1 != i2,
-                        (Datum::INT(i1), RelOp::Le, Datum::INT(i2)) => i1 <= i2,
-                        (Datum::INT(i1), RelOp::Lt, Datum::INT(i2)) => i1 < i2,
-                        (Datum::INT(i1), RelOp::Ge, Datum::INT(i2)) => i1 >= i2,
-                        (Datum::INT(i1), RelOp::Gt, Datum::INT(i2)) => i1 > i2,
-                        (Datum::STR(s1), RelOp::Eq, Datum::STR(s2)) => *s1 == *s2,
-                        (Datum::STR(s1), RelOp::Ne, Datum::STR(s2)) => *s1 != *s2,
-                        _ => panic!("Internal error: Operands of RelOp not resolved yet."),
-                    };
-                    //debug!("Eval returned {}", res);
-                    stack.push(Datum::BOOL(res))
-                }
-                PInstruction::BinaryExpr(op) => {
-                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
-                    let res: isize = match (lhs, op, rhs) {
-                        (Datum::INT(i1), ArithOp::Add, Datum::INT(i2)) => i1 + i2,
-                        (Datum::INT(i1), ArithOp::Sub, Datum::INT(i2)) => i1 - i2,
-                        (Datum::INT(i1), ArithOp::Mul, Datum::INT(i2)) => i1 * i2,
-                        (Datum::INT(i1), ArithOp::Div, Datum::INT(i2)) => i1 / i2,
-                        _ => panic!("Internal error: Operands of ArithOp not resolved yet."),
-                    };
-                    stack.push(Datum::INT(res))
-                }
-                PInstruction::LogExpr(op) => {
-                    let c0 = stack.pop().unwrap();
-                    let c1 = if matches!(op, LogOp::Not) { Datum::NULL } else { stack.pop().unwrap() };
-                    let res = match (c0, op, c1) {
-                        (Datum::BOOL(b0), LogOp::And, Datum::BOOL(b1)) => b0 && b1,
-                        (Datum::BOOL(b0), LogOp::Or, Datum::BOOL(b1)) => b0 || b1,
-                        (Datum::BOOL(b0), LogOp::Not, _) => !b0,
-                        _ => panic!("Internal error: Operands of LogExpr not resolved yet."),
-                    };
-                    stack.push(Datum::BOOL(res))
-                }
-                PInstruction::NegatedExpr => {
-                    let c0 = stack.pop().unwrap();
-                    match c0 {
-                        Datum::INT(i1) => stack.push(Datum::INT(-i1)),
-                        _ => panic!("Internal error: Operands of NegatedExpr must be numeric."),
-                    }
-                }
-                _ => {
-                    debug!("Instruction inst: {:?} not implemented yet. Possibly invalid?", inst);
-                    todo!()
-                }
-            }
+        let array = stack.pop().unwrap();
+        if let PCodeStack::Column(Column::Owned(array)) = array {
+            return array;
+        } else {
+            panic!("unexpected value")
         }
-        let retval = stack.pop();
-        retval.unwrap()
     }
-    */
 }
