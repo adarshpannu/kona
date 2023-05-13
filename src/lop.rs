@@ -39,7 +39,7 @@ impl LOPKey {
 /***************************************************************************************************/
 #[derive(Debug)]
 pub enum LOP {
-    TableScan { input_cols: Bitset<QunCol> },
+    TableScan { projection: Bitset<QunCol> },
     HashJoin { equi_join_preds: Vec<(ExprKey, PredicateAlignment)> },
     Repartition { cpartitions: usize },
     Aggregation { group_by_len: usize },
@@ -579,7 +579,7 @@ impl QGM {
 
                 let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
 
-                lop_graph.add_node_with_props(LOP::TableScan { input_cols: input_quncols }, props, None)
+                lop_graph.add_node_with_props(LOP::TableScan { projection: input_quncols }, props, None)
             };
             //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
             worklist.push(lopkey);

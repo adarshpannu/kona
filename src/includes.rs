@@ -87,3 +87,8 @@ where
 
 pub use arrow2::datatypes::DataType;
 pub use arrow2::datatypes::Field;
+pub use arrow2::chunk::Chunk;
+pub use arrow2::array::Array;
+
+pub type ChunkBox = Chunk<Box<dyn Array>>;
+pub use std::collections::HashMap;

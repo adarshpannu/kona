@@ -98,9 +98,7 @@ pub struct ExprProp {
 
 impl std::default::Default for ExprProp {
     fn default() -> Self {
-        ExprProp {
-            datatype: DataType::Null,
-        }
+        ExprProp { datatype: DataType::Null }
     }
 }
 

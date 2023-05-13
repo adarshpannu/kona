@@ -1,10 +1,9 @@
-
 // Print: Diagnostics, Graphviz,
 
+use regex::Regex;
 use std::fs::File;
 use std::io::Write;
 use std::process::Command;
-use regex::Regex;
 
 pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
 
@@ -58,7 +57,7 @@ impl QGM {
         let predstring = props.preds.printable(self, true);
 
         let (label, extrastr) = match &lop {
-            LOP::TableScan { input_cols } => {
+            LOP::TableScan { projection: input_cols } => {
                 let input_cols = input_cols.printable(self);
                 let extrastr = format!("(input = {})", input_cols);
                 (String::from("TableScan"), extrastr)
@@ -95,9 +94,10 @@ impl QGM {
     }
 }
 
+use std::collections::HashMap;
 
 impl QGM {
-    pub fn write_physical_plan_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, pathname: &str) -> Result<(), String> {
+    pub fn write_physical_plan_to_graphviz(self: &QGM, stage_graph: &StageGraph, pop_graph: &POPGraph, pop_key: POPKey, pathname: &str) -> Result<(), String> {
         let mut file = std::fs::File::create(pathname).map_err(|err| f!("{:?}: {}", err, pathname))?;
 
         fprint!(file, "digraph example1 {{\n");
@@ -106,7 +106,9 @@ impl QGM {
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        self.write_pop_to_graphviz(pop_graph, pop_key, &mut file)?;
+        let pop2stage: HashMap<POPKey, &Stage> = stage_graph.get_pop_to_stage_map();
+
+        self.write_pop_to_graphviz(stage_graph, pop_graph, &pop2stage, pop_key, &mut file)?;
 
         fprint!(file, "}}\n");
 
@@ -125,7 +127,9 @@ impl QGM {
         Ok(())
     }
 
-    pub fn write_pop_to_graphviz(self: &QGM, pop_graph: &POPGraph, pop_key: POPKey, file: &mut File) -> Result<(), String> {
+    pub fn write_pop_to_graphviz(
+        self: &QGM, stage_graph: &StageGraph, pop_graph: &POPGraph, pop2stage: &HashMap<POPKey, &Stage>, pop_key: POPKey, file: &mut File,
+    ) -> Result<(), String> {
         let id = pop_key.printable_key();
         let (pop, props, children) = pop_graph.get3(pop_key);
 
@@ -133,16 +137,24 @@ impl QGM {
             for &child_key in children.iter() {
                 let child_name = child_key.printable_key();
                 fprint!(file, "    popkey{} -> popkey{};\n", child_name, id);
-                self.write_pop_to_graphviz(pop_graph, child_key, file)?;
+                self.write_pop_to_graphviz(stage_graph, pop_graph, pop2stage, child_key, file)?;
             }
         }
+
+        let color = if let Some(&stage) = pop2stage.get(&pop_key) {
+            "red"
+        } else {
+            "black"
+        };
 
         let (label, extrastr) = match &pop {
             POP::CSV(csv) => {
                 let pathname = csv.pathname.split("/").last().unwrap_or(&csv.pathname);
-                let mut projection = csv.projection.clone();
-                projection.sort_by(|a, b| a.cmp(b));
-                let extrastr = format!("file: {}, map: {:?}", pathname, projection).replace("{", "(").replace("}", ")");
+                //let mut projection = csv.projection.clone();
+                //projection.sort_by(|a, b| a.cmp(b));
+                let extrastr = format!("file: {}, projection: {:?}", pathname, &csv.projection)
+                    .replace("{", "(")
+                    .replace("}", ")");
                 (String::from("CSV"), extrastr)
             }
             POP::CSVDir(csvdir) => {
@@ -169,18 +181,19 @@ impl QGM {
         let label = label.replace("\"", "").replace("{", "").replace("}", "");
         fprint!(
             file,
-            "    popkey{}[label=\"{}-{}|p = {}|{}\"];\n",
+            "    popkey{}[label=\"{}-{}|ix = {}|p = {}|{}\", color=\"{}\"];\n",
             id,
             label,
             pop_key.printable_id(),
+            props.index_in_stage,
             props.npartitions,
-            extrastr
+            extrastr,
+            color
         );
 
         Ok(())
     }
 }
-
 
 impl Bitset<QunCol> {
     fn printable(&self, qgm: &QGM) -> String {
@@ -236,8 +249,6 @@ pub fn printable_emitcols(preds: &Vec<EmitCol>, qgm: &QGM, do_escape: bool) -> S
     predstring.push_str("}");
     predstring
 }
-
-
 
 impl POPKey {
     pub fn printable_key(&self) -> String {

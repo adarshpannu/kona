@@ -1,52 +1,72 @@
 // csv
 
+use crate::includes::*;
+use crate::pop::CSV;
+use arrow2::io::csv::read;
+use arrow2::io::csv::read::{ByteRecord, Reader, ReaderBuilder};
 use std::fs;
 use std::fs::File;
-use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use crate::includes::*;
+use std::io::{self, BufReader};
 
 pub struct CSVPartitionIter {
-    reader: io::BufReader<File>,
-    partition_size: u64,
-    cur_read: u64,
+    fields: Vec<Field>,
+    projection: Vec<ColId>,
+    reader: Reader<fs::File>,
+    rows: Vec<ByteRecord>,
 }
 
 impl CSVPartitionIter {
-    pub fn new(pathname: &String, partition: &TextFilePartition) -> Result<CSVPartitionIter, String> {
-        let file = File::open(pathname).unwrap();
-        let mut reader = BufReader::new(file);
+    pub fn new(csv: &CSV) -> Result<CSVPartitionIter, String> {
+        let reader = ReaderBuilder::new()
+            .has_headers(csv.header)
+            .delimiter(csv.separator as u8)
+            .from_path(&csv.pathname)
+            .map_err(|err| stringify1(err, &csv.pathname))?;
 
-        reader.seek(SeekFrom::Start(partition.0)).map_err(|err| stringify1(err, pathname))?;
+        // Consume the header row (fix: check if header exists though)??
+
+        let rows = vec![ByteRecord::default(); 100];
 
         Ok(CSVPartitionIter {
+            fields: csv.fields.clone(),
+            projection: csv.projection.clone(),
             reader,
-            partition_size: (partition.1 - partition.0),
-            cur_read: 0,
+            rows,
         })
     }
 }
 
 impl Iterator for CSVPartitionIter {
-    type Item = String;
+    type Item = Chunk<Box<dyn Array>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.cur_read >= self.partition_size {
-            None
-        } else {
-            let mut line = String::new();
-            self.reader.read_line(&mut line).unwrap();
-            if line.len() > 0 {
-                self.cur_read += line.len() as u64;
-                Some(line)
-            } else {
-                None
-            }
+        // allocate space to read from CSV to. The size of this vec denotes how many rows are read.
+
+        // skip 0 (excluding the header) and read up to 100 rows.
+        // this is IO-intensive and performs minimal CPU work. In particular,
+        // no deserialization is performed.
+        let rows_read = read::read_rows(&mut self.reader, 0, &mut self.rows).map_err(|err| stringify(err)).ok();
+        if rows_read.is_none() {
+            return None;
         }
+
+        let rows = &self.rows[..rows_read.unwrap()];
+
+        //let projection: Option<&[usize]> = projection.map(|v| &v);
+        //let projection: Option<&[usize]> = if let Some(projection) = projection.as_ref() { Some(projection) } else { None };
+
+        // parse the rows into a `Chunk`. This is CPU-intensive, has no IO,
+        // and can be performed on a different thread by passing `rows` through a channel.
+        // `deserialize_column` is a function that maps rows and a column index to an Array
+        let cols = read::deserialize_batch(rows, &self.fields, Some(&self.projection), 0, read::deserialize_column)
+            .map_err(|err| stringify(err))
+            .ok();
+        //dbg!(&cols);
+        cols
     }
 }
-
 
 pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
     let f = fs::File::open(&pathname).map_err(|err| stringify1(err, &pathname))?;

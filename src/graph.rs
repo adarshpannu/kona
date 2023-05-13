@@ -54,7 +54,7 @@ where
     pub fn new() -> Self {
         Graph {
             sm: SlotMap::with_key(),
-            next_id: 1,   // Starts at 1. There's code out these that handles zero-valued things differently. So keep this at 1.
+            next_id: 1, // Starts at 1. There's code out these that handles zero-valued things differently. So keep this at 1.
         }
     }
 
@@ -119,6 +119,15 @@ where
         GraphIterator {
             graph: self,
             queue: vec![root],
+            stop_depth_traversal: None,
+        }
+    }
+
+    pub fn iter_cond<'a, F>(&'a self, root: K, cond: Option<Box<dyn Fn(K) -> bool>>) -> GraphIterator<'a, K, V, P> {
+        GraphIterator {
+            graph: self,
+            queue: vec![root],
+            stop_depth_traversal: cond,
         }
     }
 }
@@ -129,26 +138,32 @@ where
 {
     graph: &'a Graph<K, V, P>,
     queue: Vec<K>,
+    stop_depth_traversal: Option<Box<dyn Fn(K) -> bool>>, // If true, don't explore children of a given node
 }
 
 // Breadth-first iterator
 impl<'a, K, V, P> Iterator for GraphIterator<'a, K, V, P>
 where
     K: slotmap::Key,
-    V: std::fmt::Debug
+    V: std::fmt::Debug,
 {
     type Item = K;
     fn next(&mut self) -> Option<Self::Item> {
         if self.queue.len() == 0 {
             return None;
         }
-        let cur_key = self.queue.pop();
-        if let Some(cur_key) = cur_key {
+        let cur_key_option = self.queue.pop();
+        if let Some(cur_key) = cur_key_option {
+            if let Some(stop_depth_traversal) = &self.stop_depth_traversal {
+                if !stop_depth_traversal(cur_key) {
+                    return cur_key_option
+                }
+            }
             let children = self.graph.get(cur_key).children.as_ref();
             if let Some(children) = children {
                 self.queue.extend(children.iter());
             }
         }
-        cur_key
+        cur_key_option
     }
 }

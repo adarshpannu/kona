@@ -96,13 +96,12 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 // Build LOPs
                 let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
 
-                /*
+                let flow = POP::compile(env, &mut qgm, &lop_graph, lop_key).unwrap();
+
                 if !env.settings.parse_only.unwrap_or(false) {
                     // Build POPs
-                    let flow = POP::compile(env, &mut qgm, &lop_graph, lop_key).unwrap();
                     run_flow(env, &flow)?;
                 }
-                */
             }
         }
     }
@@ -116,6 +115,7 @@ fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "flare::pcode=info");
 
     //std::env::set_var("RUST_LOG", "flare=info,flare::pop=debug,flare::flow=debug");
+    std::env::set_var("RUST_LOG", "debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
@@ -185,7 +185,6 @@ fn run_unit_tests() -> Result<(), String> {
 }
 
 use arrow2::array::Array;
-use arrow2::chunk::Chunk;
 use arrow2::error::Result as A2Result;
 use arrow2::io::csv::read;
 
@@ -193,7 +192,7 @@ use arrow2::io::csv::read;
 fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn Array>>> {
     // Create a CSV reader. This is typically created on the thread that reads the file and
     // thus owns the read head.
-    let mut reader = read::ReaderBuilder::new().from_path(path)?;
+    let mut reader: read::Reader<fs::File> = read::ReaderBuilder::new().from_path(path)?;
 
     // Infers the fields using the default inferer. The inferer is just a function that maps bytes
     // to a `DataType`.

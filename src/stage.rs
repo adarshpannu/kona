@@ -13,6 +13,7 @@ pub struct Stage {
     pub root_pop_key: Option<POPKey>,
     pub orig_child_count: usize,
     pub npartitions: usize,
+    pub pop_count: usize // # of POPs in this stage
 }
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ impl Stage {
             root_pop_key: None,
             orig_child_count: 0,
             npartitions: 0,
+            pop_count: 0
         }
     }
 
@@ -102,9 +104,20 @@ impl StageGraph {
         stage.root_pop_key = Some(pop_key)
     }
 
+    pub fn increment_pop(&mut self, pop_graph: &POPGraph, stage_id: StageId, pop_key: POPKey) -> usize {
+        let stage = &mut self.stages[stage_id];
+        stage.pop_count += 1;
+        return stage.pop_count
+    }
+
     pub fn print(&self) {
         for stage in self.stages.iter() {
             debug!("--- Stage: {:?}", stage)
         }
     }
+
+    pub fn get_pop_to_stage_map(&self) -> HashMap<POPKey, &Stage> {
+        self.stages.iter().map(|s| (s.root_pop_key.unwrap(), s)).collect()
+    }
+
 }

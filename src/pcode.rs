@@ -1,6 +1,7 @@
 // pcode
 
 pub use crate::{expr::*, flow::*, graph::*, includes::*, lop::*, pop::*, qgm::*, row::*};
+use arrow2::scalar::{new_scalar, PrimitiveScalar, Scalar};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PCode {
@@ -36,9 +37,7 @@ impl ExprKey {
         }
 
         let inst = match expr {
-            Expr::CID(colid, ..) => PInstruction::Column(ColumnPosition {
-                column_position: *colid,
-            }),
+            Expr::CID(colid, ..) => PInstruction::Column(ColumnPosition { column_position: *colid }),
             Expr::Literal(value) => PInstruction::Literal(value.clone()),
             Expr::Column { qunid, colid, .. } => {
                 let cpos = cpt.get(QunCol(*qunid, *colid));
@@ -55,6 +54,11 @@ impl ExprKey {
     }
 }
 
+enum PCodeStack<'a> {
+    Datum(Datum),
+    Column(&'a Box<dyn Array>),
+}
+
 impl PCode {
     pub fn new() -> PCode {
         PCode { instructions: vec![] }
@@ -64,7 +68,43 @@ impl PCode {
         self.instructions.push(inst)
     }
 
-    pub fn eval(&self, _registers: &Row) -> Datum {
+    pub fn eval(&self, input: &ChunkBox) -> ChunkBox {
+        let mut stack: Vec<PCodeStack> = vec![];
+        for inst in self.instructions.iter() {
+            match inst {
+                PInstruction::Column(id) => stack.push(PCodeStack::Column(&input[id.column_position])),
+                PInstruction::Literal(datum) => stack.push(PCodeStack::Datum(datum.clone())),
+                PInstruction::RelExpr(op) => {
+                    let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
+                    match (lhs, op, rhs) {
+                        (PCodeStack::Column(lhs), RelOp::Gt, PCodeStack::Column(rhs)) => {
+                            todo!()
+                        }
+                        (PCodeStack::Column(lhs), relop, PCodeStack::Datum(Datum::INT(i))) => {
+                            let scalar = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
+                            let lhs = &**lhs;
+                            let rhs = &scalar;
+                            let array: Box<dyn Array> = match relop {
+                                RelOp::Lt => Box::new(arrow2::compute::comparison::lt_scalar(lhs, rhs)),
+                                RelOp::Le => Box::new(arrow2::compute::comparison::lt_eq_scalar(lhs, rhs)),
+                                RelOp::Eq => Box::new(arrow2::compute::comparison::eq_scalar(lhs, rhs)),
+                                RelOp::Ne => Box::new(arrow2::compute::comparison::neq_scalar(lhs, rhs)),
+                                RelOp::Ge => Box::new(arrow2::compute::comparison::gt_eq_scalar(lhs, rhs)),
+                                RelOp::Gt => Box::new(arrow2::compute::comparison::gt_scalar(lhs, rhs)),
+                                _ => todo!(),
+                            };
+                            let retval: ChunkBox = Chunk::new(vec![array]);
+                            return retval;
+                        }
+                        _ => todo!(),
+                    }
+                }
+                _ => {
+                    debug!("Instruction inst: {:?} not implemented yet. Possibly invalid?", inst);
+                    todo!()
+                }
+            }
+        }
         todo!()
     }
 

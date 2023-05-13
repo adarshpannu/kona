@@ -1,8 +1,8 @@
 // task
 
-use std::collections::HashMap;
 use crate::includes::*;
 use crate::pop::*;
+use std::collections::HashMap;
 
 /***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
@@ -10,10 +10,7 @@ pub struct Task {
     pub partition_id: PartitionId,
 
     #[serde(skip)]
-    pub contexts: HashMap<POPKey, NodeRuntime>,
-
-    #[serde(skip)]
-    pub task_row: Row,
+    pub contexts: Vec<NodeRuntime>,
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
@@ -21,8 +18,7 @@ impl Task {
     pub fn new(partition_id: PartitionId) -> Task {
         Task {
             partition_id,
-            contexts: HashMap::new(),
-            task_row: Row::from(vec![]),
+            contexts: vec![],
         }
     }
 
@@ -33,13 +29,40 @@ impl Task {
             stage.root_pop_key, self.partition_id, stage.npartitions_producer
         );
         */
-        self.task_row = Row::from(vec![Datum::NULL; 32]); // FIXME
+        self.init_contexts(flow, stage);
+
         loop {
-            let retval = stage.root_pop_key.unwrap().next(flow, stage, self, true)?;
-            if !retval {
+            let output_chunk = stage.root_pop_key.unwrap().next(flow, stage, self, true)?;
+            if output_chunk.len() == 0 {
                 break;
             }
         }
         Ok(())
+    }
+
+    pub fn init_contexts(&mut self, flow: &Flow, stage: &Stage) {
+        let root_pop_key = stage.root_pop_key.unwrap();
+
+        for ix in 0..stage.pop_count {
+            self.contexts.push(NodeRuntime::Uninitialized)
+        }
+
+        let stop_search = |popkey| {
+            let (pop, props, ..) = flow.pop_graph.get3(popkey);
+            matches!(pop, POP::Repartition(_))
+        };
+
+        for popkey in flow.pop_graph.iter(root_pop_key) {
+            let (pop, props, ..) = flow.pop_graph.get3(popkey);
+            let ix = props.index_in_stage;
+            let ctx = match &pop {
+                POP::CSV(csv) => {
+                    let iter = CSVPartitionIter::new(csv).unwrap();
+                    NodeRuntime::CSVRuntime { iter }
+                }
+                _ => unimplemented!(),
+            };
+            self.contexts[ix] = ctx;
+        }
     }
 }
