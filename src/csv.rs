@@ -25,9 +25,7 @@ impl CSVPartitionIter {
             .from_path(&csv.pathname)
             .map_err(|err| stringify1(err, &csv.pathname))?;
 
-        // Consume the header row (fix: check if header exists though)??
-
-        let rows = vec![ByteRecord::default(); 100];
+        let rows = vec![ByteRecord::default(); CHUNK_SIZE];
 
         Ok(CSVPartitionIter {
             fields: csv.fields.clone(),

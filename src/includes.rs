@@ -92,3 +92,6 @@ pub use arrow2::compute::{arithmetics, comparison, boolean};
 
 pub type ChunkBox = Chunk<Box<dyn Array>>;
 pub use std::collections::HashMap;
+
+pub const CHUNK_SIZE: usize = 1024;
+

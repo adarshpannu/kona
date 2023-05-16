@@ -108,7 +108,10 @@ impl POPKey {
                 chunk = Self::eval_predicates(props, chunk);
                 debug!("After preds: {:?}", &chunk);
 
-                //chunk = Self::eval_emitcols(props, out_chunk);
+                let emitchunk: Option<Chunk<Box<dyn Array>>> = Self::eval_emitcols(props, &chunk);
+                if let Some(emitchunk) = emitchunk {
+                    debug!("Emitcols: {:?}", &emitchunk);
+                }
             }
             return Ok(chunk);
         }
@@ -127,22 +130,20 @@ impl POPKey {
         return filtered_chunk;
     }
 
-    /*
-    pub fn eval_emitcols(props: &POPProps, registers: &Row) -> Option<Row> {
+    pub fn eval_emitcols(props: &POPProps, input: &ChunkBox) -> Option<ChunkBox> {
         if let Some(emitcols) = props.emitcols.as_ref() {
             let emit_output = emitcols
                 .iter()
                 .map(|emit| {
-                    let result = emit.eval(&registers);
+                    let result = emit.eval(&input);
                     result
                 })
                 .collect::<Vec<_>>();
-            Some(Row::from(emit_output))
+            Some(Chunk::new(emit_output))
         } else {
             None
         }
     }
-    */
 }
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]

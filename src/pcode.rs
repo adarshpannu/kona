@@ -107,7 +107,9 @@ impl PCode {
                             let rhs = &(i as i64);
                             let array: Box<dyn Array> = match arithop {
                                 ArithOp::Add => Box::new(arithmetics::basic::add_scalar(lhs, rhs)),
-                                _ => todo!(),
+                                ArithOp::Sub => Box::new(arithmetics::basic::sub_scalar(lhs, rhs)),
+                                ArithOp::Mul => Box::new(arithmetics::basic::mul_scalar(lhs, rhs)),
+                                ArithOp::Div => Box::new(arithmetics::basic::div_scalar(lhs, rhs)),
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
@@ -183,10 +185,10 @@ impl PCode {
             }
         }
         let array = stack.pop().unwrap();
-        if let PCodeStack::Column(Column::Owned(array)) = array {
-            return array;
-        } else {
-            panic!("unexpected value")
+        match array {
+            PCodeStack::Column(Column::Owned(array)) => array,
+            PCodeStack::Column(Column::Ref(array)) => array.clone(),
+            _ => panic!("unexpected value"),
         }
     }
 }

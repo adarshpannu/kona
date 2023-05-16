@@ -271,7 +271,7 @@ impl QGM {
                     equi_join_preds.sort_by(|a, b| a.0.cmp(&b.0));
 
                     if equi_join_preds.len() > 0 {
-                        let mut preds = all_preds.clone_n_clear();
+                        let mut preds = all_preds.clone_metadata();
 
                         for &pred_key in join_preds.iter() {
                             preds.set(pred_key);
@@ -299,14 +299,14 @@ impl QGM {
                         let lhs_repart_props = lhs_partdesc.map(|partdesc| LOPProps {
                             quns: lhs_props.quns.clone(),
                             cols: lhs_props.cols.clone(),
-                            preds: lhs_props.preds.clone_n_clear(),
+                            preds: lhs_props.preds.clone_metadata(),
                             partdesc,
                             emitcols: None,
                         });
                         let rhs_repart_props = rhs_partdesc.map(|partdesc| LOPProps {
                             quns: rhs_props.quns.clone(),
                             cols: rhs_props.cols.clone(),
-                            preds: rhs_props.preds.clone_n_clear(),
+                            preds: rhs_props.preds.clone_metadata(),
                             partdesc,
                             emitcols: None,
                         });
@@ -372,7 +372,7 @@ impl QGM {
                     let props = LOPProps {
                         quns: props.quns.clone(),
                         cols: props.cols.clone(),
-                        preds: props.preds.clone_n_clear(),
+                        preds: props.preds.clone_metadata(),
                         partdesc,
                         emitcols: None,
                     };
@@ -425,7 +425,7 @@ impl QGM {
     }
 
     fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
-        let mut select_list_quncol = aps_context.all_quncols.clone_n_clear();
+        let mut select_list_quncol = aps_context.all_quncols.clone_metadata();
         qblock
             .select_list
             .iter()
@@ -444,8 +444,8 @@ impl QGM {
         if let Some(pred_list) = qblock.pred_list.as_ref() {
             for &pred_key in pred_list.iter() {
                 // Collect quns and quncols for each predicate
-                let mut quncols = aps_context.all_quncols.clone_n_clear();
-                let mut quns = aps_context.all_quns.clone_n_clear();
+                let mut quncols = aps_context.all_quncols.clone_metadata();
+                let mut quns = aps_context.all_quns.clone_metadata();
 
                 for quncol in pred_key.iter_quncols(&self.expr_graph) {
                     quncols.set(quncol);
@@ -457,8 +457,8 @@ impl QGM {
                 let eqjoin_desc = if let RelExpr(RelOp::Eq) = expr.value {
                     let children = expr.children.as_ref().unwrap();
                     let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
-                    let lhs_quns = aps_context.all_quns.clone_n_clear().init(lhs_child_key.iter_quns(expr_graph));
-                    let rhs_quns = aps_context.all_quns.clone_n_clear().init(rhs_child_key.iter_quns(expr_graph));
+                    let lhs_quns = aps_context.all_quns.clone_metadata().init(lhs_child_key.iter_quns(expr_graph));
+                    let rhs_quns = aps_context.all_quns.clone_metadata().init(rhs_child_key.iter_quns(expr_graph));
 
                     if lhs_quns.len() > 0 && rhs_quns.len() > 0 {
                         let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
@@ -514,11 +514,11 @@ impl QGM {
         // Build unary POPs first
         for qun in qblock.quns.iter() {
             // Set quns
-            let mut quns = all_quns.clone_n_clear();
+            let mut quns = all_quns.clone_metadata();
             quns.set(qun.id);
 
             // Set input cols: find all column references for this qun
-            let mut input_quncols = all_quncols.clone_n_clear();
+            let mut input_quncols = all_quncols.clone_metadata();
             aps_context
                 .all_quncols
                 .elements()
@@ -529,7 +529,7 @@ impl QGM {
             // Set output cols + preds
             let mut unbound_quncols = select_list_quncol.clone();
 
-            let mut preds = all_preds.clone_n_clear();
+            let mut preds = all_preds.clone_metadata();
             pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, .. })| {
                 if quns.get(qun.id) {
                     if quns.bitmap.len() == 1 {

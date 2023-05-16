@@ -67,7 +67,7 @@ where
         self
     }
 
-    pub fn clone_n_clear(&self) -> Self {
+    pub fn clone_metadata(&self) -> Self {
         self.clone().clear()
     }
 
