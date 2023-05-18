@@ -25,7 +25,7 @@ impl QueryBlock {
         let qblock = &mut qblock_graph.get_mut(qbkey).value;
 
         // Resolve nested query blocks first
-        let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.qblock).collect();
+        let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
         for qbkey in qbkey_children {
             Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata)?;
         }
@@ -35,7 +35,7 @@ impl QueryBlock {
 
         // Resolve base table QUNs next
         for qun in qblock.quns.iter_mut() {
-            if let Some(tablename) = qun.tablename.as_ref() {
+            if let Some(tablename) = qun.get_basename() {
                 let tbdesc = env.metadata.get_tabledesc(tablename);
                 if let Some(tbdesc0) = tbdesc.as_ref() {
                     metadata.add_tabledesc(qun.id, Rc::clone(tbdesc0));
@@ -148,7 +148,7 @@ impl QueryBlock {
             .collect::<Vec<_>>();
 
         inner_qb_node.value = inner_qb;
-        let outer_qun = Quantifier::new(agg_qun_id, None, Some(inner_qb_key), None);
+        let outer_qun = Quantifier::new_qblock(agg_qun_id, inner_qb_key, None);
         outer_qb.name = None;
         outer_qb.qbtype = QueryBlockType::GroupBy;
         outer_qb.quns = vec![outer_qun];

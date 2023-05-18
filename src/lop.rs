@@ -552,7 +552,7 @@ impl QGM {
 
             // Build plan for nested query blocks
             let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
-                let child_qblock_key = qun.qblock.unwrap();
+                let child_qblock_key = qun.get_qblock().unwrap();
                 let child_qblock = &self.qblock_graph.get(child_qblock_key).value;
                 let group_by_len = qblock.group_by.as_ref().unwrap().len();
                 let expected_partitioning = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();

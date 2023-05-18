@@ -74,6 +74,13 @@ match {
     r"//[^\n\r]*[\n\r]*" => { }, // Skip // comments
     r"--[^\n\r]*[\n\r]*" => { }, // Skip -- comments`
     r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+    r"(?i)LEFT" => "LEFT",
+    r"(?i)RIGHT" => "RIGHT",
+    r"(?i)FULL" => "FULL",
+    r"(?i)INNER" => "INNER",
+    r"(?i)OUTER" => "OUTER",
+    r"(?i)JOIN" => "JOIN",
+    r"(?i)ON" => "ON",
 } else {
     r"[a-zA-Z][a-zA-Z0-9_-]*",
 }
@@ -163,8 +170,8 @@ pub SUIEQuery: QueryBlockKey = {
     QueryBlock,
     Subquery,
     <qb1:SUIEQuery> <qblocktype:UIEOperator> <qb2:QueryBlock> => {
-        let qun1 = Quantifier::new(parser_state.expr_graph.next_id(), None, Some(qb1), None);
-        let qun2 = Quantifier::new(parser_state.expr_graph.next_id(), None, Some(qb2), None);
+        let qun1 = Quantifier::new_qblock(parser_state.expr_graph.next_id(), qb1, None);
+        let qun2 = Quantifier::new_qblock(parser_state.expr_graph.next_id(), qb2, None);
         let qblock = QueryBlock::new(
             parser_state.qblock_graph.next_id(), 
             None, 
@@ -249,11 +256,30 @@ OrderSort: Ordering = {
 
 Quantifier: Quantifier = {
     <schemaname:(Identifier ".")?> <name:Identifier> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.expr_graph.next_id(), Some(name), None, alias)
+        Quantifier::new_base(parser_state.expr_graph.next_id(), name, alias)
     },
-    <subq:Subquery> <alias:correlation_clause?> => {
-        Quantifier::new(parser_state.expr_graph.next_id(), None, Some(subq), alias)
+    <subq:Subquery> <alias:correlation_clause> => {
+        Quantifier::new_qblock(parser_state.expr_graph.next_id(), subq, Some(alias))
+    },
+    <ansi_join:AnsiJoin> => {
+        Quantifier::new_ansijoin(parser_state.expr_graph.next_id(), ansi_join, None)
     }
+}
+
+AnsiJoin: AnsiJoin = { 
+    <q1:Quantifier> <join_type:JoinType> <q2:Quantifier> "ON" <on_clause:LogExpr> => {
+        let left = Box::new(q1);
+        let right = Box::new(q2);
+        AnsiJoin { join_type, left, right }
+    },
+    "(" <AnsiJoin> ")" 
+}
+
+JoinType: JoinType = {
+    "INNER"? "JOIN" => JoinType::Inner,
+    "LEFT" "OUTER"? "JOIN" => JoinType::Left,
+    "RIGHT" "OUTER"? "JOIN" => JoinType::Right,
+    "FULL" "OUTER"? "JOIN" => JoinType::Full,
 }
 
 correlation_clause: String = "AS"? <id:Identifier> => id;

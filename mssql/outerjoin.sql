@@ -2,21 +2,23 @@ use adarshdb;
 GO
 
 select *
-from adarshdb.adarshschema.T1
+from EMP
 go
 
 select *
-from adarshdb.adarshschema.T2
+from SALARY
 go
 
-SELECT T1.*, T2.*
---, T3.*
-FROM adarshdb.adarshschema.T1 T1
-        LEFT JOIN adarshdb.adarshschema.T2 T2
-        ON T1.id = T2.id --and T1.num + T2.num = 7
---LEFT OUTER JOIN adarshdb.adarshschema.T3 T3
---ON T2.role = T3.role 
---and T2.role = 'Executive'
---WHERE T2.id = T2.id
-ORDER BY T1.id, T2.role
+SELECT EMP.*, ROLE.*, SALARY.*
+FROM    (EMP
+        LEFT JOIN ROLE
+        ON EMP.id = ROLE.id)
+        LEFT OUTER JOIN (SALARY LEFT JOIN EMP E2
+        ON SALARY.row_id = E2.row_id)
+        on EMP.row_id = SALARY.row_id
+ORDER BY EMP.id, ROLE.role
+GO
+
+SELECT * FROM t1 LEFT JOIN (t2, t3, t4)
+                 ON (t2.a=t1.a AND t3.b=t1.b AND t4.c=t1.c)
 GO

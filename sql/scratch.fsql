@@ -4,11 +4,7 @@ DESCRIBE TABLE emp;
 
 set PARSE_ONLY = "true";
 
-select emp_dept_id, sum(age), (SELECT max(age) from EMP)
-from emp E
-where 
-    age > 50 
-    and age <= ALL (SELECT age from EMP)
-group by emp_dept_id
-;
+select C1
+FROM T1, T2 INNER JOIN T3 ON 1 = 2;
+
 

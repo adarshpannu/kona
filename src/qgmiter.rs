@@ -22,7 +22,7 @@ impl<'a> Iterator for QueryBlockIter<'a> {
                 self.queue.append(&mut children.clone());
             }
             */
-            let children: Vec<QueryBlockKey> = qblocknode.quns.iter().filter_map(|qun| qun.qblock).collect();
+            let children: Vec<QueryBlockKey> = qblocknode.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
             self.queue.append(&mut children.clone());
             return Some(qbkey);
         }

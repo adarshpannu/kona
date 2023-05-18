@@ -100,15 +100,32 @@ pub enum QueryBlockType {
 }
 
 #[derive(Serialize, Deserialize)]
+pub enum QuantifierSource {
+    Basename(String),
+    QueryBlock(QueryBlockKey),
+    AnsiJoin(AnsiJoin),
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AnsiJoin {
+    pub join_type: JoinType,
+    pub left: Box<Quantifier>,
+    pub right: Box<Quantifier>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Quantifier {
     pub id: QunId,
-
-    // Either we have a named base table, or we have a queryblock (but not both)
-    pub tablename: Option<String>,
-    pub qblock: Option<QueryBlockKey>,
-
-    pub alias: Option<String>,
-
+    source: QuantifierSource,
+    alias: Option<String>,
     #[serde(skip)]
     pub tabledesc: Option<Rc<dyn TableDesc>>,
 }
@@ -117,45 +134,76 @@ impl fmt::Debug for Quantifier {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Quantifier")
             .field("id", &self.id)
-            .field("name", &self.tablename)
-            .field("alias", &self.alias)
+            .field("name", &self.get_basename())
+            .field("alias", &self.get_alias())
             .finish()
     }
 }
 
 impl Quantifier {
-    pub fn new(id: QunId, name: Option<String>, qblock: Option<QueryBlockKey>, alias: Option<String>) -> Self {
-        // Either we have a named base table, or we have a queryblock (but not both)
-        assert!((name.is_some() && qblock.is_none()) || (name.is_none() && qblock.is_some()));
-
+    pub fn new(id: QunId, source: QuantifierSource, alias: Option<String>) -> Self {
         Quantifier {
             id,
-            tablename: name,
-            qblock,
+            source,
             alias,
             tabledesc: None,
         }
     }
 
+    pub fn new_base(id: QunId, name: String, alias: Option<String>) -> Self {
+        let source = QuantifierSource::Basename(name);
+        Quantifier::new(id, source, alias)
+    }
+
+    pub fn new_qblock(id: QunId, qblock: QueryBlockKey, alias: Option<String>) -> Self {
+        let source = QuantifierSource::QueryBlock(qblock);
+        Quantifier::new(id, source, alias)
+    }
+
+    pub fn new_ansijoin(id: QunId, ansi_join: AnsiJoin, alias: Option<String>) -> Self {
+        let source = QuantifierSource::AnsiJoin(ansi_join);
+        Quantifier::new(id, source, alias)
+    }
+
     pub fn is_base_table(&self) -> bool {
-        self.qblock.is_none()
+        matches!(self.source, QuantifierSource::Basename(_))
     }
 
     pub fn matches_name_or_alias(&self, prefix: &String) -> bool {
-        self.tablename.as_ref().map(|e| e == prefix).unwrap_or(false) || self.alias.as_ref().map(|e| e == prefix).unwrap_or(false)
+        self.get_basename().map(|e| e == prefix).unwrap_or(false) || self.get_alias().map(|e| e == prefix).unwrap_or(false)
     }
 
     pub fn display(&self) -> String {
         format!(
             "QUN_{} {}/{}",
             self.id,
-            self.tablename.as_ref().unwrap_or(&"".to_string()),
-            self.alias.as_ref().unwrap_or(&"".to_string()),
+            self.get_basename().unwrap_or(&"".to_string()),
+            self.get_alias().unwrap_or(&"".to_string()),
         )
     }
 
     pub fn name(&self) -> String {
         format!("QUN_{}", self.id)
+    }
+
+    pub fn get_basename(&self) -> Option<&String> {
+        if let QuantifierSource::Basename(basename) = &self.source {
+            Some(basename)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_qblock(&self) -> Option<QueryBlockKey> {
+        if let QuantifierSource::QueryBlock(qblock) = self.source {
+            Some(qblock)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_alias(&self) -> Option<&String> {
+        self.alias.as_ref()
     }
 }
 
@@ -319,7 +367,7 @@ impl QueryBlock {
 
         // Write referenced query blocks
         for qun in self.quns.iter().rev() {
-            if let Some(qbkey) = qun.qblock {
+            if let Some(qbkey) = qun.get_qblock() {
                 let qblock = &qgm.qblock_graph.get(qbkey).value;
                 fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 //qblock.write_qblock_to_graphviz(qgm, file)?
