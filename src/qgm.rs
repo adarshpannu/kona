@@ -119,6 +119,7 @@ pub struct AnsiJoin {
     pub join_type: JoinType,
     pub left: Box<Quantifier>,
     pub right: Box<Quantifier>,
+    pub on_clause: ExprKey
 }
 
 #[derive(Serialize, Deserialize)]
@@ -289,95 +290,6 @@ impl QueryBlock {
     }
 }
 
-impl QueryBlock {
-    pub fn write_qblock_to_graphviz(&self, is_main_qb: bool, qgm: &QGM, file: &mut File) -> Result<(), String> {
-        // Write current query block first
-
-        // --- begin query block cluster ---
-        fprint!(file, "  subgraph cluster_{} {{\n", self.name());
-        fprint!(file, "    \"{}_selectlist\"[label=\"select_list\",shape=box,style=filled];\n", self.name());
-        if is_main_qb {
-            fprint!(file, "    color = \"red\"\n");
-        }
-
-        // Write select_list
-        fprint!(file, "  subgraph cluster_select_list{} {{\n", self.name());
-        for (ix, nexpr) in self.select_list.iter().enumerate() {
-            let expr_key = nexpr.expr_key;
-            QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix))?;
-            let childid_name = expr_key.to_string();
-            fprint!(file, "    exprnode{} -> \"{}_selectlist\";\n", childid_name, self.name());
-        }
-        fprint!(file, "}}\n");
-
-        // Write quns
-        for qun in self.quns.iter().rev() {
-            fprint!(
-                file,
-                "    \"{}\"[label=\"{}\", fillcolor=black, fontcolor=white, style=filled]\n",
-                qun.name(),
-                qun.display()
-            );
-        }
-
-        // Write pred_list
-        if let Some(pred_list) = self.pred_list.as_ref() {
-            fprint!(file, "  subgraph cluster_pred_list{} {{\n", self.name());
-
-            for &expr_key in pred_list {
-                QGM::write_expr_to_graphvis(qgm, expr_key, file, None)?;
-                let id = expr_key.to_string();
-                fprint!(file, "    exprnode{} -> {}_pred_list;\n", id, self.name());
-            }
-            fprint!(file, "    \"{}_pred_list\"[label=\"pred_list\",shape=box,style=filled];\n", self.name());
-            fprint!(file, "}}\n");
-        }
-
-        // Write group_by
-        if let Some(group_by) = self.group_by.as_ref() {
-            fprint!(file, "  subgraph cluster_group_by{} {{\n", self.name());
-
-            fprint!(file, "    \"{}_group_by\"[label=\"group_by\",shape=box,style=filled];\n", self.name());
-
-            for (ix, &expr_key) in group_by.iter().enumerate() {
-                QGM::write_expr_to_graphvis(qgm, expr_key, file, Some(ix))?;
-                let childid_name = expr_key.to_string();
-                fprint!(file, "    exprnode{} -> \"{}_group_by\";\n", childid_name, self.name());
-            }
-            fprint!(file, "}}\n");
-        }
-
-        // Write having_clause
-        if let Some(having_clause) = self.having_clause.as_ref() {
-            fprint!(file, "  subgraph cluster_having_clause{} {{\n", self.name());
-
-            for &expr_key in having_clause {
-                QGM::write_expr_to_graphvis(qgm, expr_key, file, None)?;
-
-                let id = expr_key.to_string();
-                fprint!(file, "    exprnode{} -> {}_having_clause;\n", id, self.name());
-            }
-            fprint!(file, "    \"{}_having_clause\"[label=\"having_clause\",shape=box,style=filled];\n", self.name());
-            fprint!(file, "}}\n");
-        }
-        fprint!(file, "    label = \"{} type={:?}\";\n", self.name(), self.qbtype);
-
-        fprint!(file, "}}\n");
-        // --- end query block cluster ---
-
-        // Write referenced query blocks
-        for qun in self.quns.iter().rev() {
-            if let Some(qbkey) = qun.get_qblock() {
-                let qblock = &qgm.qblock_graph.get(qbkey).value;
-                fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
-                //qblock.write_qblock_to_graphviz(qgm, file)?
-            }
-        }
-
-        Ok(())
-    }
-}
-
 pub struct ParserState {
     pub qblock_graph: QueryBlockGraph,
     pub expr_graph: ExprGraph,
@@ -445,27 +357,5 @@ impl QGM {
         }
         Ok(())
     }
-
-    fn write_expr_to_graphvis(qgm: &QGM, expr_key: ExprKey, file: &mut File, order_ix: Option<usize>) -> Result<(), String> {
-        let id = expr_key.to_string();
-        let (expr, _, children) = qgm.expr_graph.get3(expr_key);
-        let ix_str = if let Some(ix) = order_ix { format!(": {}", ix) } else { String::from("") };
-
-        fprint!(file, "    exprnode{}[label=\"{}{}\"];\n", id, expr.name(), ix_str);
-
-        if let Expr::Subquery(qbkey) = expr {
-            let qblock = &qgm.qblock_graph.get(*qbkey).value;
-            fprint!(file, "    \"{}_selectlist\" -> \"exprnode{}\";\n", qblock.name(), id);
-        }
-
-        if let Some(children) = children {
-            for &childid in children {
-                let childid_name = childid.to_string();
-
-                fprint!(file, "    exprnode{} -> exprnode{};\n", childid_name, id);
-                Self::write_expr_to_graphvis(qgm, childid, file, None)?;
-            }
-        }
-        Ok(())
-    }
+    
 }

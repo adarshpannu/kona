@@ -270,7 +270,7 @@ AnsiJoin: AnsiJoin = {
     <q1:Quantifier> <join_type:JoinType> <q2:Quantifier> "ON" <on_clause:LogExpr> => {
         let left = Box::new(q1);
         let right = Box::new(q2);
-        AnsiJoin { join_type, left, right }
+        AnsiJoin { join_type, left, right, on_clause }
     },
     "(" <AnsiJoin> ")" 
 }

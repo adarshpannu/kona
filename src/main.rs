@@ -120,7 +120,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/simple.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
@@ -139,7 +139,7 @@ fn main() -> Result<(), String> {
 fn run_unit_tests() -> Result<(), String> {
     use std::process::Command;
     use std::rc::Rc;
-    
+
     // Initialize logger with INFO as default
     logging::init("error");
     let mut npassed = 0;
