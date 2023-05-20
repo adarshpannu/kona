@@ -1,7 +1,6 @@
 // main
 
-#![allow(unused_variables)]
-#![allow(unused_imports)]
+//#![allow(unused_variables)]
 
 use std::fs;
 
@@ -31,11 +30,15 @@ pub mod qgmiter;
 pub mod lop;
 pub mod qst;
 
-pub mod compile;
-pub mod csv;
+pub mod pop;
+pub mod pop_compile;
+pub mod pop_run;
+pub mod pop_csv;
+pub mod pop_repartition;
+pub mod pop_hashjoin;
+pub mod pop_aggregation;
 pub mod flow;
 pub mod pcode;
-pub mod pop;
 
 pub mod row;
 pub mod scheduler;
@@ -120,7 +123,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/simple.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/join.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 

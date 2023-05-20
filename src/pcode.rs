@@ -1,7 +1,7 @@
 // pcode
 
 pub use crate::{expr::*, flow::*, graph::*, includes::*, lop::*, pop::*, qgm::*, row::*};
-use arrow2::scalar::{new_scalar, PrimitiveScalar, Scalar};
+use arrow2::scalar::{PrimitiveScalar};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PCode {

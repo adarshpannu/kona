@@ -6,7 +6,6 @@ use crate::scheduler::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stage {
-    // Compile-time details
     pub stage_id: StageId,
     pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
     pub root_lop_key: LOPKey,
@@ -104,7 +103,7 @@ impl StageGraph {
         stage.root_pop_key = Some(pop_key)
     }
 
-    pub fn increment_pop(&mut self, pop_graph: &POPGraph, stage_id: StageId, pop_key: POPKey) -> usize {
+    pub fn increment_pop(&mut self, stage_id: StageId) -> usize {
         let stage = &mut self.stages[stage_id];
         stage.pop_count += 1;
         return stage.pop_count

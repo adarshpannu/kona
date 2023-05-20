@@ -1,8 +1,6 @@
 // Compile
 
-#![allow(unused_variables)]
-
-pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
+pub use crate::{bitset::*, pop_csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
 
 impl POP {
     pub fn compile(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
@@ -28,7 +26,7 @@ impl POP {
     pub fn compile_lop(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, stage_graph: &mut StageGraph, stage_id: StageId,
     ) -> Result<POPKey, String> {
-        let (lop, lopprops, lop_children) = lop_graph.get3(lop_key);
+        let (lop, _, lop_children) = lop_graph.get3(lop_key);
 
         // Do we have a new stage?
         let effective_stage_id = if matches!(lop, LOP::Repartition { .. }) {
@@ -46,8 +44,6 @@ impl POP {
             }
         }
 
-        let npartitions = lopprops.partdesc.npartitions;
-
         let pop_key: POPKey = match lop {
             LOP::TableScan { .. } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph)?,
             LOP::HashJoin { .. } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children)?,
@@ -60,18 +56,18 @@ impl POP {
         }
 
         // Assign indexes to POP, increment stage pop count
-        let new_pop_count: usize = stage_graph.increment_pop(pop_graph, effective_stage_id, pop_key);
+        let new_pop_count: usize = stage_graph.increment_pop(effective_stage_id);
         let mut props = &mut pop_graph.get_mut(pop_key).properties;
         props.index_in_stage = new_pop_count - 1;
 
         // Add RepartionRead
         if matches!(lop, LOP::Repartition { .. }) {
-            let pop_key: POPKey = Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, vec![pop_key])?;
+            let pop_key: POPKey = Self::compile_repartition_read(qgm, lop_graph, lop_key, pop_graph, vec![pop_key])?;
 
-            let new_pop_count: usize = stage_graph.increment_pop(pop_graph, stage_id, pop_key);
+            let new_pop_count: usize = stage_graph.increment_pop(stage_id);
             let mut props = &mut pop_graph.get_mut(pop_key).properties;
             props.index_in_stage = new_pop_count - 1;
-    
+
             return Ok(pop_key);
         }
         Ok(pop_key)
@@ -83,7 +79,6 @@ impl POP {
 
         let qunid = lopprops.quns.elements()[0];
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
-        let columns = tbldesc.columns();
 
         //let coltypes = columns.iter().map(|col| col.data_type.clone()).collect();
 
@@ -135,7 +130,7 @@ impl POP {
         Ok(pop_key)
     }
 
-    pub fn compute_column_position_table(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> ColumnPositionTable {
+    pub fn compute_column_position_table(_qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> ColumnPositionTable {
         let lop = &lop_graph.get(lop_key).value;
         let mut cpt = ColumnPositionTable::new();
 
@@ -176,7 +171,6 @@ impl POP {
 
     pub fn compile_emitcols(qgm: &QGM, emitcols: Option<&Vec<EmitCol>>, cpt: &ColumnPositionTable) -> Option<Vec<PCode>> {
         if let Some(emitcols) = emitcols {
-            let pcode = PCode::new();
             let pcodevec = emitcols
                 .iter()
                 .map(|ne| {
@@ -195,7 +189,7 @@ impl POP {
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
         // Repartition split into Repartition + CSVDirScan
-        let (lop, lopprops, ..) = lop_graph.get3(lop_key);
+        let lopprops = &lop_graph.get(lop_key).properties;
 
         // We shouldn't have any predicates
         let predicates = None;
@@ -226,7 +220,7 @@ impl POP {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let repart_key = if let PartType::HASHEXPR(exprs) = &lopprops.partdesc.part_type {
+        let repart_key = if let PartType::HASHEXPR(_) = &lopprops.partdesc.part_type {
             debug!("Compile pkey start");
             vec![]
             //Self::compile_exprs(qgm, &exprs, &cpt).unwrap()
@@ -241,18 +235,42 @@ impl POP {
         Ok(pop_key)
     }
 
+    pub fn compile_repartition_read(
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>,
+    ) -> Result<POPKey, String> {
+        let lopprops = &lop_graph.get(lop_key).properties;
+
+        // We shouldn't have any predicates
+        let predicates = None;
+        assert!(lopprops.preds.len() == 0);
+
+        let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
+
+        // Compile cols or emitcols. We will have one or the other
+        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+
+        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
+
+        let pop_inner = RepartitionRead {};
+        let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, Some(pop_children));
+
+        Ok(pop_key)
+    }
+
     pub fn compile_join(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>) -> Result<POPKey, String> {
-        let (lop, lopprops, ..) = lop_graph.get3(lop_key);
+        let lopprops = &lop_graph.get(lop_key).properties;
 
         // Compile predicates
         //debug!("Compile predicate for lopkey: {:?}", lop_key);
-        let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
+        let _cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
 
-        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &cpt);
+        //let predicates = Self::compile_predicates(qgm, &lopprops.preds, &cpt);
+        let predicates = None;
 
         // Compile emitcols
         //debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+        //let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+        let emitcols = None;
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
@@ -265,8 +283,8 @@ impl POP {
     pub fn compile_aggregation(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
-        let (lop, lopprops, ..) = lop_graph.get3(lop_key);
-        let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
+        let lopprops = &lop_graph.get(lop_key).properties;
+        let _cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
 
         // Compile predicates
         debug!("Compile predicate for lopkey: {:?}", lop_key);

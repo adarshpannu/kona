@@ -1,7 +1,7 @@
 // csv
 
 use crate::includes::*;
-use crate::pop::CSV;
+use crate::pop::*;
 use arrow2::io::csv::read;
 use arrow2::io::csv::read::{ByteRecord, Reader, ReaderBuilder};
 use csv::Position;
@@ -10,6 +10,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::io::{self, BufReader};
+use std::fmt;
 
 pub struct CSVPartitionIter {
     fields: Vec<Field>,
@@ -211,5 +212,123 @@ impl Iterator for CSVDirIter {
                 return None;
             }
         }
+    }
+}
+
+
+
+/***************************************************************************************************/
+#[derive(Serialize, Deserialize)]
+pub struct CSV {
+    pub pathname: String,
+    pub fields: Vec<Field>,
+    pub header: bool,
+    pub separator: char,
+    pub partitions: Vec<TextFilePartition>,
+    pub projection: Vec<ColId>,
+}
+
+impl CSV {
+    pub fn new(pathname: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, projection: Vec<ColId>) -> CSV {
+        let partitions = compute_partitions(&pathname, npartitions as u64).unwrap();
+
+        CSV {
+            pathname,
+            fields,
+            header,
+            separator,
+            partitions,
+            projection,
+        }
+    }
+
+    pub fn next(&self, task: &mut Task) -> Result<Chunk<Box<dyn Array>>, String> {
+        let context = &mut task.contexts[0];
+
+        if let POPContext::CSVContext { ref mut iter } = context {
+            return iter.next().ok_or("CSV::next() failed!".to_string());
+        }
+        panic!("Cannot get NodeRuntime::CSV")
+    }
+}
+
+impl fmt::Debug for CSV {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let pathname = self.pathname.split("/").last().unwrap();
+        fmt.debug_struct("").field("file", &pathname).finish()
+    }
+}
+
+/***************************************************************************************************/
+
+#[derive(Serialize, Deserialize)]
+pub struct CSVDir {
+    pub dirname_prefix: String, // E.g.: $TEMPDIR/flow-99/stage  i.e. everything except the "-{partition#}"
+    pub fields: Vec<Field>,
+    pub header: bool,
+    pub separator: char,
+    pub npartitions: usize,
+    pub projection: Vec<ColId>,
+}
+
+impl fmt::Debug for CSVDir {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let dirname = self.dirname_prefix.split("/").last().unwrap();
+        fmt.debug_struct("").field("dir", &dirname).finish()
+    }
+}
+
+impl CSVDir {
+    pub fn new(dirname_prefix: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, projection: Vec<ColId>) -> Self {
+        CSVDir {
+            dirname_prefix,
+            fields,
+            header,
+            separator,
+            npartitions,
+            projection,
+        }
+    }
+
+    pub fn next(&self, _task: &mut Task) -> Result<ChunkBox, String> {
+        todo!()
+        /*
+        let partition_id = task.partition_id;
+        let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
+            let full_dirname = format!("{}-{}", self.dirname_prefix, partition_id);
+            let iter = CSVDirIter::new(&full_dirname).unwrap();
+            NodeRuntime::CSVDir { iter }
+        });
+
+        if let NodeRuntime::CSVDir { iter } = runtime {
+            if let Some(line) = iter.next() {
+                // debug!("line = :{}:", &line.trim_end());
+                line.trim_end()
+                    .split(self.separator)
+                    .enumerate()
+                    .filter(|(ix, col)| self.projection.get(ix).is_some())
+                    .for_each(|(ix, col)| {
+                        let ttuple_ix = *self.projection.get(&ix).unwrap();
+                        let datum = match self.coltypes[ix] {
+                            DataType::Int64 => {
+                                let ival = col.parse::<isize>();
+                                if ival.is_err() {
+                                    panic!("{} is not an INT", &col);
+                                } else {
+                                    Datum::INT(ival.unwrap())
+                                }
+                            }
+                            DataType::Utf8 => Datum::STR(Rc::new(col.to_owned())),
+                            _ => todo!(),
+                        };
+                        task.task_row.set_column(ttuple_ix, &datum);
+                    });
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        }
+        panic!("Cannot get NodeRuntime::CSV")
+        */
     }
 }

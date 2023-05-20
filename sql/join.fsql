@@ -9,7 +9,7 @@ set PARALLEL_DEGREE = 4;
 // All engineers aged 35+ 
 SELECT EMP.name, DEPT.DEPT_ID 
 from EMP, DEPT
-where EMP.EMP_DEPT_ID = DEPT.DEPT_ID
+where EMP.EMP_DEPT_ID + 1 = DEPT.DEPT_ID
 AND EMP.age > 35
 AND DEPT.NAME = "Engineering"
 ;

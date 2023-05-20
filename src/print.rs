@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use std::process::Command;
 
-pub use crate::{bitset::*, csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
+pub use crate::{pop_csv::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
 
 impl QGM {
     pub fn write_expr_to_graphvis(qgm: &QGM, expr_key: ExprKey, file: &mut File, order_ix: Option<usize>) -> Result<(), String> {
@@ -160,7 +160,7 @@ impl QGM {
             }
         }
 
-        let color = if let Some(&stage) = pop2stage.get(&pop_key) {
+        let color = if pop2stage.get(&pop_key).is_some() {
             "red"
         } else {
             "black"
@@ -190,6 +190,10 @@ impl QGM {
             POP::Repartition(inner) => {
                 let extrastr = format!("output_map = {:?}", inner.output_map);
                 (String::from("Repartition"), extrastr)
+            }
+            POP::RepartitionRead(_) => {
+                let extrastr = format!("");
+                (String::from("RepartitionRead"), extrastr)
             }
             POP::Aggregation(_) => {
                 let extrastr = format!("");

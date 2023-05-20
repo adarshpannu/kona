@@ -329,8 +329,6 @@ impl QueryBlock {
                 let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
                 *colid = quncol.1;
-                // FIXME - No longer using qtuple!! *colid =  qtuple_ix;
-                //debug!("ASSIGN {:?}.{:?} = qunid={}, qtuple_ix={}", prefix, colname, qunid, qtuple_ix);
                 datatype
             }
             LogExpr(..) => DataType::Boolean,
