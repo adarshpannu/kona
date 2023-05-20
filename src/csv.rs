@@ -4,6 +4,7 @@ use crate::includes::*;
 use crate::pop::CSV;
 use arrow2::io::csv::read;
 use arrow2::io::csv::read::{ByteRecord, Reader, ReaderBuilder};
+use csv::Position;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -15,15 +16,27 @@ pub struct CSVPartitionIter {
     projection: Vec<ColId>,
     reader: Reader<fs::File>,
     rows: Vec<ByteRecord>,
+    partition: TextFilePartition,
 }
 
 impl CSVPartitionIter {
-    pub fn new(csv: &CSV) -> Result<CSVPartitionIter, String> {
-        let reader = ReaderBuilder::new()
-            .has_headers(csv.header)
+    pub fn new(csv: &CSV, partition_id: PartitionId) -> Result<CSVPartitionIter, String> {
+        let has_headers = if partition_id == 0 { csv.header } else { false };
+        let partition = csv.partitions[partition_id];
+
+        let mut reader = ReaderBuilder::new()
+            .has_headers(has_headers)
             .delimiter(csv.separator as u8)
             .from_path(&csv.pathname)
             .map_err(|err| stringify1(err, &csv.pathname))?;
+
+        // Position iterator to beginning of partition
+        if partition_id > 0 {
+            //let mut pos = csv::Position::new();
+            let mut pos = Position::new();
+            pos.set_byte(partition.0);
+            reader.seek(pos).map_err(stringify)?;
+        }
 
         let rows = vec![ByteRecord::default(); CHUNK_SIZE];
 
@@ -32,7 +45,30 @@ impl CSVPartitionIter {
             projection: csv.projection.clone(),
             reader,
             rows,
+            partition,
         })
+    }
+
+    pub fn read_rows(&mut self) -> Result<usize, String> {
+        let reader = &mut self.reader;
+        let rows = &mut self.rows;
+
+        let mut row_number = 0;
+        for row in rows.iter_mut() {
+            let has_more = reader
+                .read_byte_record(row)
+                .map_err(|e| (format!(" at line {}", row_number), Box::new(e)))
+                .map_err(stringify)?;
+            let pos = reader.position();
+            if pos.byte() > self.partition.1 {
+                break;
+            }
+            if !has_more {
+                break;
+            }
+            row_number += 1;
+        }
+        Ok(row_number)
     }
 }
 
@@ -45,15 +81,12 @@ impl Iterator for CSVPartitionIter {
         // skip 0 (excluding the header) and read up to 100 rows.
         // this is IO-intensive and performs minimal CPU work. In particular,
         // no deserialization is performed.
-        let rows_read = read::read_rows(&mut self.reader, 0, &mut self.rows).map_err(|err| stringify(err)).ok();
+        let rows_read = self.read_rows().map_err(|err| stringify(err)).ok();
         if rows_read.is_none() {
             return None;
         }
 
         let rows = &self.rows[..rows_read.unwrap()];
-
-        //let projection: Option<&[usize]> = projection.map(|v| &v);
-        //let projection: Option<&[usize]> = if let Some(projection) = projection.as_ref() { Some(projection) } else { None };
 
         // parse the rows into a `Chunk`. This is CPU-intensive, has no IO,
         // and can be performed on a different thread by passing `rows` through a channel.
@@ -91,15 +124,7 @@ pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePa
             end += line.len() as u64;
         }
         splits.push(TextFilePartition(begin, end));
-        /*
-        debug!(
-            "File {}, partition-{} offsets = [{}, {})",
-            pathname,
-            splits.len(),
-            begin,
-            end
-        );
-        */
+        debug!("File {}, partition-{} offsets = [{}, {})", pathname, splits.len(), begin, end);
         begin = end;
     }
     Ok(splits)

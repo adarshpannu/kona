@@ -4,6 +4,6 @@ DESCRIBE TABLE emp;
 
 SELECT emp_dept_id * 100, name, age
 from emp
-where age + 10 = 42 or age = 30 or age = emp_dept_id or -age = -30
+where age = 32 or age = 61
 ;
 

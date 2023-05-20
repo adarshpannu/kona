@@ -336,6 +336,7 @@ dependencies = [
  "bitmaps",
  "chrono",
  "clp",
+ "csv",
  "env_logger",
  "fstrings",
  "itertools",

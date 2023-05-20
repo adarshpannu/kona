@@ -57,7 +57,7 @@ impl Task {
             let ix = props.index_in_stage;
             let ctx = match &pop {
                 POP::CSV(csv) => {
-                    let iter = CSVPartitionIter::new(csv).unwrap();
+                    let iter = CSVPartitionIter::new(csv, self.partition_id).unwrap();
                     NodeRuntime::CSVRuntime { iter }
                 }
                 _ => unimplemented!(),
