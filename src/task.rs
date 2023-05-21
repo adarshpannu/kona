@@ -1,6 +1,12 @@
 // task
 
-use crate::{includes::*, pop::*};
+pub use crate::includes::*;
+use crate::{
+    pop::{POPContext, POP},
+    pop_csv::CSVPartitionIter,
+    stage::Stage,
+    Flow,
+};
 
 /***************************************************************************************************/
 #[derive(Serialize, Deserialize)]

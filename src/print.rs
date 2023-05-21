@@ -1,11 +1,20 @@
 // Print: Diagnostics, Graphviz,
 
-use regex::Regex;
-use std::fs::File;
-use std::io::Write;
-use std::process::Command;
+use std::{collections::HashMap, fs::File, io::Write, process::Command};
 
-pub use crate::{pop_csv::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
+use regex::Regex;
+
+use crate::{
+    bitset::Bitset,
+    expr::Expr,
+    graph::{ExprKey, LOPKey, POPKey},
+    includes::*,
+    lop::{EmitCol, LOPGraph, LOP},
+    pop::{POPGraph, POP},
+    qgm::QueryBlock,
+    stage::{Stage, StageGraph},
+    QGM,
+};
 
 impl QGM {
     pub fn write_expr_to_graphvis(qgm: &QGM, expr_key: ExprKey, file: &mut File, order_ix: Option<usize>) -> Result<(), String> {
@@ -160,11 +169,7 @@ impl QGM {
             }
         }
 
-        let color = if pop2stage.get(&pop_key).is_some() {
-            "red"
-        } else {
-            "black"
-        };
+        let color = if pop2stage.get(&pop_key).is_some() { "red" } else { "black" };
 
         let (label, extrastr) = match &pop {
             POP::CSV(csv) => {
@@ -217,7 +222,6 @@ impl QGM {
         Ok(())
     }
 }
-
 
 impl QueryBlock {
     pub fn write_qblock_to_graphviz(&self, is_main_qb: bool, qgm: &QGM, file: &mut File) -> Result<(), String> {

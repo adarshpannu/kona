@@ -30,15 +30,15 @@ pub mod qgmiter;
 pub mod lop;
 pub mod qst;
 
-pub mod pop;
-pub mod pop_compile;
-pub mod pop_run;
-pub mod pop_csv;
-pub mod pop_repartition;
-pub mod pop_hashjoin;
-pub mod pop_aggregation;
 pub mod flow;
 pub mod pcode;
+pub mod pop;
+pub mod pop_aggregation;
+pub mod pop_compile;
+pub mod pop_csv;
+pub mod pop_hashjoin;
+pub mod pop_repartition;
+pub mod pop_run;
 
 pub mod row;
 pub mod scheduler;
@@ -140,8 +140,7 @@ fn main() -> Result<(), String> {
 */
 #[test]
 fn run_unit_tests() -> Result<(), String> {
-    use std::process::Command;
-    use std::rc::Rc;
+    use std::{process::Command, rc::Rc};
 
     // Initialize logger with INFO as default
     logging::init("error");
@@ -160,7 +159,7 @@ fn run_unit_tests() -> Result<(), String> {
 
         ntotal = ntotal + 1;
         let mut env = Env::new(1, input_pathname, output_dir.clone());
-        env.set_option("PARSE_ONLY".to_string(), pop::Datum::STR(Rc::new("true".to_string()))).unwrap();
+        env.set_option("PARSE_ONLY".to_string(), row::Datum::STR(Rc::new("true".to_string()))).unwrap();
 
         let jobres = run_job(&mut env);
         if let Err(errstr) = jobres {
@@ -189,8 +188,7 @@ fn run_unit_tests() -> Result<(), String> {
     Ok(())
 }
 
-use arrow2::error::Result as A2Result;
-use arrow2::io::csv::read;
+use arrow2::{error::Result as A2Result, io::csv::read};
 
 #[allow(dead_code)]
 fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn Array>>> {

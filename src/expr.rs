@@ -1,12 +1,14 @@
 // expr
 
-use crate::graph::*;
+use crate::graph::Graph;
 use crate::includes::*;
-use crate::row::*;
 use regex::Regex;
 
 use std::fmt;
 use Expr::*;
+use crate::graph::ExprKey;
+use crate::row::Datum;
+use crate::graph::QueryBlockKey;
 
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 

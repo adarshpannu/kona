@@ -1,7 +1,8 @@
 // graph
 
-use crate::includes::*;
 use slotmap::{new_key_type, SlotMap};
+
+use crate::includes::*;
 
 new_key_type! { pub struct ExprKey; }
 new_key_type! { pub struct LOPKey; }
@@ -28,8 +29,7 @@ impl<K, V, P> Node<K, V, P> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<K, V, P>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     pub sm: SlotMap<K, Node<K, V, P>>,
     next_id: usize,
 }
@@ -134,8 +134,7 @@ where
 
 pub struct GraphIterator<'a, K, V, P>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     graph: &'a Graph<K, V, P>,
     queue: Vec<K>,
     stop_depth_traversal: Option<Box<dyn Fn(K) -> bool>>, // If true, don't explore children of a given node
@@ -156,7 +155,7 @@ where
         if let Some(cur_key) = cur_key_option {
             if let Some(stop_depth_traversal) = &self.stop_depth_traversal {
                 if !stop_depth_traversal(cur_key) {
-                    return cur_key_option
+                    return cur_key_option;
                 }
             }
             let children = self.graph.get(cur_key).children.as_ref();

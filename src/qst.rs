@@ -1,12 +1,15 @@
 // QST: Query Semantic Transforms
 
-use crate::expr::{Expr::*, *};
-use crate::graph::*;
-use crate::qgm::*;
-use crate::row::Datum;
-
-use crate::includes::*;
 use std::rc::Rc;
+
+pub use crate::includes::*;
+use crate::{
+    expr::{AggType, ArithOp, Expr, Expr::*, ExprGraph, ExprProp},
+    graph::{ExprKey, Node, QueryBlockKey},
+    qgm::{QueryBlockType, QGM},
+    row::Datum,
+    NamedExpr, QGMMetadata, Quantifier, QueryBlock, QueryBlockGraph,
+};
 
 impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {

@@ -1,6 +1,20 @@
 // Compile
 
-pub use crate::{bitset::*, pop_csv::*, expr::*, flow::*, graph::*, includes::*, lop::*, metadata::*, pcode::*, pcode::*, qgm::*, row::*, stage::*, task::*};
+use crate::{
+    bitset::Bitset,
+    graph::{ExprKey, Graph, LOPKey, POPKey},
+    includes::*,
+    lop::{EmitCol, LOPGraph, LOP},
+    metadata::{PartType, TableType},
+    pcode::PCode,
+    pop::{ColumnPosition, ColumnPositionTable, POPGraph, POPProps, POP},
+    pop_aggregation,
+    pop_csv::{CSVDir, CSV},
+    pop_hashjoin, pop_repartition,
+    qgm::QGM,
+    stage::StageGraph,
+    Flow,
+};
 
 impl POP {
     pub fn compile(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
@@ -229,7 +243,7 @@ impl POP {
         };
         debug!("Compile pkey end");
 
-        let pop_inner = Repartition { output_map, repart_key };
+        let pop_inner = pop_repartition::Repartition { output_map, repart_key };
         let pop_key = pop_graph.add_node_with_props(POP::Repartition(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
@@ -251,7 +265,7 @@ impl POP {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_inner = RepartitionRead {};
+        let pop_inner = pop_repartition::RepartitionRead {};
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
@@ -274,7 +288,7 @@ impl POP {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_inner = HashJoin {};
+        let pop_inner = pop_hashjoin::HashJoin {};
         let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
@@ -296,7 +310,7 @@ impl POP {
 
         let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
 
-        let pop_inner = Aggregation {};
+        let pop_inner = pop_aggregation::Aggregation {};
         let pop_key = pop_graph.add_node_with_props(POP::Aggregation(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)

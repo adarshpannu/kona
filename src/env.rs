@@ -1,10 +1,6 @@
 // env
 
-use crate::includes::*;
-use crate::scheduler::Scheduler;
-use crate::metadata::Metadata;
-use crate::row::Datum;
-
+use crate::{includes::*, metadata::Metadata, row::Datum, scheduler::Scheduler};
 pub struct EnvSettings {
     pub parallel_degree: Option<usize>,
     pub parse_only: Option<bool>,

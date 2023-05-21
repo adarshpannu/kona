@@ -1,7 +1,9 @@
 # Ref: https://rust-lang.github.io/rustfmt/?version=v1.4.36
 
 brace_style = "PreferSameLine"
-fn_args_layout = "Compressed"
+fn_params_layout = "Compressed"
 use_field_init_shorthand = true
 max_width = 160
-enum_variant_style = "Compact"
+#enum_variant_style = "Compact"
+imports_granularity="Crate"
+group_imports = "StdExternalCrate"

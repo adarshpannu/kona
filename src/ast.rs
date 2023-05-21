@@ -1,20 +1,11 @@
 // ast: abstract syntax tree definitions
 
-use crate::qgm::QGM;
-use crate::row::Datum;
+use crate::{qgm::QGM, row::Datum};
 
 #[derive(Debug)]
 pub enum AST {
-    CatalogTable {
-        name: String,
-        options: Vec<(String, Datum)>,
-    },
-    DescribeTable {
-        name: String,
-    },
+    CatalogTable { name: String, options: Vec<(String, Datum)> },
+    DescribeTable { name: String },
     QGM(QGM),
-    SetOption {
-        name: String,
-        value: Datum,
-    },
+    SetOption { name: String, value: Datum },
 }

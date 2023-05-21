@@ -1,16 +1,13 @@
 // bitset: Thin wrapper over bitmaps::Bitmap so they work over datatypes
 
+use std::{cell::RefCell, collections::HashMap, hash::Hash, rc::Rc};
+
 use bitmaps::Bitmap;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Bitset<T>
 where
-    T: Hash + PartialEq + Eq + Copy,
-{
+    T: Hash + PartialEq + Eq + Copy, {
     pub bitmap: Bitmap<256>,
     dict: Rc<RefCell<HashMap<T, usize>>>,
     rev_dict: Rc<RefCell<HashMap<usize, T>>>,
@@ -74,12 +71,7 @@ where
     pub fn elements(&self) -> Vec<T> {
         let bitmap = self.bitmap.clone();
         let rev_dict = (*self.rev_dict).borrow();
-        bitmap
-            .into_iter()
-            .map(|ix| {
-                *rev_dict.get(&ix).unwrap()
-            })
-            .collect()
+        bitmap.into_iter().map(|ix| *rev_dict.get(&ix).unwrap()).collect()
     }
 
     pub fn len(&self) -> usize {
@@ -116,9 +108,7 @@ where
     }
 }
 
-use std::ops::BitAnd;
-use std::ops::BitOr;
-use std::ops::BitOrAssign;
+use std::ops::{BitAnd, BitOr, BitOrAssign};
 
 impl<'a, T> BitOrAssign<&'a Bitset<T>> for Bitset<T>
 where

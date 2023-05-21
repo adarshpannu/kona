@@ -1,11 +1,15 @@
 // pop: Physical operators
 
-//#![allow(unused_variables)]
-
-pub use crate::{includes::*, pcode::*, pcode::*, qgm::*, row::*};
-
-pub type POPGraph = Graph<POPKey, POP, POPProps>;
 use arrow2::compute::filter::filter_chunk;
+
+pub use crate::includes::*;
+use crate::{
+    graph::POPKey,
+    pop::{POPProps, POP},
+    stage::Stage,
+    task::Task,
+    Flow,
+};
 
 impl POPKey {
     pub fn next(&self, flow: &Flow, _stage: &Stage, task: &mut Task) -> Result<ChunkBox, String> {

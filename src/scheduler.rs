@@ -1,11 +1,13 @@
 // scheduler
 
-use std::sync::mpsc;
-use std::thread;
-use std::thread::JoinHandle;
+use std::{sync::mpsc, thread, thread::JoinHandle};
 
-use crate::includes::*;
-use crate::pop::*;
+use crate::{
+    includes::*,
+    stage::{Stage, StageGraph, StageStatus},
+    task::Task,
+    Flow,
+};
 
 #[derive(Debug)]
 pub enum SchedulerMessage {

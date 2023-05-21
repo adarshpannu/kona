@@ -1,6 +1,7 @@
 // includes.rs
-pub use log::{error, warn, info, debug};
 pub use std::fs;
+
+pub use log::{debug, error, info, warn};
 
 //pub const DATADIR: &str = "/Users/adarshrp/Projects/flare/data";
 pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
@@ -19,9 +20,9 @@ pub struct QunCol(pub QunId, pub ColId);
 
 pub type ColMap = std::collections::HashMap<ColId, ColId>;
 
-pub use crate::env::Env;
+pub use serde::{Deserialize, Serialize};
 
-pub use serde::{Serialize, Deserialize};
+pub use crate::env::Env;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct TextFilePartition(pub u64, pub u64);
@@ -48,7 +49,7 @@ pub fn yes_or_no(s: &str) -> Option<bool> {
     match s {
         "Y" | "YES" => Some(true),
         "N" | "NO" => Some(false),
-        _ => None
+        _ => None,
     }
 }
 
@@ -73,25 +74,13 @@ pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {
     Ok(pathnames)
 }
 
-use std::io::{self, BufRead};
-use std::fs::File;
-use std::path::Path;
-
-pub fn read_lines<P>(pathname: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    let file = File::open(pathname)?;
-    Ok(io::BufReader::new(file).lines())
-}
-
-pub use arrow2::datatypes::{DataType, Field};
-pub use arrow2::chunk::Chunk;
-pub use arrow2::array::{Array, PrimitiveArray, BooleanArray};
-pub use arrow2::compute::{arithmetics, comparison, boolean};
+pub use arrow2::{
+    array::{Array, BooleanArray, PrimitiveArray},
+    chunk::Chunk,
+    compute::{arithmetics, boolean, comparison},
+    datatypes::{DataType, Field},
+};
 
 pub type ChunkBox = Chunk<Box<dyn Array>>;
-pub use std::collections::HashMap;
 
 pub const CHUNK_SIZE: usize = 1024;
-

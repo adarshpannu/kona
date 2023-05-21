@@ -1,16 +1,13 @@
 // logging
 
+use std::{io::Write, thread};
+
 use chrono::{DateTime, Local};
-use env_logger::fmt::Color;
-use env_logger::Env;
+use env_logger::{fmt::Color, Env};
 use log::Level;
-use std::io::Write;
-use std::thread;
 
 pub fn init(default_log_level: &str) {
-    let mut builder = env_logger::Builder::from_env(
-        Env::default().default_filter_or(default_log_level),
-    );
+    let mut builder = env_logger::Builder::from_env(Env::default().default_filter_or(default_log_level));
     let builder = builder.format(|buf, record| {
         let now: DateTime<Local> = Local::now();
         let mut level_style = buf.style();

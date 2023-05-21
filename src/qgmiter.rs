@@ -1,9 +1,14 @@
 // qgmiter: Various iterators over QGM
 
-use crate::expr::{Expr::*, *};
-use crate::graph::*;
-use crate::includes::*;
-use crate::qgm::*;
+use crate::{
+    expr::{
+        Expr::{Column, CID},
+        ExprGraph,
+    },
+    graph::{ExprKey, QueryBlockKey},
+    includes::*,
+    QueryBlockGraph, QGM,
+};
 
 pub struct QueryBlockIter<'a> {
     qblock_graph: &'a QueryBlockGraph,
@@ -46,8 +51,7 @@ impl QGM {
 
     pub fn iter_quncols(&self) -> Box<dyn Iterator<Item = QunCol> + '_> {
         let qblock_iter = self.iter_qblocks();
-        let iter =
-            qblock_iter.flat_map(move |qblock_key| qblock_key.iter_quncols(&self.qblock_graph, &self.expr_graph));
+        let iter = qblock_iter.flat_map(move |qblock_key| qblock_key.iter_quncols(&self.qblock_graph, &self.expr_graph));
         Box::new(iter)
     }
 
@@ -93,9 +97,7 @@ impl QueryBlockKey {
         iter
     }
 
-    pub fn iter_quncols<'g>(
-        &self, qblock_graph: &'g QueryBlockGraph, expr_graph: &'g ExprGraph,
-    ) -> Box<dyn Iterator<Item = QunCol> + 'g> {
+    pub fn iter_quncols<'g>(&self, qblock_graph: &'g QueryBlockGraph, expr_graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
         let iter = self.iter_toplevel_exprs(qblock_graph);
         let iter = iter.flat_map(move |expr_key| expr_key.iter_quncols(expr_graph));
         Box::new(iter)

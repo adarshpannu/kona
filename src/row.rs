@@ -1,7 +1,7 @@
 // row: Representation of N-tuples
 
-use std::fmt;
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
+
 use crate::includes::*;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
@@ -32,10 +32,10 @@ impl Datum {
     pub fn as_usize(&self, err_str: &str) -> Result<usize, String> {
         if let Datum::INT(val) = self {
             if *val >= 0 {
-                return Ok(*val as usize)
+                return Ok(*val as usize);
             }
         }
-        return Err(err_str.to_string())
+        return Err(err_str.to_string());
     }
 }
 

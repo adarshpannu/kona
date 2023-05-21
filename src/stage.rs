@@ -1,8 +1,15 @@
 // stage
 
-use crate::includes::*;
-use crate::pop::*;
-use crate::scheduler::*;
+use std::collections::HashMap;
+
+pub use crate::includes::*;
+use crate::{
+    graph::{LOPKey, POPKey},
+    pop::POPGraph,
+    scheduler::SchedulerMessage,
+    task::Task,
+    Flow,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stage {
@@ -12,7 +19,7 @@ pub struct Stage {
     pub root_pop_key: Option<POPKey>,
     pub orig_child_count: usize,
     pub npartitions: usize,
-    pub pop_count: usize // # of POPs in this stage
+    pub pop_count: usize, // # of POPs in this stage
 }
 
 #[derive(Debug)]
@@ -43,7 +50,7 @@ impl Stage {
             root_pop_key: None,
             orig_child_count: 0,
             npartitions: 0,
-            pop_count: 0
+            pop_count: 0,
         }
     }
 
@@ -106,7 +113,7 @@ impl StageGraph {
     pub fn increment_pop(&mut self, stage_id: StageId) -> usize {
         let stage = &mut self.stages[stage_id];
         stage.pop_count += 1;
-        return stage.pop_count
+        return stage.pop_count;
     }
 
     pub fn print(&self) {
@@ -118,5 +125,4 @@ impl StageGraph {
     pub fn get_pop_to_stage_map(&self) -> HashMap<POPKey, &Stage> {
         self.stages.iter().map(|s| (s.root_pop_key.unwrap(), s)).collect()
     }
-
 }

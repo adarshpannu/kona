@@ -1,6 +1,6 @@
 // flow
 
-use crate::{includes::*, pop::*};
+use crate::{graph::POPKey, includes::*, pop::POPGraph, stage::StageGraph, POP};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
@@ -13,4 +13,3 @@ impl Flow {
         &self.pop_graph.get(pop_key).value
     }
 }
-

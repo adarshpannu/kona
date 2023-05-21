@@ -1,15 +1,13 @@
 // qgm: query graph model
 
-use std::collections::HashMap;
-use std::fmt;
-use std::io::Write;
-use std::process::Command;
-use std::rc::Rc;
+use std::{collections::HashMap, fmt, io::Write, process::Command, rc::Rc};
 
-use crate::expr::*;
-use crate::graph::*;
-use crate::includes::*;
-use crate::metadata::*;
+pub use crate::includes::*;
+use crate::{
+    expr::{Expr, ExprGraph},
+    graph::{ExprKey, Graph, QueryBlockKey},
+    metadata::TableDesc,
+};
 
 pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlock, ()>;
 
@@ -118,7 +116,7 @@ pub struct AnsiJoin {
     pub join_type: JoinType,
     pub left: Box<Quantifier>,
     pub right: Box<Quantifier>,
-    pub on_clause: ExprKey
+    pub on_clause: ExprKey,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -356,5 +354,4 @@ impl QGM {
         }
         Ok(())
     }
-    
 }

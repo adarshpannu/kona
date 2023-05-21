@@ -1,6 +1,7 @@
 // pop_repartition
 
-pub use crate::{includes::*, pop::*};
+pub use crate::includes::*;
+use crate::{pcode::PCode, task::Task};
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,8 +20,7 @@ impl Repartition {
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RepartitionRead {
-}
+pub struct RepartitionRead {}
 
 impl RepartitionRead {
     pub fn next(&self, _task: &mut Task) -> Result<ChunkBox, String> {

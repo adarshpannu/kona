@@ -1,10 +1,10 @@
 // metadata
 
-use crate::includes::*;
-use crate::{expr::*, graph::*, row::*};
+use std::{collections::HashMap, rc::Rc};
+
 use arrow2::io::csv::read;
-use std::collections::HashMap;
-use std::rc::Rc;
+
+use crate::{expr::ExprGraph, graph::ExprKey, includes::*, row::Datum};
 
 #[derive(Debug, Clone, Copy)]
 pub enum TableType {

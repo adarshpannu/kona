@@ -1,16 +1,20 @@
 // lop: Logical operators
 
-use bimap::BiMap;
-use partitions::PartitionVec;
 use std::collections::HashMap;
 
-use crate::bitset::*;
-use crate::expr::{Expr::*, *};
-use crate::graph::*;
-use crate::includes::*;
-use crate::metadata::*;
-use crate::qgm::*;
+use bimap::BiMap;
+use partitions::PartitionVec;
 use regex::Regex;
+
+use crate::{
+    bitset::Bitset,
+    expr::{Expr::*, ExprGraph, *},
+    graph::{ExprKey, Graph, LOPKey, QueryBlockKey},
+    includes::*,
+    metadata::{PartDesc, PartType},
+    qgm::{QueryBlock, QueryBlockType},
+    QGM,
+};
 
 pub type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
 
@@ -667,5 +671,4 @@ impl QGM {
         };
         (lhs_partdesc, rhs_partdesc, 4)
     }
-
 }

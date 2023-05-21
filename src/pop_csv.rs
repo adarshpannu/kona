@@ -1,16 +1,19 @@
 // csv
 
-use crate::includes::*;
-use crate::pop::*;
-use arrow2::io::csv::read;
-use arrow2::io::csv::read::{ByteRecord, Reader, ReaderBuilder};
+use std::{
+    fmt, fs,
+    fs::File,
+    io::{self, prelude::*, BufReader, SeekFrom},
+};
+
+use arrow2::io::csv::{
+    read,
+    read::{ByteRecord, Reader, ReaderBuilder},
+};
 use csv::Position;
-use std::fs;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::SeekFrom;
-use std::io::{self, BufReader};
-use std::fmt;
+
+pub use crate::includes::*;
+use crate::{pop::POPContext, task::Task};
 
 pub struct CSVPartitionIter {
     fields: Vec<Field>,
@@ -214,8 +217,6 @@ impl Iterator for CSVDirIter {
         }
     }
 }
-
-
 
 /***************************************************************************************************/
 #[derive(Serialize, Deserialize)]

@@ -2,5 +2,11 @@
     "editor.inlayHints.enabled": "onUnlessPressed",
     "workbench.colorCustomizations": {
         "editorInlayHint.background": "#E8E8E8",
-    }
+    },
+    // Enable all features
+    "rust-analyzer.cargo.features": "all",
+    // Import rules
+    "rust-analyzer.imports.granularity.group": "crate",
+    "rust-analyzer.imports.prefix": "crate",
+    "editor.defaultFormatter": "rust-lang.rust-analyzer",
 }
