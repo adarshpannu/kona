@@ -1,14 +1,15 @@
 // expr
 
-use crate::graph::Graph;
-use crate::includes::*;
-use regex::Regex;
-
 use std::fmt;
+
+use regex::Regex;
 use Expr::*;
-use crate::graph::ExprKey;
-use crate::row::Datum;
-use crate::graph::QueryBlockKey;
+
+use crate::{
+    graph::{ExprKey, Graph, QueryBlockKey},
+    includes::*,
+    row::Datum,
+};
 
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 
@@ -210,8 +211,10 @@ impl Expr {
     }
 }
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 
 impl ExprKey {
     pub fn hash(&self, expr_graph: &ExprGraph) -> u64 {

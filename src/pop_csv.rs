@@ -12,8 +12,7 @@ use arrow2::io::csv::{
 };
 use csv::Position;
 
-pub use crate::includes::*;
-use crate::{pop::POPContext, task::Task};
+use crate::{includes::*, pop::POPContext, task::Task};
 
 pub struct CSVPartitionIter {
     fields: Vec<Field>,

@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-pub use crate::includes::*;
 use crate::{
     graph::{LOPKey, POPKey},
+    includes::*,
     pop::POPGraph,
     scheduler::SchedulerMessage,
     task::Task,

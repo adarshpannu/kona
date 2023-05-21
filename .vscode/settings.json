@@ -8,5 +8,4 @@
     // Import rules
     "rust-analyzer.imports.granularity.group": "crate",
     "rust-analyzer.imports.prefix": "crate",
-    "editor.defaultFormatter": "rust-lang.rust-analyzer",
 }

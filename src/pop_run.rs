@@ -2,9 +2,9 @@
 
 use arrow2::compute::filter::filter_chunk;
 
-pub use crate::includes::*;
 use crate::{
     graph::POPKey,
+    includes::*,
     pop::{POPProps, POP},
     stage::Stage,
     task::Task,

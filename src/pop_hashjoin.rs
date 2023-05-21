@@ -1,7 +1,6 @@
 // pop_hashjoin
 
-pub use crate::includes::*;
-use crate::task::Task;
+use crate::{includes::*, task::Task};
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
