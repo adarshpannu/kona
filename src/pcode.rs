@@ -3,11 +3,11 @@
 use arrow2::scalar::PrimitiveScalar;
 
 use crate::{
+    datum::Datum,
     expr::{ArithOp, Expr, ExprGraph, LogOp, RelOp},
     graph::ExprKey,
     includes::*,
     pop::{ColumnPosition, ColumnPositionTable},
-    row::Datum,
 };
 
 #[derive(Debug, Serialize, Deserialize)]

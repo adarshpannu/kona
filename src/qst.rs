@@ -3,12 +3,11 @@
 use std::rc::Rc;
 
 use crate::{
+    datum::Datum,
     expr::{AggType, ArithOp, Expr, Expr::*, ExprGraph, ExprProp},
     graph::{ExprKey, Node, QueryBlockKey},
     includes::*,
-    qgm::{QueryBlockType, QGM},
-    row::Datum,
-    NamedExpr, QGMMetadata, Quantifier, QueryBlock, QueryBlockGraph,
+    qgm::{NamedExpr, QGMMetadata, Quantifier, QueryBlock, QueryBlockGraph, QueryBlockType, QGM},
 };
 
 impl QGM {

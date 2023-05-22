@@ -2,6 +2,7 @@
 
 use crate::{
     bitset::Bitset,
+    flow::Flow,
     graph::{ExprKey, Graph, LOPKey, POPKey},
     includes::*,
     lop::{EmitCol, LOPGraph, LOP},
@@ -13,7 +14,6 @@ use crate::{
     pop_hashjoin, pop_repartition,
     qgm::QGM,
     stage::StageGraph,
-    Flow,
 };
 
 impl POP {

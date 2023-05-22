@@ -4,7 +4,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use arrow2::io::csv::read;
 
-use crate::{expr::ExprGraph, graph::ExprKey, includes::*, row::Datum};
+use crate::{datum::Datum, expr::ExprGraph, graph::ExprKey, includes::*};
 
 #[derive(Debug, Clone, Copy)]
 pub enum TableType {

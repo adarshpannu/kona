@@ -4,7 +4,7 @@ use lalrpop_util::ParseError;
 use crate::includes::*;
 
 use crate::expr::{Expr::*, *};
-use crate::row::*;
+use crate::datum::*;
 use crate::ast::*;
 use crate::qgm::*;
 use crate::graph::*;

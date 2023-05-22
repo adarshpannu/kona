@@ -7,7 +7,7 @@ use crate::{
     },
     graph::{ExprKey, QueryBlockKey},
     includes::*,
-    QueryBlockGraph, QGM,
+    qgm::{QueryBlockGraph, QGM},
 };
 
 pub struct QueryBlockIter<'a> {

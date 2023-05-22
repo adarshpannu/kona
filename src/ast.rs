@@ -1,6 +1,6 @@
 // ast: abstract syntax tree definitions
 
-use crate::{qgm::QGM, row::Datum};
+use crate::{datum::Datum, qgm::QGM};
 
 #[derive(Debug)]
 pub enum AST {

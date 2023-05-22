@@ -4,7 +4,7 @@
 
 use std::fs;
 
-use crate::includes::*;
+use crate::{includes::*, qgm::ParserState};
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -40,7 +40,7 @@ pub mod pop_hashjoin;
 pub mod pop_repartition;
 pub mod pop_run;
 
-pub mod row;
+pub mod datum;
 pub mod scheduler;
 pub mod scratch;
 pub mod stage;
@@ -48,10 +48,10 @@ pub mod task;
 
 pub mod print;
 
-use ast::*;
-use flow::*;
+use ast::AST;
+use flow::Flow;
 use pop::POP;
-use qgm::*;
+use qgm::QGM;
 
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
@@ -159,7 +159,8 @@ fn run_unit_tests() -> Result<(), String> {
 
         ntotal = ntotal + 1;
         let mut env = Env::new(1, input_pathname, output_dir.clone());
-        env.set_option("PARSE_ONLY".to_string(), row::Datum::STR(Rc::new("true".to_string()))).unwrap();
+        env.set_option("PARSE_ONLY".to_string(), datum::Datum::STR(Rc::new("true".to_string())))
+            .unwrap();
 
         let jobres = run_job(&mut env);
         if let Err(errstr) = jobres {

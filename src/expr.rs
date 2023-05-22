@@ -6,9 +6,9 @@ use regex::Regex;
 use Expr::*;
 
 use crate::{
+    datum::Datum,
     graph::{ExprKey, Graph, QueryBlockKey},
     includes::*,
-    row::Datum,
 };
 
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
