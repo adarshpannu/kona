@@ -97,8 +97,8 @@ impl POP {
         //let coltypes = columns.iter().map(|col| col.data_type.clone()).collect();
 
         // Build input map
-        let projection: Vec<ColId> = if let LOP::TableScan { projection: input_cols } = lop {
-            input_cols.elements().iter().map(|&quncol| quncol.1).collect()
+        let projection: Vec<ColId> = if let LOP::TableScan { projection } = lop {
+            projection.elements().iter().map(|&quncol| quncol.1).collect()
         } else {
             return Err(format!("Internal error: compile_scan() received a POP that isn't a TableScan"));
         };

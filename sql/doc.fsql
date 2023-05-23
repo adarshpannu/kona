@@ -1,0 +1,19 @@
+CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/R.csv", "PARTITIONS" = 3);
+CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/S.csv", "PARTITIONS" = 3 );
+CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/T.csv",  "PARTITIONS" = 3);
+
+DESCRIBE TABLE R;
+DESCRIBE TABLE S;
+DESCRIBE TABLE T;
+
+set PARSE_ONLY = "true";
+set PARALLEL_DEGREE = 3;
+
+select r2, s2, t2
+from R, S, T
+where 
+        r0 = 10
+    and t2 = 30
+    and r0 + 1 = s0
+    and s0 = t0
+;

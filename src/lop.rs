@@ -205,11 +205,7 @@ impl QGM {
 
         assert!(self.cte_list.len() == 0);
 
-        let APSContext {
-            all_quncols: _,
-            all_quns: _,
-            all_preds,
-        } = aps_context;
+        let all_preds = &aps_context.all_preds;
 
         // Process select-list: Collect all QunCols
         let select_list_quncol = self.collect_selectlist_quncols(aps_context, qblock);
@@ -283,21 +279,21 @@ impl QGM {
                         }
 
                         // Initialize join properties
-                        let mut quns = lhs_props.quns.clone();
-                        quns.bitmap |= rhs_props.quns.bitmap;
+                        let quns = &lhs_props.quns | &rhs_props.quns;
+                        //quns.bitmap |= rhs_props.quns.bitmap;
 
-                        let mut cols = lhs_props.cols.clone();
-                        cols.bitmap |= rhs_props.cols.bitmap;
+                        let mut cols = &lhs_props.cols | &rhs_props.cols;
+                        //cols.bitmap |= rhs_props.cols.bitmap;
 
                         // Compute cols to flow through. Retain all cols in the select-list + unbound preds
-                        let mut colbitmap = select_list_quncol.clone().bitmap;
+                        let mut flowcols = select_list_quncol.clone();
                         for (_, PredDesc { quncols, .. }) in pred_map.iter() {
-                            colbitmap = colbitmap | quncols.bitmap;
+                            flowcols |= quncols;
                         }
-                        cols.bitmap = cols.bitmap & colbitmap;
+                        cols &= flowcols;
 
                         // Repartition join legs as needed
-                        let (lhs_partdesc, rhs_partdesc, _npartitions) =
+                        let (lhs_partdesc, rhs_partdesc, _) =
                             Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
 
                         let lhs_repart_props = lhs_partdesc.map(|partdesc| LOPProps {
@@ -331,7 +327,7 @@ impl QGM {
                             rhs_plan_key
                         };
 
-                        // Join partitioning is identical to partitioning of children.
+                        // Join partitioning is identical to partitioning of the LHS.
                         let lhs_props = &lop_graph.get(new_lhs_plan_key).properties;
                         let partdesc = lhs_props.partdesc.clone();
 
@@ -536,7 +532,7 @@ impl QGM {
             let mut preds = all_preds.clone_metadata();
             pred_map.iter().for_each(|(&pred_key, PredDesc { quncols, quns, .. })| {
                 if quns.get(qun.id) {
-                    if quns.bitmap.len() == 1 {
+                    if quns.len() == 1 {
                         // Set preds: find local preds that refer to this qun
                         preds.set(pred_key);
                     } else {
@@ -546,8 +542,7 @@ impl QGM {
                 }
             });
 
-            let mut output_quncols = select_list_quncol.clone();
-            output_quncols.bitmap = unbound_quncols.bitmap & input_quncols.bitmap;
+            let output_quncols = &unbound_quncols & &input_quncols;
 
             // Remove all preds that will run on this tablescan as they've been bound already
             for pred_key in preds.elements().iter() {
@@ -651,12 +646,14 @@ impl QGM {
         // Compute expected partitioning keys
         let (lhs_expected_keys, rhs_expected_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
 
-        // todo: need to ensure #partitions are matched up correctly esp. in light of situations wherein one leg is correctly partitioned while the other isn't
+        let npartitions = env.settings.parallel_degree.unwrap_or(1);
+
+        // TODO: need to ensure #partitions are matched up correctly esp. in light of situations wherein one leg is correctly partitioned while the other isn't
         let lhs_partdesc = if Self::is_correctly_partitioned(expr_graph, &lhs_expected_keys, lhs_actual_keys, eqclass) {
             None
         } else {
             Some(PartDesc {
-                npartitions: env.settings.parallel_degree.unwrap_or(1),
+                npartitions,
                 part_type: PartType::HASHEXPR(lhs_expected_keys),
             })
         };
@@ -665,10 +662,10 @@ impl QGM {
             None
         } else {
             Some(PartDesc {
-                npartitions: env.settings.parallel_degree.unwrap_or(1),
+                npartitions,
                 part_type: PartType::HASHEXPR(rhs_expected_keys),
             })
         };
-        (lhs_partdesc, rhs_partdesc, 4)
+        (lhs_partdesc, rhs_partdesc, npartitions)
     }
 }

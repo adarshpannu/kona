@@ -108,16 +108,8 @@ where
     }
 }
 
-use std::ops::{BitAnd, BitOr, BitOrAssign};
+use std::ops::{BitAnd, BitOr, BitOrAssign, BitAndAssign};
 
-impl<'a, T> BitOrAssign<&'a Bitset<T>> for Bitset<T>
-where
-    T: Hash + PartialEq + Eq + Copy,
-{
-    fn bitor_assign(&mut self, rhs: &'a Bitset<T>) {
-        self.bitmap |= rhs.bitmap;
-    }
-}
 
 impl<'a, T> BitAnd<&'a Bitset<T>> for Bitset<T>
 where
@@ -130,6 +122,29 @@ where
         let mut other = self.clone();
         other.bitmap &= rhs.bitmap;
         other
+    }
+}
+
+impl<'a, T> BitAnd<&'a Bitset<T>> for &'a Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    type Output = Bitset<T>;
+
+    // rhs is the "right-hand side" of the expression `a & b`
+    fn bitand(self, rhs: &'a Bitset<T>) -> Self::Output {
+        let mut other = self.clone();
+        other.bitmap &= rhs.bitmap;
+        other
+    }
+}
+
+impl<'a, T> BitAndAssign<Bitset<T>> for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    fn bitand_assign(&mut self, rhs: Bitset<T>) {
+        self.bitmap &= rhs.bitmap;
     }
 }
 
@@ -147,16 +162,25 @@ where
     }
 }
 
-impl<'a, T> BitAnd<&'a Bitset<T>> for &'a Bitset<T>
+impl<'a, T> BitOr<&'a Bitset<T>> for &'a Bitset<T>
 where
     T: Hash + PartialEq + Eq + Copy,
 {
     type Output = Bitset<T>;
 
     // rhs is the "right-hand side" of the expression `a & b`
-    fn bitand(self, rhs: &'a Bitset<T>) -> Self::Output {
+    fn bitor(self, rhs: &'a Bitset<T>) -> Self::Output {
         let mut other = self.clone();
-        other.bitmap &= rhs.bitmap;
+        other.bitmap |= rhs.bitmap;
         other
+    }
+}
+
+impl<'a, T> BitOrAssign<&'a Bitset<T>> for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    fn bitor_assign(&mut self, rhs: &'a Bitset<T>) {
+        self.bitmap |= rhs.bitmap;
     }
 }
