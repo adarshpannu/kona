@@ -1,14 +1,15 @@
 // bitset: Thin wrapper over bitmaps::Bitmap so they work over datatypes
 
+use bitmaps::Bitmap;
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 use std::{cell::RefCell, collections::HashMap, hash::Hash, rc::Rc};
 
-use bitmaps::Bitmap;
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bitset<T>
 where
-    T: Hash + PartialEq + Eq + Copy, {
-    pub bitmap: Bitmap<256>,
+    T: Hash + PartialEq + Eq + Copy,
+{
+    bitmap: Bitmap<256>,
     dict: Rc<RefCell<HashMap<T, usize>>>,
     rev_dict: Rc<RefCell<HashMap<usize, T>>>,
     next_id: Rc<RefCell<usize>>,
@@ -108,9 +109,6 @@ where
     }
 }
 
-use std::ops::{BitAnd, BitOr, BitOrAssign, BitAndAssign};
-
-
 impl<'a, T> BitAnd<&'a Bitset<T>> for Bitset<T>
 where
     T: Hash + PartialEq + Eq + Copy,
@@ -182,5 +180,14 @@ where
 {
     fn bitor_assign(&mut self, rhs: &'a Bitset<T>) {
         self.bitmap |= rhs.bitmap;
+    }
+}
+
+impl<T> AsRef<Bitset<T>> for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    fn as_ref(&self) -> &Self {
+        self
     }
 }

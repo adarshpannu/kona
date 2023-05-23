@@ -231,7 +231,7 @@ impl QGM {
                     let lhs_props = &lop_graph.get(lhs_plan_key).properties;
                     let rhs_props = &lop_graph.get(rhs_plan_key).properties;
 
-                    let join_quns_bitmap = lhs_props.quns.bitmap | rhs_props.quns.bitmap;
+                    let join_quns = &lhs_props.quns | &rhs_props.quns;
 
                     // Are there any join predicates between two subplans?
                     // P1.quns should be superset of LHS quns
@@ -240,8 +240,7 @@ impl QGM {
                         .iter()
                         .filter_map(|(pred_key, pred_desc)| {
                             let PredDesc { quns, .. } = pred_desc;
-                            let pred_quns_bitmap = quns.bitmap;
-                            let is_subset = (pred_quns_bitmap & join_quns_bitmap) == pred_quns_bitmap;
+                            let is_subset = (quns & &join_quns) == *quns;
                             if is_subset {
                                 Some(*pred_key)
                             } else {
@@ -280,10 +279,7 @@ impl QGM {
 
                         // Initialize join properties
                         let quns = &lhs_props.quns | &rhs_props.quns;
-                        //quns.bitmap |= rhs_props.quns.bitmap;
-
                         let mut cols = &lhs_props.cols | &rhs_props.cols;
-                        //cols.bitmap |= rhs_props.cols.bitmap;
 
                         // Compute cols to flow through. Retain all cols in the select-list + unbound preds
                         let mut flowcols = select_list_quncol.clone();
@@ -537,7 +533,7 @@ impl QGM {
                         preds.set(pred_key);
                     } else {
                         // Set output columns: Only project cols in the select-list + unbound join preds
-                        unbound_quncols.bitmap = unbound_quncols.bitmap | quncols.bitmap;
+                        unbound_quncols |= quncols;
                     }
                 }
             });
