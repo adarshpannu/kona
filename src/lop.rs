@@ -51,8 +51,8 @@ pub enum LOP {
 
 /***************************************************************************************************/
 #[derive(Debug, Clone)]
-pub struct EmitCol {
-    pub quncol: QunCol,
+pub struct VirtCol {
+    //pub quncol: QunCol,
     pub expr_key: ExprKey,
 }
 
@@ -62,17 +62,17 @@ pub struct LOPProps {
     pub cols: Bitset<QunCol>,
     pub preds: Bitset<ExprKey>,
     pub partdesc: PartDesc,
-    pub emitcols: Option<Vec<EmitCol>>,
+    pub virtcols: Option<Vec<VirtCol>>,
 }
 
 impl LOPProps {
-    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, emitcols: Option<Vec<EmitCol>>) -> Self {
+    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, virtcols: Option<Vec<VirtCol>>) -> Self {
         LOPProps {
             quns,
             cols,
             preds,
             partdesc,
-            emitcols,
+            virtcols,
         }
     }
 }
@@ -292,19 +292,23 @@ impl QGM {
                         let (lhs_partdesc, rhs_partdesc, _) =
                             Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
 
-                        let lhs_repart_props = lhs_partdesc.map(|partdesc| LOPProps {
-                            quns: lhs_props.quns.clone(),
-                            cols: lhs_props.cols.clone(),
-                            preds: lhs_props.preds.clone_metadata(),
-                            partdesc,
-                            emitcols: None,
+                        let lhs_repart_props = lhs_partdesc.map(|partdesc| {
+                            let virtcols = None; // Self::partdesc_to_virtcols(&partdesc);
+
+                            LOPProps {
+                                quns: lhs_props.quns.clone(),
+                                cols: lhs_props.cols.clone(),
+                                preds: lhs_props.preds.clone_metadata(),
+                                partdesc,
+                                virtcols,
+                            }
                         });
                         let rhs_repart_props = rhs_partdesc.map(|partdesc| LOPProps {
                             quns: rhs_props.quns.clone(),
                             cols: rhs_props.cols.clone(),
                             preds: rhs_props.preds.clone_metadata(),
                             partdesc,
-                            emitcols: None,
+                            virtcols: None,
                         });
 
                         //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
@@ -370,39 +374,36 @@ impl QGM {
                         cols: props.cols.clone(),
                         preds: props.preds.clone_metadata(),
                         partdesc,
-                        emitcols: None,
+                        virtcols: None,
                     };
                     root_lop_key = lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![root_lop_key]));
                 }
             }
 
-            /*
-            let mut props = lop_graph.get(root_lop_key).properties.clone();
-            props.quns = props.quns.clear();
-            props.cols = props.cols.clear();
-            props.preds = props.preds.clear();
-
-            // Add emitter
-            let emitcols = qblock.select_list.clone();
-            let root_lop_key = lop_graph.add_node_with_props(LOP::Emit { emitcols }, props, Some(vec![root_lop_key]));
-            */
             let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
-            let emitcols = qblock
+            let virtcols = qblock
                 .select_list
                 .iter()
-                .enumerate()
-                .map(|(ix, ne)| EmitCol {
-                    quncol: QunCol(parent_qun_id, ix),
+                .map(|ne| VirtCol {
+                    //quncol: QunCol(parent_qun_id, ix),
                     expr_key: ne.expr_key,
                 })
                 .collect::<Vec<_>>();
-            props.emitcols = Some(emitcols);
+            props.virtcols = Some(virtcols);
 
             info!("Created logical plan for qblock id: {}", qblock.id);
 
             Ok(root_lop_key)
         } else {
             Err("Cannot find plan for qblock".to_string())
+        }
+    }
+
+    fn partdesc_to_virtcols(partdesc: &PartDesc) -> Option<Vec<ExprKey>> {
+        if let PartType::HASHEXPR(exprs) = &partdesc.part_type {
+            Some(exprs.clone())
+        } else {
+            None
         }
     }
 

@@ -60,16 +60,16 @@ impl ColumnPositionTable {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
     pub predicates: Option<Vec<PCode>>,
-    pub emitcols: Option<Vec<PCode>>,
+    pub virtcols: Option<Vec<PCode>>,
     pub npartitions: usize,
     pub index_in_stage: usize,
 }
 
 impl POPProps {
-    pub fn new(predicates: Option<Vec<PCode>>, emitcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
+    pub fn new(predicates: Option<Vec<PCode>>, virtcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
         POPProps {
             predicates,
-            emitcols,
+            virtcols,
             npartitions,
             index_in_stage: 0,
         }

@@ -5,7 +5,7 @@ use crate::{
     flow::Flow,
     graph::{ExprKey, Graph, LOPKey, POPKey},
     includes::*,
-    lop::{EmitCol, LOPGraph, LOP},
+    lop::{VirtCol, LOPGraph, LOP},
     metadata::{PartType, TableType},
     pcode::PCode,
     pop::{ColumnPosition, ColumnPositionTable, POPGraph, POPProps, POP},
@@ -134,11 +134,11 @@ impl POP {
             }
         };
 
-        // Compile emitcols
-        debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+        // Compile virtcols
+        debug!("Compile vcols for lopkey: {:?}", lop_key);
+        let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
 
-        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, virtcols, lopprops.partdesc.npartitions);
 
         let pop_key = pop_graph.add_node_with_props(pop, props, None);
         Ok(pop_key)
@@ -183,9 +183,9 @@ impl POP {
         }
     }
 
-    pub fn compile_emitcols(qgm: &QGM, emitcols: Option<&Vec<EmitCol>>, cpt: &ColumnPositionTable) -> Option<Vec<PCode>> {
-        if let Some(emitcols) = emitcols {
-            let pcodevec = emitcols
+    pub fn compile_virtcols(qgm: &QGM, virtcols: Option<&Vec<VirtCol>>, cpt: &ColumnPositionTable) -> Option<Vec<PCode>> {
+        if let Some(virtcols) = virtcols {
+            let pcodevec = virtcols
                 .iter()
                 .map(|ne| {
                     let mut pcode = PCode::new();
@@ -211,12 +211,12 @@ impl POP {
 
         let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
 
-        // Compile cols or emitcols. We will have one or the other
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+        // Compile cols or virtcols. We will have one or the other
+        let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
 
         let output_map = None;
         /*
-        let output_map: Option<Vec<RegisterId>> = if emitcols.is_none() {
+        let output_map: Option<Vec<RegisterId>> = if virtcols.is_none() {
             let output_map = lopprops
                 .cols
                 .elements()
@@ -232,7 +232,7 @@ impl POP {
         };
         */
 
-        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, virtcols, lopprops.partdesc.npartitions);
 
         let repart_key = if let PartType::HASHEXPR(_) = &lopprops.partdesc.part_type {
             debug!("Compile pkey start");
@@ -260,10 +260,10 @@ impl POP {
 
         let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
 
-        // Compile cols or emitcols. We will have one or the other
-        let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+        // Compile cols or virtcols. We will have one or the other
+        let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
 
-        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, virtcols, lopprops.partdesc.npartitions);
 
         let pop_inner = pop_repartition::RepartitionRead {};
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, Some(pop_children));
@@ -281,12 +281,12 @@ impl POP {
         //let predicates = Self::compile_predicates(qgm, &lopprops.preds, &cpt);
         let predicates = None;
 
-        // Compile emitcols
-        //debug!("Compile emits for lopkey: {:?}", lop_key);
-        //let emitcols = Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
-        let emitcols = None;
+        // Compile virtcols
+        //debug!("Compile vcols for lopkey: {:?}", lop_key);
+        //let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
+        let virtcols = None;
 
-        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, virtcols, lopprops.partdesc.npartitions);
 
         let pop_inner = pop_hashjoin::HashJoin {};
         let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
@@ -304,11 +304,11 @@ impl POP {
         debug!("Compile predicate for lopkey: {:?}", lop_key);
         let predicates = None; // todo Self::compile_predicates(qgm, &lopprops.preds, &cpt);
 
-        // Compile emitcols
-        debug!("Compile emits for lopkey: {:?}", lop_key);
-        let emitcols = None; // todo Self::compile_emitcols(qgm, lopprops.emitcols.as_ref(), &cpt);
+        // Compile virtcols
+        debug!("Compile vcols for lopkey: {:?}", lop_key);
+        let virtcols = None; // todo Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
 
-        let props = POPProps::new(predicates, emitcols, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, virtcols, lopprops.partdesc.npartitions);
 
         let pop_inner = pop_aggregation::Aggregation {};
         let pop_key = pop_graph.add_node_with_props(POP::Aggregation(pop_inner), props, Some(pop_children));

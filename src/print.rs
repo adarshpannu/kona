@@ -9,7 +9,7 @@ use crate::{
     expr::Expr,
     graph::{ExprKey, LOPKey, POPKey},
     includes::*,
-    lop::{EmitCol, LOPGraph, LOP},
+    lop::{LOPGraph, VirtCol, LOP},
     pop::{POPGraph, POP},
     qgm::QueryBlock,
     stage::{Stage, StageGraph},
@@ -79,9 +79,9 @@ impl QGM {
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let colstring = if let Some(emitcols) = props.emitcols.as_ref() {
-            //let emitcols = emitcols.iter().map(|e| e.expr_key).collect::<Vec<_>>();
-            printable_emitcols(&emitcols, self, true)
+        let colstring = if let Some(virtcols) = props.virtcols.as_ref() {
+            //let virtcols = virtcols.iter().map(|e| e.expr_key).collect::<Vec<_>>();
+            printable_virtcols(&virtcols, self, true)
         } else {
             props.cols.printable(self)
         };
@@ -350,14 +350,16 @@ pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool) -> Stri
     predstring
 }
 
-pub fn printable_emitcols(preds: &Vec<EmitCol>, qgm: &QGM, do_escape: bool) -> String {
+pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> String {
     let mut predstring = String::from("{");
-    for (ix, EmitCol { quncol, expr_key }) in preds.iter().enumerate() {
+    for (ix, VirtCol { expr_key }) in preds.iter().enumerate() {
         let predstr = expr_key.printable(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
+        /*
         if quncol.0 > 0 {
             predstring.push_str(&format!(" [${}.{}] ", quncol.0, quncol.1));
         }
+        */
 
         if ix < preds.len() - 1 {
             predstring.push_str("|")

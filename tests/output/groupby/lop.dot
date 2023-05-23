@@ -6,6 +6,6 @@ digraph example1 {
     lopkeyLOPKey2v1 -> lopkeyLOPKey3v1;
     lopkeyLOPKey1v1 -> lopkeyLOPKey2v1;
     lopkeyLOPKey1v1[label="TableScan-1v1|[1]|EMP_DEPT_ID (1.2) AGE (1.1) |{AGE \> 50|EMP_DEPT_ID \< 99}|p = 1 (RAW)|(input = EMP_DEPT_ID (1.2) AGE (1.1) )"];
-    lopkeyLOPKey2v1[label="Repartition-2v1|[1]|{EMP_DEPT_ID + 55 [$3.0] |AGE + 10 [$3.1] |AGE + 50 [$3.2] |AGE [$3.3] }|{}|p = 4 (EMP_DEPT_ID + 55)|c = 1"];
+    lopkeyLOPKey2v1[label="Repartition-2v1|[1]|{EMP_DEPT_ID + 55|AGE + 10|AGE + 50|AGE}|{}|p = 4 (EMP_DEPT_ID + 55)|c = 1"];
     lopkeyLOPKey3v1[label="Aggregation-3v1|[3]|{SUM($3.1) * 99 / COUNT($3.2)|$3.0|SUM($3.3) / COUNT($3.3)|$3.0}|{SUM($3.3) \> 100|$3.0 \> 10}|p = 4 (EMP_DEPT_ID + 55)|by_len = 1"];
 }

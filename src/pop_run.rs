@@ -28,13 +28,13 @@ impl POPKey {
             debug!("Before preds: {:?}", &chunk);
 
             if chunk.len() > 0 {
-                // Run predicates and emits, if any
+                // Run predicates and vcols, if any
                 chunk = Self::eval_predicates(props, chunk);
                 debug!("After preds: {:?}", &chunk);
 
-                let emitchunk: Option<Chunk<Box<dyn Array>>> = Self::eval_emitcols(props, &chunk);
-                if let Some(emitchunk) = emitchunk {
-                    debug!("Emitcols: {:?}", &emitchunk);
+                let projection_chunk: Option<Chunk<Box<dyn Array>>> = Self::eval_virtcols(props, &chunk);
+                if let Some(projection_chunk) = projection_chunk {
+                    debug!("Virtcols: {:?}", &projection_chunk);
                 }
             }
             return Ok(chunk);
@@ -54,16 +54,16 @@ impl POPKey {
         return filtered_chunk;
     }
 
-    pub fn eval_emitcols(props: &POPProps, input: &ChunkBox) -> Option<ChunkBox> {
-        if let Some(emitcols) = props.emitcols.as_ref() {
-            let emit_output = emitcols
+    pub fn eval_virtcols(props: &POPProps, input: &ChunkBox) -> Option<ChunkBox> {
+        if let Some(virtcols) = props.virtcols.as_ref() {
+            let virtoutput = virtcols
                 .iter()
-                .map(|emit| {
-                    let result = emit.eval(&input);
+                .map(|pcode| {
+                    let result = pcode.eval(&input);
                     result
                 })
                 .collect::<Vec<_>>();
-            Some(Chunk::new(emit_output))
+            Some(Chunk::new(virtoutput))
         } else {
             None
         }
