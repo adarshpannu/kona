@@ -52,7 +52,6 @@ pub enum LOP {
 /***************************************************************************************************/
 #[derive(Debug, Clone)]
 pub struct VirtCol {
-    //pub quncol: QunCol,
     pub expr_key: ExprKey,
 }
 
@@ -186,7 +185,7 @@ impl QGM {
         let aps_context = APSContext::new(self);
         let mut lop_graph: LOPGraph = Graph::new();
 
-        let lop_key = self.build_qblock_logical_plan(env, 0, self.main_qblock_key, &aps_context, &mut lop_graph, None);
+        let lop_key = self.build_qblock_logical_plan(env, self.main_qblock_key, &aps_context, &mut lop_graph, None);
         if let Ok(lop_key) = lop_key {
             let plan_pathname = format!("{}/{}", env.output_dir, "lop.dot");
             self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_pathname)?;
@@ -197,8 +196,7 @@ impl QGM {
     }
 
     pub fn build_qblock_logical_plan(
-        self: &QGM, env: &Env, parent_qun_id: QunId, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph,
-        expected_partitioning: Option<Vec<ExprKey>>,
+        self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph, expected_partitioning: Option<Vec<ExprKey>>,
     ) -> Result<LOPKey, String> {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
@@ -293,7 +291,7 @@ impl QGM {
                             Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
 
                         let lhs_repart_props = lhs_partdesc.map(|partdesc| {
-                            let virtcols = None; // Self::partdesc_to_virtcols(&partdesc);
+                            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
 
                             LOPProps {
                                 quns: lhs_props.quns.clone(),
@@ -303,12 +301,15 @@ impl QGM {
                                 virtcols,
                             }
                         });
-                        let rhs_repart_props = rhs_partdesc.map(|partdesc| LOPProps {
-                            quns: rhs_props.quns.clone(),
-                            cols: rhs_props.cols.clone(),
-                            preds: rhs_props.preds.clone_metadata(),
-                            partdesc,
-                            virtcols: None,
+                        let rhs_repart_props = rhs_partdesc.map(|partdesc| {
+                            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
+                            LOPProps {
+                                quns: rhs_props.quns.clone(),
+                                cols: rhs_props.cols.clone(),
+                                preds: rhs_props.preds.clone_metadata(),
+                                partdesc,
+                                virtcols,
+                            }
                         });
 
                         //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
@@ -380,16 +381,11 @@ impl QGM {
                 }
             }
 
+            // Only the select-list expressions flow out of a queryblock. We can clear the column bitset.
             let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
-            let virtcols = qblock
-                .select_list
-                .iter()
-                .map(|ne| VirtCol {
-                    //quncol: QunCol(parent_qun_id, ix),
-                    expr_key: ne.expr_key,
-                })
-                .collect::<Vec<_>>();
+            let virtcols = qblock.select_list.iter().map(|ne| VirtCol { expr_key: ne.expr_key }).collect::<Vec<_>>();
             props.virtcols = Some(virtcols);
+            props.cols = props.cols.clone_metadata();
 
             info!("Created logical plan for qblock id: {}", qblock.id);
 
@@ -399,9 +395,15 @@ impl QGM {
         }
     }
 
-    fn partdesc_to_virtcols(partdesc: &PartDesc) -> Option<Vec<ExprKey>> {
+    fn partdesc_to_virtcols(expr_graph: &ExprGraph, partdesc: &PartDesc) -> Option<Vec<VirtCol>> {
+        // Only return virtual columns that are composite expressions (i.e. not plain columns)
         if let PartType::HASHEXPR(exprs) = &partdesc.part_type {
-            Some(exprs.clone())
+            let virtcols = exprs
+                .iter()
+                .filter(|&expr_key| !expr_key.is_column(expr_graph))
+                .map(|&expr_key| VirtCol { expr_key })
+                .collect();
+            Some(virtcols)
         } else {
             None
         }
@@ -558,7 +560,7 @@ impl QGM {
                     debug!("expected: {:?}", e.printable(&self.expr_graph, false))
                 }
 
-                let child_lop_key = self.build_qblock_logical_plan(env, qun.id, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
+                let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
 
                 let children = Some(vec![child_lop_key]);
 

@@ -79,11 +79,10 @@ impl QGM {
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let colstring = if let Some(virtcols) = props.virtcols.as_ref() {
-            //let virtcols = virtcols.iter().map(|e| e.expr_key).collect::<Vec<_>>();
-            printable_virtcols(&virtcols, self, true)
-        } else {
-            props.cols.printable(self)
+        let mut colstring = props.cols.printable(self);
+
+        if let Some(virtcols) = props.virtcols.as_ref() {
+            colstring = format!("{{{}|{}}}", colstring, printable_virtcols(&virtcols, self, true));
         };
 
         let predstring = props.preds.printable(self, true);
@@ -351,21 +350,15 @@ pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool) -> Stri
 }
 
 pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> String {
-    let mut predstring = String::from("{");
+    let mut predstring = String::from("");
     for (ix, VirtCol { expr_key }) in preds.iter().enumerate() {
         let predstr = expr_key.printable(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
-        /*
-        if quncol.0 > 0 {
-            predstring.push_str(&format!(" [${}.{}] ", quncol.0, quncol.1));
-        }
-        */
-
         if ix < preds.len() - 1 {
             predstring.push_str("|")
         }
     }
-    predstring.push_str("}");
+    predstring.push_str("");
     predstring
 }
 

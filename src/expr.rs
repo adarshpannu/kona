@@ -253,6 +253,11 @@ impl ExprKey {
         format!("{:?}", *self).replace("(", "").replace(")", "")
     }
 
+    pub fn is_column(&self, graph: &ExprGraph) -> bool {
+        let expr = &graph.get(*self).value;
+        matches!(expr, Column { .. })
+    }
+
     pub fn printable(&self, graph: &ExprGraph, do_escape: bool) -> String {
         let (expr, _, children) = graph.get3(*self);
         let retval = match expr {

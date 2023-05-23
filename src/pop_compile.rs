@@ -211,7 +211,7 @@ impl POP {
 
         let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
 
-        // Compile cols or virtcols. We will have one or the other
+        // Compile cols and/or virtcols. 
         let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
 
         let output_map = None;
@@ -260,7 +260,7 @@ impl POP {
 
         let cpt: ColumnPositionTable = Self::compute_column_position_table(qgm, lop_graph, lop_key);
 
-        // Compile cols or virtcols. We will have one or the other
+        // Compile cols or virtcols.
         let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &cpt);
 
         let props = POPProps::new(predicates, virtcols, lopprops.partdesc.npartitions);
