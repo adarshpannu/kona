@@ -286,47 +286,8 @@ impl QGM {
                         }
                         cols &= flowcols;
 
-                        // Repartition join legs as needed
-                        let (lhs_partdesc, rhs_partdesc, _) =
-                            Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, &equi_join_preds, &eqclass);
-
-                        let lhs_repart_props = lhs_partdesc.map(|partdesc| {
-                            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
-
-                            LOPProps {
-                                quns: lhs_props.quns.clone(),
-                                cols: lhs_props.cols.clone(),
-                                preds: lhs_props.preds.clone_metadata(),
-                                partdesc,
-                                virtcols,
-                            }
-                        });
-                        let rhs_repart_props = rhs_partdesc.map(|partdesc| {
-                            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
-                            LOPProps {
-                                quns: rhs_props.quns.clone(),
-                                cols: rhs_props.cols.clone(),
-                                preds: rhs_props.preds.clone_metadata(),
-                                partdesc,
-                                virtcols,
-                            }
-                        });
-
-                        //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
-                        let (lhs_partitions, rhs_partitions) = (lhs_props.partdesc.npartitions, rhs_props.partdesc.npartitions);
-
-                        let new_lhs_plan_key = if let Some(lhs_repart_props) = lhs_repart_props {
-                            // Repartition LHS
-                            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: lhs_partitions }, lhs_repart_props, Some(vec![lhs_plan_key]))
-                        } else {
-                            lhs_plan_key
-                        };
-                        let new_rhs_plan_key = if let Some(rhs_repart_props) = rhs_repart_props {
-                            // Repartition RHS
-                            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: rhs_partitions }, rhs_repart_props, Some(vec![rhs_plan_key]))
-                        } else {
-                            rhs_plan_key
-                        };
+                        let (new_lhs_plan_key, new_rhs_plan_key) =
+                            self.repartition_join_legs(env, lop_graph, lhs_plan_key, rhs_plan_key, &equi_join_preds, &eqclass);
 
                         // Join partitioning is identical to partitioning of the LHS.
                         let lhs_props = &lop_graph.get(new_lhs_plan_key).properties;
@@ -334,8 +295,10 @@ impl QGM {
 
                         let props = LOPProps::new(quns, cols, preds, partdesc, None);
 
-                        let join_node = lop_graph.add_node_with_props(LOP::HashJoin { equi_join_preds }, props, Some(vec![new_lhs_plan_key, new_rhs_plan_key]));
-                        join_status = Some((lhs_plan_key, rhs_plan_key, join_node));
+                        let join_lop_key =
+                            lop_graph.add_node_with_props(LOP::HashJoin { equi_join_preds }, props, Some(vec![new_lhs_plan_key, new_rhs_plan_key]));
+
+                        join_status = Some((lhs_plan_key, rhs_plan_key, join_lop_key));
 
                         // For now, go with the first equi-join
                         break 'outer;
@@ -353,32 +316,8 @@ impl QGM {
 
         if worklist.len() == 1 {
             let mut root_lop_key = worklist[0];
-
-            if let Some(expected_partitioning) = expected_partitioning {
-                let props = &lop_graph.get(root_lop_key).properties;
-                let empty_vec = vec![];
-                let actual_partitioning = if let PartType::HASHEXPR(keys) = &props.partdesc.part_type {
-                    keys
-                } else {
-                    &empty_vec
-                };
-
-                if !Self::is_correctly_partitioned(&self.expr_graph, &expected_partitioning, actual_partitioning, &eqclass) {
-                    let partdesc = PartDesc {
-                        npartitions: 4,
-                        part_type: PartType::HASHEXPR(expected_partitioning),
-                    };
-                    let cpartitions = props.partdesc.npartitions;
-
-                    let props = LOPProps {
-                        quns: props.quns.clone(),
-                        cols: props.cols.clone(),
-                        preds: props.preds.clone_metadata(),
-                        partdesc,
-                        virtcols: None,
-                    };
-                    root_lop_key = lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![root_lop_key]));
-                }
+            if let Some(expected_partitioning) = &expected_partitioning {
+                root_lop_key = self.repartition_if_needed(lop_graph, root_lop_key, expected_partitioning, &eqclass);
             }
 
             // Only the select-list expressions flow out of a queryblock. We can clear the column bitset.
@@ -393,6 +332,85 @@ impl QGM {
         } else {
             Err("Cannot find plan for qblock".to_string())
         }
+    }
+
+    fn repartition_if_needed(self: &QGM, lop_graph: &mut LOPGraph, lop_key: LOPKey, expected_partitioning: &Vec<ExprKey>, eqclass: &ExprEqClass) -> LOPKey {
+        let props = &lop_graph.get(lop_key).properties;
+        let empty_vec = vec![];
+        let actual_partitioning = if let PartType::HASHEXPR(keys) = &props.partdesc.part_type {
+            keys
+        } else {
+            &empty_vec
+        };
+
+        if Self::is_correctly_partitioned(&self.expr_graph, &expected_partitioning, actual_partitioning, &eqclass) {
+            lop_key
+        } else {
+            let partdesc = PartDesc {
+                npartitions: 4,
+                part_type: PartType::HASHEXPR(expected_partitioning.clone()),
+            };
+            let cpartitions = props.partdesc.npartitions;
+
+            let props = LOPProps {
+                quns: props.quns.clone(),
+                cols: props.cols.clone(),
+                preds: props.preds.clone_metadata(),
+                partdesc,
+                virtcols: None,
+            };
+            lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![lop_key]))
+        }
+    }
+
+    fn repartition_join_legs(
+        self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey,
+        equi_join_preds: &Vec<(ExprKey, PredicateAlignment)>, eqclass: &ExprEqClass,
+    ) -> (LOPKey, LOPKey) {
+        let lhs_props = &lop_graph.get(lhs_plan_key).properties;
+        let rhs_props = &lop_graph.get(rhs_plan_key).properties;
+
+        // Repartition join legs as needed
+        let (lhs_partdesc, rhs_partdesc, _) =
+            Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, equi_join_preds, eqclass);
+
+        let lhs_repart_props = lhs_partdesc.map(|partdesc| {
+            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
+            LOPProps {
+                quns: lhs_props.quns.clone(),
+                cols: lhs_props.cols.clone(),
+                preds: lhs_props.preds.clone_metadata(),
+                partdesc,
+                virtcols,
+            }
+        });
+        let rhs_repart_props = rhs_partdesc.map(|partdesc| {
+            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
+            LOPProps {
+                quns: rhs_props.quns.clone(),
+                cols: rhs_props.cols.clone(),
+                preds: rhs_props.preds.clone_metadata(),
+                partdesc,
+                virtcols,
+            }
+        });
+
+        //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
+        let (lhs_partitions, rhs_partitions) = (lhs_props.partdesc.npartitions, rhs_props.partdesc.npartitions);
+
+        let new_lhs_plan_key = if let Some(lhs_repart_props) = lhs_repart_props {
+            // Repartition LHS
+            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: lhs_partitions }, lhs_repart_props, Some(vec![lhs_plan_key]))
+        } else {
+            lhs_plan_key
+        };
+        let new_rhs_plan_key = if let Some(rhs_repart_props) = rhs_repart_props {
+            // Repartition RHS
+            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: rhs_partitions }, rhs_repart_props, Some(vec![rhs_plan_key]))
+        } else {
+            rhs_plan_key
+        };
+        (new_lhs_plan_key, new_rhs_plan_key)
     }
 
     fn partdesc_to_virtcols(expr_graph: &ExprGraph, partdesc: &PartDesc) -> Option<Vec<VirtCol>> {
