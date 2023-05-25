@@ -28,6 +28,7 @@ pub mod qgm;
 pub mod qgmiter;
 
 pub mod lop;
+pub mod lop_repartition;
 pub mod qst;
 
 pub mod flow;
@@ -123,7 +124,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/rst.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/flare/sql/spja.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 

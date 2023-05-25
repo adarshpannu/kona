@@ -58,7 +58,8 @@ impl Task {
         };
         */
 
-        for popkey in flow.pop_graph.iter(root_pop_key) {
+        let mut iter = flow.pop_graph.iter(root_pop_key);
+        while let Some(popkey) = iter.next(&flow.pop_graph) {
             let (pop, props, ..) = flow.pop_graph.get3(popkey);
             let ix = props.index_in_stage;
             let ctx = match &pop {

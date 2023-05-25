@@ -51,7 +51,7 @@ impl QGM {
             Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, equi_join_preds, eqclass);
 
         let lhs_repart_props = lhs_partdesc.map(|partdesc| {
-            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
+            let virtcols = None;
             LOPProps {
                 quns: lhs_props.quns.clone(),
                 cols: lhs_props.cols.clone(),
@@ -61,7 +61,7 @@ impl QGM {
             }
         });
         let rhs_repart_props = rhs_partdesc.map(|partdesc| {
-            let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
+            let virtcols = None;
             LOPProps {
                 quns: rhs_props.quns.clone(),
                 cols: rhs_props.cols.clone(),
@@ -96,19 +96,17 @@ impl QGM {
                 .iter()
                 .filter(|&expr_key| !expr_key.is_column(expr_graph))
                 .map(|&expr_key| VirtCol { expr_key })
-                .collect();
-            Some(virtcols)
-        } else {
-            None
+                .collect::<Vec<_>>();
+            if ! virtcols.is_empty() {
+                return Some(virtcols);
+            }
         }
+        None
     }
 
     pub fn compare_part_keys(expr_graph: &ExprGraph, keys1: &Vec<ExprKey>, keys2: &Vec<ExprKey>, eqclass: &ExprEqClass) -> bool {
         if keys1.len() == keys2.len() {
-            keys2
-                .iter()
-                .zip(keys1.iter())
-                .all(|(key1, key2)| eqclass.check_eq(expr_graph, *key1, *key2))
+            keys2.iter().zip(keys1.iter()).all(|(key1, key2)| eqclass.check_eq(expr_graph, *key1, *key2))
         } else {
             false
         }

@@ -64,7 +64,7 @@ impl QGM {
 
 impl ExprKey {
     pub fn iter_quncols<'g>(&self, expr_graph: &'g ExprGraph) -> Box<dyn Iterator<Item = QunCol> + 'g> {
-        let it = expr_graph.iter(*self).filter_map(move |nodeid| {
+        let it = expr_graph.true_iter(*self).filter_map(move |nodeid| {
             let expr = &expr_graph.get(nodeid).value;
             match expr {
                 Column { qunid, colid, .. } => Some(QunCol(*qunid, *colid)),

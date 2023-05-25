@@ -163,8 +163,8 @@ impl Expr {
         let mut iter2 = graph.iter(expr_key2);
 
         loop {
-            if let Some(expr_key1) = iter1.next() {
-                if let Some(expr_key2) = iter2.next() {
+            if let Some(expr_key1) = iter1.next(graph) {
+                if let Some(expr_key2) = iter2.next(graph) {
                     let expr1 = &graph.get(expr_key1).value;
                     let expr2 = &graph.get(expr_key2).value;
                     if expr1.equals(expr2) == false {
@@ -176,7 +176,7 @@ impl Expr {
                 }
             } else {
                 // expr_key1 == None
-                return iter2.next().is_none();
+                return iter2.next(graph).is_none();
             }
         }
     }
@@ -218,10 +218,10 @@ use std::{
 
 impl ExprKey {
     pub fn hash(&self, expr_graph: &ExprGraph) -> u64 {
-        let iter = expr_graph.iter(*self);
+        let mut iter = expr_graph.iter(*self);
         let mut state = DefaultHasher::new();
 
-        for exprkey in iter {
+        while let Some(exprkey) = iter.next(expr_graph) {
             let expr = &expr_graph.get(exprkey).value;
             match expr {
                 Expr::Column { colname, qunid, colid, .. } => {

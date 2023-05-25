@@ -1,5 +1,5 @@
 {
-    "editor.inlayHints.enabled": "onUnlessPressed",
+    "editor.inlayHints.enabled": "offUnlessPressed",
     "workbench.colorCustomizations": {
         "editorInlayHint.background": "#E8E8E8",
     },

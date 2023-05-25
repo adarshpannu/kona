@@ -29,7 +29,8 @@ impl<K, V, P> Node<K, V, P> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<K, V, P>
 where
-    K: slotmap::Key, {
+    K: slotmap::Key,
+{
     pub sm: SlotMap<K, Node<K, V, P>>,
     next_id: usize,
 }
@@ -84,6 +85,14 @@ where
         node
     }
 
+    pub fn get_value(&self, key: K) -> &V {
+        &self.sm.get(key).unwrap().value
+    }
+
+    pub fn get_properties(&self, key: K) -> &P {
+        &self.sm.get(key).unwrap().properties
+    }
+
     pub fn get_mut(&mut self, key: K) -> &mut Node<K, V, P> {
         let node = self.sm.get_mut(key).unwrap();
         node
@@ -115,39 +124,53 @@ where
         node.children = Some(new_children);
     }
 
-    pub fn iter<'a>(&'a self, root: K) -> GraphIterator<'a, K, V, P> {
+    pub fn iter(&self, root: K) -> GraphIterator<K> {
         GraphIterator {
-            graph: self,
             queue: vec![root],
             stop_depth_traversal: None,
         }
     }
 
-    pub fn iter_cond<'a, F>(&'a self, root: K, cond: Option<Box<dyn Fn(K) -> bool>>) -> GraphIterator<'a, K, V, P> {
+    pub fn iter_cond<F>(&self, root: K, cond: Option<Box<dyn Fn(K) -> bool>>) -> GraphIterator<K> {
         GraphIterator {
-            graph: self,
             queue: vec![root],
             stop_depth_traversal: cond,
         }
     }
+
+    pub fn true_iter<'a>(&'a self, root: K) -> TrueGraphIterator<'a, K, V, P> {
+        let graph_iter = GraphIterator {
+            queue: vec![root],
+            stop_depth_traversal: None,
+        };
+        TrueGraphIterator { graph_iter, graph: self }
+    }
+
 }
 
-pub struct GraphIterator<'a, K, V, P>
+pub struct GraphIterator<K>
 where
-    K: slotmap::Key, {
-    graph: &'a Graph<K, V, P>,
+    K: slotmap::Key,
+{
     queue: Vec<K>,
     stop_depth_traversal: Option<Box<dyn Fn(K) -> bool>>, // If true, don't explore children of a given node
 }
 
-// Breadth-first iterator
-impl<'a, K, V, P> Iterator for GraphIterator<'a, K, V, P>
+pub struct TrueGraphIterator<'a, K, V, P>
 where
     K: slotmap::Key,
-    V: std::fmt::Debug,
 {
-    type Item = K;
-    fn next(&mut self) -> Option<Self::Item> {
+    graph_iter: GraphIterator<K>,
+    graph: &'a Graph<K, V, P>
+}
+
+
+// Breadth-first iterator
+impl<K> GraphIterator<K>
+where
+    K: slotmap::Key,
+{
+    pub fn next<V, P>(&mut self, graph: &Graph<K, V, P>) -> Option<K> {
         if self.queue.len() == 0 {
             return None;
         }
@@ -158,11 +181,23 @@ where
                     return cur_key_option;
                 }
             }
-            let children = self.graph.get(cur_key).children.as_ref();
+            let children = graph.get(cur_key).children.as_ref();
             if let Some(children) = children {
                 self.queue.extend(children.iter());
             }
         }
         cur_key_option
+    }
+}
+
+
+impl<'a, K, V, P> Iterator for TrueGraphIterator<'a, K, V, P>
+where
+    K: slotmap::Key,
+    V: std::fmt::Debug,
+{
+    type Item = K;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.graph_iter.next(self.graph)
     }
 }
