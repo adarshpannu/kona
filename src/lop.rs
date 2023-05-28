@@ -43,17 +43,14 @@ impl LOPKey {
 /***************************************************************************************************/
 #[derive(Debug)]
 pub enum LOP {
-    TableScan { projection: Bitset<QunCol> },
-    HashJoin { equi_join_preds: Vec<(ExprKey, PredicateAlignment)> },
+    TableScan { input_projection: Bitset<QunCol> },
+    HashJoin { lhs_join_keys: Vec<ExprKey>, rhs_join_keys: Vec<ExprKey> },
     Repartition { cpartitions: usize },
     Aggregation { group_by_len: usize },
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct VirtCol {
-    pub expr_key: ExprKey,
-}
+pub type VirtCol = ExprKey;
 
 #[derive(Debug, Clone)]
 pub struct LOPProps {
@@ -303,13 +300,17 @@ impl QGM {
 
                     // Sort preds since the preceding hash-based ordering can be random
                     equi_join_preds.sort_by(|a, b| a.0.cmp(&b.0));
+                    let eqq = equi_join_preds.iter().map(|e| e.0).collect::<Vec<_>>();
 
                     if equi_join_preds.len() > 0 {
                         let mut preds = all_preds.clone_metadata();
 
-                        for &pred_key in join_preds.iter() {
-                            preds.set(pred_key);
-                            pred_map.remove_entry(&pred_key);
+                        for pred_key in join_preds.iter() {
+                            // Don't add equijoin preds to the after-join list
+                            if ! eqq.contains(pred_key) {
+                                preds.set(*pred_key);
+                            }
+                            pred_map.remove_entry(pred_key);
                         }
 
                         // Initialize join properties
@@ -323,7 +324,7 @@ impl QGM {
                         }
                         cols &= flowcols;
 
-                        let (new_lhs_plan_key, new_rhs_plan_key) =
+                        let (new_lhs_plan_key, new_rhs_plan_key, lhs_join_keys, rhs_join_keys) =
                             self.repartition_join_legs(env, lop_graph, lhs_plan_key, rhs_plan_key, &equi_join_preds, &eqclass);
 
                         // Join partitioning is identical to partitioning of the LHS.
@@ -332,8 +333,11 @@ impl QGM {
 
                         let props = LOPProps::new(quns, cols, preds, partdesc, None);
 
-                        let join_lop_key =
-                            lop_graph.add_node_with_props(LOP::HashJoin { equi_join_preds }, props, Some(vec![new_lhs_plan_key, new_rhs_plan_key]));
+                        let join_lop_key = lop_graph.add_node_with_props(
+                            LOP::HashJoin { lhs_join_keys, rhs_join_keys },
+                            props,
+                            Some(vec![new_lhs_plan_key, new_rhs_plan_key]),
+                        );
 
                         join_status = Some((lhs_plan_key, rhs_plan_key, join_lop_key));
 
@@ -359,7 +363,7 @@ impl QGM {
 
             // Only the select-list expressions flow out of a queryblock. We can clear the column bitset.
             let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
-            let virtcols = qblock.select_list.iter().map(|ne| VirtCol { expr_key: ne.expr_key }).collect::<Vec<_>>();
+            let virtcols = qblock.select_list.iter().map(|ne| ne.expr_key).collect::<Vec<_>>();
             props.virtcols = Some(virtcols);
             props.cols = props.cols.clone_metadata();
 
@@ -539,7 +543,13 @@ impl QGM {
 
                 let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
 
-                lop_graph.add_node_with_props(LOP::TableScan { projection: input_quncols }, props, None)
+                lop_graph.add_node_with_props(
+                    LOP::TableScan {
+                        input_projection: input_quncols,
+                    },
+                    props,
+                    None,
+                )
             };
             //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
             worklist.push(lopkey);

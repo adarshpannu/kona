@@ -42,12 +42,12 @@ impl QGM {
     pub fn repartition_join_legs(
         self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey,
         equi_join_preds: &Vec<(ExprKey, PredicateAlignment)>, eqclass: &ExprEqClass,
-    ) -> (LOPKey, LOPKey) {
+    ) -> (LOPKey, LOPKey, Vec<ExprKey>, Vec<ExprKey>) {
         let lhs_props = &lop_graph.get(lhs_plan_key).properties;
         let rhs_props = &lop_graph.get(rhs_plan_key).properties;
 
         // Repartition join legs as needed
-        let (lhs_partdesc, rhs_partdesc, _) =
+        let (lhs_partdesc, rhs_partdesc, lhs_join_keys, rhs_join_keys, _) =
             Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, equi_join_preds, eqclass);
 
         let lhs_repart_props = lhs_partdesc.map(|partdesc| {
@@ -86,18 +86,14 @@ impl QGM {
         } else {
             rhs_plan_key
         };
-        (new_lhs_plan_key, new_rhs_plan_key)
+        (new_lhs_plan_key, new_rhs_plan_key, lhs_join_keys, rhs_join_keys)
     }
 
     pub(crate) fn partdesc_to_virtcols(expr_graph: &ExprGraph, partdesc: &PartDesc) -> Option<Vec<VirtCol>> {
         // Only return virtual columns that are composite expressions (i.e. not plain columns)
         if let PartType::HASHEXPR(exprs) = &partdesc.part_type {
-            let virtcols = exprs
-                .iter()
-                .filter(|&expr_key| !expr_key.is_column(expr_graph))
-                .map(|&expr_key| VirtCol { expr_key })
-                .collect::<Vec<_>>();
-            if ! virtcols.is_empty() {
+            let virtcols = exprs.iter().filter(|&expr_key| !expr_key.is_column(expr_graph)).cloned().collect::<Vec<_>>();
+            if !virtcols.is_empty() {
                 return Some(virtcols);
             }
         }
@@ -128,7 +124,7 @@ impl QGM {
     pub fn harmonize_partitions(
         env: &Env, lop_graph: &LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
         eqclass: &ExprEqClass,
-    ) -> (Option<PartDesc>, Option<PartDesc>, usize) {
+    ) -> (Option<PartDesc>, Option<PartDesc>, Vec<ExprKey>, Vec<ExprKey>, usize) {
         // Compare expected vs actual partitioning keys on both sides of the join
         // Both sides must be partitioned on equivalent keys and with identical partition counts
 
@@ -148,68 +144,70 @@ impl QGM {
         };
 
         // Compute expected partitioning keys
-        let (lhs_expected_keys, rhs_expected_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
+        let (lhs_join_keys, rhs_join_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
 
         let npartitions = env.settings.parallel_degree.unwrap_or(1);
 
         // TODO: need to ensure #partitions are matched up correctly esp. in light of situations wherein one leg is correctly partitioned while the other isn't
-        let lhs_partdesc = if Self::compare_part_keys(expr_graph, &lhs_expected_keys, lhs_actual_keys, eqclass) {
+        let lhs_partdesc = if Self::compare_part_keys(expr_graph, &lhs_join_keys, lhs_actual_keys, eqclass) {
             None
         } else {
             Some(PartDesc {
                 npartitions,
-                part_type: PartType::HASHEXPR(lhs_expected_keys),
+                part_type: PartType::HASHEXPR(lhs_join_keys.clone()),
             })
         };
 
-        let rhs_partdesc = if Self::compare_part_keys(expr_graph, &rhs_expected_keys, rhs_actual_keys, eqclass) {
+        let rhs_partdesc = if Self::compare_part_keys(expr_graph, &rhs_join_keys, rhs_actual_keys, eqclass) {
             None
         } else {
             Some(PartDesc {
                 npartitions,
-                part_type: PartType::HASHEXPR(rhs_expected_keys),
+                part_type: PartType::HASHEXPR(rhs_join_keys.clone()),
             })
         };
-        (lhs_partdesc, rhs_partdesc, npartitions)
+        (lhs_partdesc, rhs_partdesc, lhs_join_keys, rhs_join_keys, npartitions)
     }
 
-    pub fn compute_join_partitioning_descs(env: &Env, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>) -> (PartDesc, PartDesc) {
-        let (lhs_expected_keys, rhs_expected_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
+    pub fn compute_join_partitioning_descs(
+        env: &Env, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
+    ) -> (PartDesc, PartDesc, Vec<ExprKey>, Vec<ExprKey>) {
+        let (lhs_join_keys, rhs_join_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
         let npartitions = env.settings.parallel_degree.unwrap_or(1);
 
         let lhs_part_desc = PartDesc {
             npartitions,
-            part_type: PartType::HASHEXPR(lhs_expected_keys),
+            part_type: PartType::HASHEXPR(lhs_join_keys.clone()),
         };
 
         let rhs_part_desc = PartDesc {
             npartitions,
-            part_type: PartType::HASHEXPR(rhs_expected_keys),
+            part_type: PartType::HASHEXPR(rhs_join_keys.clone()),
         };
 
-        (lhs_part_desc, rhs_part_desc)
+        (lhs_part_desc, rhs_part_desc, lhs_join_keys, rhs_join_keys)
     }
 
     pub fn compute_join_partitioning_keys(expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>) -> (Vec<ExprKey>, Vec<ExprKey>) {
         // Compute expected partitioning keys
-        let mut lhs_expected_keys = vec![];
-        let mut rhs_expected_keys = vec![];
+        let mut lhs_join_keys = vec![];
+        let mut rhs_join_keys = vec![];
         for &(join_pred_key, alignment) in join_preds.iter() {
             let (expr, _, children) = expr_graph.get3(join_pred_key);
             if let RelExpr(RelOp::Eq) = expr {
                 let children = children.unwrap();
                 let (lhs_pred_key, rhs_pred_key) = (children[0], children[1]);
                 if alignment == PredicateAlignment::Aligned {
-                    lhs_expected_keys.push(lhs_pred_key);
-                    rhs_expected_keys.push(rhs_pred_key);
+                    lhs_join_keys.push(lhs_pred_key);
+                    rhs_join_keys.push(rhs_pred_key);
                 } else if alignment == PredicateAlignment::Reversed {
-                    lhs_expected_keys.push(rhs_pred_key);
-                    rhs_expected_keys.push(lhs_pred_key);
+                    lhs_join_keys.push(rhs_pred_key);
+                    rhs_join_keys.push(lhs_pred_key);
                 } else {
                     assert!(false);
                 }
             }
         }
-        (lhs_expected_keys, rhs_expected_keys)
+        (lhs_join_keys, rhs_join_keys)
     }
 }

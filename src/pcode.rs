@@ -7,7 +7,7 @@ use crate::{
     expr::{ArithOp, Expr, ExprGraph, LogOp, RelOp},
     graph::ExprKey,
     includes::*,
-    pop::{ColumnPosition, ColumnPositionTable},
+    pop::{Projection, ProjectionMap},
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,7 +23,7 @@ pub enum ControlOp {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PInstruction {
-    Column(ColumnPosition),
+    Column(ColId),
     Literal(Datum),
     NegatedExpr,
     BinaryExpr(ArithOp),
@@ -33,28 +33,35 @@ pub enum PInstruction {
 }
 
 impl ExprKey {
-    pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, cpt: &ColumnPositionTable) {
-        let (expr, _, children) = expr_graph.get3(*self);
+    pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, proj_map: &ProjectionMap) {
+        let prj = Projection::VirtCol(*self);
+        let colid = proj_map.get(prj);
+        let inst = if let Some(colid) = colid {
+            PInstruction::Column(colid)
+        } else {
+            let (expr, _, children) = expr_graph.get3(*self);
 
-        // Post-order traversal (i.e. children before parents)
-        if let Some(children) = children {
-            for &child_expr_key in children {
-                child_expr_key.compile(expr_graph, pcode, cpt)
+            // Post-order traversal (i.e. children before parents)
+            if let Some(children) = children {
+                for &child_expr_key in children {
+                    child_expr_key.compile(expr_graph, pcode, proj_map)
+                }
             }
-        }
 
-        let inst = match expr {
-            Expr::CID(colid, ..) => PInstruction::Column(ColumnPosition { column_position: *colid }),
-            Expr::Literal(value) => PInstruction::Literal(value.clone()),
-            Expr::Column { qunid, colid, .. } => {
-                let cpos = cpt.get(QunCol(*qunid, *colid));
-                PInstruction::Column(cpos)
+            match expr {
+                Expr::CID(colid, ..) => PInstruction::Column(*colid),
+                Expr::Literal(value) => PInstruction::Literal(value.clone()),
+                Expr::Column { qunid, colid, .. } => {
+                    let prj = Projection::QunCol(QunCol(*qunid, *colid));
+                    let colid = proj_map.get(prj).unwrap();
+                    PInstruction::Column(colid)
+                }
+                Expr::BinaryExpr(op) => PInstruction::BinaryExpr(*op),
+                Expr::RelExpr(op) => PInstruction::RelExpr(*op),
+                Expr::LogExpr(op) => PInstruction::LogExpr(*op),
+                Expr::NegatedExpr => PInstruction::NegatedExpr,
+                _ => panic!("Expression not compilable yet: {:?}", expr),
             }
-            Expr::BinaryExpr(op) => PInstruction::BinaryExpr(*op),
-            Expr::RelExpr(op) => PInstruction::RelExpr(*op),
-            Expr::LogExpr(op) => PInstruction::LogExpr(*op),
-            Expr::NegatedExpr => PInstruction::NegatedExpr,
-            _ => panic!("Expression not compilable yet: {:?}", expr),
         };
 
         pcode.push(inst);
@@ -95,7 +102,7 @@ impl PCode {
         let mut stack: Vec<PCodeStack> = vec![];
         for inst in self.instructions.iter() {
             match inst {
-                PInstruction::Column(id) => stack.push(PCodeStack::Column(Column::Ref(&input[id.column_position]))),
+                PInstruction::Column(id) => stack.push(PCodeStack::Column(Column::Ref(&input[*id]))),
                 PInstruction::Literal(datum) => stack.push(PCodeStack::Datum(datum.clone())),
                 PInstruction::BinaryExpr(op) => {
                     let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());

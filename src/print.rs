@@ -88,14 +88,15 @@ impl QGM {
         let predstring = props.preds.printable(self, true);
 
         let (label, extrastr) = match &lop {
-            LOP::TableScan { projection: input_cols } => {
+            LOP::TableScan { input_projection: input_cols } => {
                 let input_cols = input_cols.printable(self);
                 let extrastr = format!("(input = {})", input_cols);
                 (String::from("TableScan"), extrastr)
             }
-            LOP::HashJoin { equi_join_preds } => {
-                let equi_join_preds = equi_join_preds.iter().map(|e| e.0).collect::<Vec<_>>();
-                let extrastr = printable_preds(&equi_join_preds, self, true);
+            LOP::HashJoin { lhs_join_keys, rhs_join_keys } => {
+                let lhsstr = printable_preds(&lhs_join_keys, self, true, false);
+                let rhsstr = printable_preds(&rhs_join_keys, self, true, false);
+                let extrastr = format!("{} = {}", lhsstr, rhsstr);
                 (String::from("HashJoin"), extrastr)
             }
             LOP::Repartition { cpartitions } => {
@@ -191,8 +192,8 @@ impl QGM {
                 let extrastr = format!("");
                 (String::from("HashJoin"), extrastr)
             }
-            POP::Repartition(inner) => {
-                let extrastr = format!("output_map = {:?}", inner.output_map);
+            POP::Repartition(_) => {
+                let extrastr = format!("");
                 (String::from("Repartition"), extrastr)
             }
             POP::RepartitionRead(_) => {
@@ -206,14 +207,22 @@ impl QGM {
         };
 
         let label = label.replace("\"", "").replace("{", "").replace("}", "");
+        let colstr = if let Some(cols) = &props.cols {
+            format!("{:?}", cols).replace("{", "(").replace("}", ")")
+        } else {
+            format!("")
+        };
+
         fprint!(
             file,
-            "    popkey{}[label=\"{}-{}|ix = {}|p = {}|{}\", color=\"{}\"];\n",
+            "    popkey{}[label=\"{}-{}|ix = {}|p = {}|cols = {}, vcols = #{}|{}\", color=\"{}\"];\n",
             id,
             label,
             pop_key.printable_id(),
             props.index_in_stage,
             props.npartitions,
+            colstr,
+            props.virtcols.as_ref().map_or(0, |v| v.len()),
             extrastr,
             color
         );
@@ -332,26 +341,36 @@ impl Bitset<QunCol> {
 
 impl Bitset<ExprKey> {
     fn printable(&self, qgm: &QGM, do_escape: bool) -> String {
-        printable_preds(&self.elements(), qgm, do_escape)
+        printable_preds(&self.elements(), qgm, do_escape, true)
     }
 }
 
-pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool) -> String {
-    let mut predstring = String::from("{");
+pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool, do_column_split: bool) -> String {
+    let mut predstring = String::from("");
+
+    if do_column_split {
+        predstring.push_str("{");
+    }
     for (ix, &pred_key) in preds.iter().enumerate() {
         let predstr = pred_key.printable(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
         if ix < preds.len() - 1 {
-            predstring.push_str("|")
+            if do_column_split {
+                predstring.push_str("|")
+            } else {
+                predstring.push_str(",")
+            }
         }
     }
-    predstring.push_str("}");
+    if do_column_split {
+        predstring.push_str("}");
+    }
     predstring
 }
 
 pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> String {
     let mut predstring = String::from("");
-    for (ix, VirtCol { expr_key }) in preds.iter().enumerate() {
+    for (ix, expr_key) in preds.iter().enumerate() {
         let predstr = expr_key.printable(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
         if ix < preds.len() - 1 {

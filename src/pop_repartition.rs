@@ -5,7 +5,6 @@ use crate::{includes::*, pcode::PCode, task::Task};
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Repartition {
-    pub output_map: Option<Vec<RegisterId>>,
     pub repart_key: Vec<PCode>,
 }
 

@@ -28,7 +28,7 @@ impl POPKey {
             debug!("Before preds: {:?}", &chunk);
 
             if chunk.len() > 0 {
-                // Run predicates and vcols, if any
+                // Run predicates and virtcols, if any
                 chunk = Self::eval_predicates(props, chunk);
                 debug!("After preds: {:?}", &chunk);
 

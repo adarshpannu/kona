@@ -116,6 +116,7 @@ pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePa
     let mut splits: Vec<TextFilePartition> = Vec::new();
     let mut line = String::new();
 
+    debug!("Compute partitions for file {}", pathname);
     while end < sz {
         end = begin + blk_size;
         if end > sz {
@@ -127,7 +128,7 @@ pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePa
             end += line.len() as u64;
         }
         splits.push(TextFilePartition(begin, end));
-        debug!("File {}, partition-{} offsets = [{}, {})", pathname, splits.len(), begin, end);
+        debug!("   partition-{} offsets = [{}, {})", splits.len(), begin, end);
         begin = end;
     }
     Ok(splits)

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    graph::{Graph, POPKey},
+    graph::{Graph, ExprKey, POPKey},
     includes::*,
     pcode::PCode,
     pop_aggregation::Aggregation,
@@ -27,48 +27,51 @@ impl std::default::Default for POPContext {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub struct ColumnPosition {
-    pub column_position: usize,
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+pub enum Projection {
+    QunCol(QunCol),
+    VirtCol(ExprKey)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ColumnPositionTable {
-    pub hashmap: HashMap<QunCol, ColumnPosition>,
+pub struct ProjectionMap {
+    pub hashmap: HashMap<Projection, ColId>,
 }
 
-impl std::default::Default for ColumnPositionTable {
+impl std::default::Default for ProjectionMap {
     fn default() -> Self {
-        ColumnPositionTable::new()
+        ProjectionMap::new()
     }
 }
 
-impl ColumnPositionTable {
-    pub fn new() -> ColumnPositionTable {
-        ColumnPositionTable { hashmap: HashMap::new() }
+impl ProjectionMap {
+    pub fn new() -> ProjectionMap {
+        ProjectionMap { hashmap: HashMap::new() }
     }
 
-    pub fn set(&mut self, quncol: QunCol, cp: ColumnPosition) {
-        self.hashmap.insert(quncol, cp);
+    pub fn set(&mut self, prj: Projection, colid: ColId) {
+        self.hashmap.insert(prj, colid);
     }
 
-    pub fn get(&self, quncol: QunCol) -> ColumnPosition {
-        *self.hashmap.get(&quncol).unwrap()
+    pub fn get(&self, prj: Projection) -> Option<ColId> {
+        self.hashmap.get(&prj).cloned()
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
     pub predicates: Option<Vec<PCode>>,
+    pub cols: Option<Vec<ColId>>,
     pub virtcols: Option<Vec<PCode>>,
     pub npartitions: usize,
     pub index_in_stage: usize,
 }
 
 impl POPProps {
-    pub fn new(predicates: Option<Vec<PCode>>, virtcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
+    pub fn new(predicates: Option<Vec<PCode>>, cols: Option<Vec<ColId>>, virtcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
         POPProps {
             predicates,
+            cols,
             virtcols,
             npartitions,
             index_in_stage: 0,
