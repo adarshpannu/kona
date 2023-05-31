@@ -8,16 +8,16 @@ digraph example1 {
     lopkeyLOPKey4v1 -> lopkeyLOPKey6v1;
     lopkeyLOPKey1v1 -> lopkeyLOPKey4v1;
     lopkeyLOPKey1v1[label="TableScan-1v1|[1]|{R0 (1.0) R2 (1.2) R1 (1.1) |R1 + 1|R1 * 30}|{R0 = 10|R4 = 20}|p = 3 (RAW)|(input = R0 (1.0) R2 (1.2) R1 (1.1) R4 (1.4) )"];
-    lopkeyLOPKey4v1[label="Repartition-4v1|[1]|{R0 (1.0) R2 (1.2) R1 (1.1) |R1 + 1|R1 * 30}|{}|p = 4 (R1 + 1, R1 * 30)|c = 3"];
+    lopkeyLOPKey4v1[label="Repartition-4v1|[1]|{R0 (1.0) R2 (1.2) R1 (1.1) |R1 + 1|R1 * 30}|{}|p = 3 (R1 + 1, R1 * 30)|c = 5"];
     lopkeyLOPKey5v1 -> lopkeyLOPKey6v1;
     lopkeyLOPKey2v1 -> lopkeyLOPKey5v1;
     lopkeyLOPKey2v1[label="TableScan-2v1|[2]|{S3 (2.3) S2 (2.2) S1 (2.1) |S2 + 2|S2 * 20}|{}|p = 3 (RAW)|(input = S3 (2.3) S2 (2.2) S1 (2.1) )"];
-    lopkeyLOPKey5v1[label="Repartition-5v1|[2]|{S3 (2.3) S2 (2.2) S1 (2.1) |S2 + 2|S2 * 20}|{}|p = 4 (S2 + 2, S2 * 20)|c = 3"];
-    lopkeyLOPKey6v1[label="HashJoin-6v1|[1, 2]|{R0 (1.0) R2 (1.2) S3 (2.3) S2 (2.2) |R2 + S2}|{R1 + 1 = S2 + 2|R1 * 30 = S2 * 20|R1 + S1 = 100}|p = 4 (R1 + 1, R1 * 30)|{R1 + 1 = S2 + 2|R1 * 30 = S2 * 20}"];
-    lopkeyLOPKey7v1[label="Repartition-7v1|[1, 2]|{R0 (1.0) R2 (1.2) S3 (2.3) S2 (2.2) |R2 + S2}|{}|p = 4 (R2 + S2)|c = 4"];
+    lopkeyLOPKey5v1[label="Repartition-5v1|[2]|{S3 (2.3) S2 (2.2) S1 (2.1) |S2 + 2|S2 * 20}|{}|p = 3 (S2 + 2, S2 * 20)|c = 5"];
+    lopkeyLOPKey6v1[label="HashJoin-6v1|[1, 2]|{R0 (1.0) R2 (1.2) S3 (2.3) S2 (2.2) |R2 + S2}|{R1 + S1 = 100}|p = 5 (R1 + 1, R1 * 30)|R1 + 1,R1 * 30 = S2 + 2,S2 * 20"];
+    lopkeyLOPKey7v1[label="Repartition-7v1|[1, 2]|{R0 (1.0) R2 (1.2) S3 (2.3) S2 (2.2) |R2 + S2}|{}|p = 5 (R2 + S2)|c = 5"];
     lopkeyLOPKey8v1 -> lopkeyLOPKey9v1;
     lopkeyLOPKey3v1 -> lopkeyLOPKey8v1;
     lopkeyLOPKey3v1[label="TableScan-3v1|[3]|{T2 (3.2) T3 (3.3) |T3 + 3}|{}|p = 3 (RAW)|(input = T2 (3.2) T3 (3.3) )"];
-    lopkeyLOPKey8v1[label="Repartition-8v1|[3]|{T2 (3.2) T3 (3.3) |T3 + 3}|{}|p = 4 (T3 + 3)|c = 3"];
-    lopkeyLOPKey9v1[label="HashJoin-9v1|[1, 3, 2]|{|R2 / R0|88 * R2 + T2|T3 * 77 / S3}|{R2 + S2 = T3 + 3|R2 + T2 = T3|R2 != T2}|p = 4 (R2 + S2)|{R2 + S2 = T3 + 3}"];
+    lopkeyLOPKey8v1[label="Repartition-8v1|[3]|{T2 (3.2) T3 (3.3) |T3 + 3}|{}|p = 3 (T3 + 3)|c = 5"];
+    lopkeyLOPKey9v1[label="HashJoin-9v1|[1, 3, 2]|{|R2 / R0|88 * R2 + T2|T3 * 77 / S3}|{R2 + T2 = T3|R2 != T2}|p = 5 (R2 + S2)|R2 + S2 = T3 + 3"];
 }

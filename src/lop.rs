@@ -324,13 +324,14 @@ impl QGM {
                         }
                         cols &= flowcols;
 
-                        let (new_lhs_plan_key, new_rhs_plan_key, lhs_join_keys, rhs_join_keys) =
+                        let (new_lhs_plan_key, new_rhs_plan_key, lhs_join_keys, rhs_join_keys, cpartitions) =
                             self.repartition_join_legs(env, lop_graph, lhs_plan_key, rhs_plan_key, &equi_join_preds, &eqclass);
 
                         // Join partitioning is identical to partitioning of the LHS.
                         let lhs_props = &lop_graph.get(new_lhs_plan_key).properties;
-                        let partdesc = lhs_props.partdesc.clone();
-
+                        let mut partdesc = lhs_props.partdesc.clone();
+                        partdesc.npartitions = cpartitions;
+                        
                         let props = LOPProps::new(quns, cols, preds, partdesc, None);
 
                         let join_lop_key = lop_graph.add_node_with_props(

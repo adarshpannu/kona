@@ -26,7 +26,7 @@ impl QGMMetadata {
 
     pub fn get_colname(&self, quncol: QunCol) -> String {
         if let Some(tabledesc) = self.tabledescmap.get(&quncol.0) {
-            tabledesc.columns()[quncol.1].name.clone()
+            tabledesc.fields()[quncol.1].name.clone()
         } else {
             format!("${:?}", quncol.1)
         }

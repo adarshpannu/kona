@@ -6,7 +6,7 @@ pub use arrow2::{
     array::{Array, BooleanArray, PrimitiveArray},
     chunk::Chunk,
     compute::{arithmetics, boolean, comparison},
-    datatypes::{DataType, Field},
+    datatypes::{DataType, Field, Schema},
 };
 pub use log::{debug, error, info, warn};
 pub use serde::{Deserialize, Serialize};

@@ -42,12 +42,12 @@ impl QGM {
     pub fn repartition_join_legs(
         self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey,
         equi_join_preds: &Vec<(ExprKey, PredicateAlignment)>, eqclass: &ExprEqClass,
-    ) -> (LOPKey, LOPKey, Vec<ExprKey>, Vec<ExprKey>) {
+    ) -> (LOPKey, LOPKey, Vec<ExprKey>, Vec<ExprKey>, usize) {
         let lhs_props = &lop_graph.get(lhs_plan_key).properties;
         let rhs_props = &lop_graph.get(rhs_plan_key).properties;
 
         // Repartition join legs as needed
-        let (lhs_partdesc, rhs_partdesc, lhs_join_keys, rhs_join_keys, _) =
+        let (lhs_partdesc, rhs_partdesc, lhs_join_keys, rhs_join_keys, cpartitions) =
             Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, equi_join_preds, eqclass);
 
         let lhs_repart_props = lhs_partdesc.map(|partdesc| {
@@ -72,21 +72,21 @@ impl QGM {
         });
 
         //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
-        let (lhs_partitions, rhs_partitions) = (lhs_props.partdesc.npartitions, rhs_props.partdesc.npartitions);
+        //let (lhs_partitions, rhs_partitions) = (lhs_props.partdesc.npartitions, rhs_props.partdesc.npartitions);
 
         let new_lhs_plan_key = if let Some(lhs_repart_props) = lhs_repart_props {
             // Repartition LHS
-            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: lhs_partitions }, lhs_repart_props, Some(vec![lhs_plan_key]))
+            lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, lhs_repart_props, Some(vec![lhs_plan_key]))
         } else {
             lhs_plan_key
         };
         let new_rhs_plan_key = if let Some(rhs_repart_props) = rhs_repart_props {
             // Repartition RHS
-            lop_graph.add_node_with_props(LOP::Repartition { cpartitions: rhs_partitions }, rhs_repart_props, Some(vec![rhs_plan_key]))
+            lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, rhs_repart_props, Some(vec![rhs_plan_key]))
         } else {
             rhs_plan_key
         };
-        (new_lhs_plan_key, new_rhs_plan_key, lhs_join_keys, rhs_join_keys)
+        (new_lhs_plan_key, new_rhs_plan_key, lhs_join_keys, rhs_join_keys, cpartitions)
     }
 
     pub(crate) fn partdesc_to_virtcols(expr_graph: &ExprGraph, partdesc: &PartDesc) -> Option<Vec<VirtCol>> {
@@ -146,14 +146,12 @@ impl QGM {
         // Compute expected partitioning keys
         let (lhs_join_keys, rhs_join_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
 
-        let npartitions = env.settings.parallel_degree.unwrap_or(1);
-
         // TODO: need to ensure #partitions are matched up correctly esp. in light of situations wherein one leg is correctly partitioned while the other isn't
         let lhs_partdesc = if Self::compare_part_keys(expr_graph, &lhs_join_keys, lhs_actual_keys, eqclass) {
             None
         } else {
             Some(PartDesc {
-                npartitions,
+                npartitions: lhs_props.partdesc.npartitions,
                 part_type: PartType::HASHEXPR(lhs_join_keys.clone()),
             })
         };
@@ -162,10 +160,13 @@ impl QGM {
             None
         } else {
             Some(PartDesc {
-                npartitions,
+                npartitions: rhs_props.partdesc.npartitions,
                 part_type: PartType::HASHEXPR(rhs_join_keys.clone()),
             })
         };
+
+        let npartitions = env.settings.parallel_degree.unwrap_or(1);
+
         (lhs_partdesc, rhs_partdesc, lhs_join_keys, rhs_join_keys, npartitions)
     }
 

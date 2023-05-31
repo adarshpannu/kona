@@ -115,7 +115,7 @@ impl POP {
             TableType::CSV => {
                 let inner = CSV::new(
                     tbldesc.pathname().clone(),
-                    tbldesc.columns().clone(),
+                    tbldesc.fields().clone(),
                     tbldesc.header(),
                     tbldesc.separator(),
                     lopprops.partdesc.npartitions,
@@ -126,7 +126,7 @@ impl POP {
             TableType::CSVDIR => {
                 let inner = CSVDir::new(
                     tbldesc.pathname().clone(),
-                    tbldesc.columns().clone(),
+                    tbldesc.fields().clone(),
                     tbldesc.header(),
                     tbldesc.separator(),
                     lopprops.partdesc.npartitions,

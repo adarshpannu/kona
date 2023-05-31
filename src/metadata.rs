@@ -57,7 +57,7 @@ pub struct TableStats {
 pub trait TableDesc {
     fn get_type(&self) -> TableType;
     fn pathname(&self) -> &String;
-    fn columns(&self) -> &Vec<Field>;
+    fn fields(&self) -> &Vec<Field>;
     fn header(&self) -> bool;
     fn separator(&self) -> char;
     fn describe(&self) -> String {
@@ -122,7 +122,7 @@ impl TableDesc for CSVDesc {
         self.tp
     }
 
-    fn columns(&self) -> &Vec<Field> {
+    fn fields(&self) -> &Vec<Field> {
         &self.columns
     }
 
@@ -338,8 +338,8 @@ impl Metadata {
         info!("  SEPARATOR = '{}'", tbldesc.separator());
         info!("  PARTITIONS = {:?}", tbldesc.get_part_desc());
         info!("  STATS = {:?}", tbldesc.get_stats());
-        info!("  {} COLUMNS", tbldesc.columns().len());
-        for cd in tbldesc.columns() {
+        info!("  {} COLUMNS", tbldesc.fields().len());
+        for cd in tbldesc.fields() {
             info!("      {} {:?}", cd.name, cd.data_type);
         }
         Ok(())
