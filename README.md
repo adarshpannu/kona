@@ -1,2 +1,2 @@
-# flare
-Tinkering with Rust.
+# yarde
+yet another relational data engine: a passion project using Rust

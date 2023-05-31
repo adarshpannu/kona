@@ -1,4 +1,4 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", 
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yarde/data/emp.csv", 
                     "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE emp;

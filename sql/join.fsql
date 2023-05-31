@@ -1,5 +1,5 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/emp.csv", PARTITIONS = 3);
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/flare/data/dept.csv", PARTITIONS = 3);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yarde/data/emp.csv", PARTITIONS = 3);
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yarde/data/dept.csv", PARTITIONS = 3);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;

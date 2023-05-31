@@ -1,6 +1,6 @@
 -- data/empdir/partition-0, data/empdir/partition-1 and data/empdir/partition-2 must exist
 -- Each partition consists of all files in each of the aforementioned subdirs
-CATALOG TABLE emp ( "TYPE" = "CSVDIR", "PATH" = "/Users/adarshrp/Projects/flare/data/empdir/partition", PARTITIONS = 3, HEADER = "NO",
+CATALOG TABLE emp ( "TYPE" = "CSVDIR", "PATH" = "/Users/adarshrp/Projects/yarde/data/empdir/partition", PARTITIONS = 3, HEADER = "NO",
                     COLUMNS = "name=STRING,age=INT,emp_dept_id=INT");
 
 DESCRIBE TABLE emp;

@@ -116,16 +116,16 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 ********************************** main ****************************************************************
 */
 fn main() -> Result<(), String> {
-    //std::env::set_var("RUST_LOG", "flare::pcode=info");
+    //std::env::set_var("RUST_LOG", "yarde::pcode=info");
 
-    //std::env::set_var("RUST_LOG", "flare=info,flare::pop=debug,flare::flow=debug");
+    //std::env::set_var("RUST_LOG", "yarde=info,yarde::pop=debug,yarde::flow=debug");
     std::env::set_var("RUST_LOG", "debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/flare/sql/repartition.fsql".to_string();
-    let output_dir = "/Users/adarshrp/Projects/flare/tmp".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/yarde/sql/repartition.fsql".to_string();
+    let output_dir = "/Users/adarshrp/Projects/yarde/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
     let jobres = run_job(&mut env);
@@ -151,8 +151,8 @@ fn run_unit_tests() -> Result<(), String> {
     let diffcmd = "diff";
 
     for test in vec!["rst", "repartition", "groupby", "spja"] {
-        let input_pathname = f!("/Users/adarshrp/Projects/flare/sql/{test}.fsql");
-        let output_dir = f!("/Users/adarshrp/Projects/flare/tests/output/{test}/");
+        let input_pathname = f!("/Users/adarshrp/Projects/yarde/sql/{test}.fsql");
+        let output_dir = f!("/Users/adarshrp/Projects/yarde/tests/output/{test}/");
 
         println!("---------- Running subtest {}", input_pathname);
         std::fs::remove_dir_all(&output_dir).map_err(stringify)?;
@@ -169,7 +169,7 @@ fn run_unit_tests() -> Result<(), String> {
             error!("{}", errstr);
         }
         // Compare with gold output
-        let gold_dir = f!("/Users/adarshrp/Projects/flare/tests/gold/{test}/");
+        let gold_dir = f!("/Users/adarshrp/Projects/yarde/tests/gold/{test}/");
 
         let output = Command::new(diffcmd).arg(gold_dir).arg(output_dir).output().expect("failed to execute process");
 
@@ -224,7 +224,7 @@ fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn
 
 #[test]
 fn test_arrow2_csv_reader() -> A2Result<()> {
-    let file_path = "/Users/adarshrp/Projects/flare/data/emp.csv";
+    let file_path = "/Users/adarshrp/Projects/yarde/data/emp.csv";
 
     let projection: Vec<usize> = vec![2, 0];
 

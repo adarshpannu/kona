@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'flare'",
+            "name": "Debug executable 'yarde'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=flare",
-                    "--package=flare"
+                    "--bin=yarde",
+                    "--package=yarde"
                 ],
                 "filter": {
-                    "name": "flare",
+                    "name": "yarde",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'flare'",
+            "name": "Debug unit tests in executable 'yarde'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=flare",
-                    "--package=flare"
+                    "--bin=yarde",
+                    "--package=yarde"
                 ],
                 "filter": {
-                    "name": "flare",
+                    "name": "yarde",
                     "kind": "bin"
                 }
             },
@@ -44,8 +44,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "run flare",
-            "program": "${workspaceRoot}/target/debug/flare",
+            "name": "run yarde",
+            "program": "${workspaceRoot}/target/debug/yarde",
             "args": [],
             "cwd": "${workspaceRoot}",
             "sourceMap": {},
