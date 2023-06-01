@@ -15,6 +15,7 @@ use crate::{
     qgm::QGM,
     stage::StageGraph,
 };
+use std::rc::Rc;
 
 impl POP {
     pub fn compile(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
@@ -58,12 +59,19 @@ impl POP {
             }
         }
 
+        // Get schema to write+read repartitioning files to disk (arrow2)
+        let schema = if matches!(lop, LOP::Repartition { .. }) {
+            Some(Rc::new(lop_key.get_schema(qgm, lop_graph)))
+        } else {
+            None
+        };
+
         debug!("Begin compiling POP for lopkey = {:?}", lop_key);
 
         let pop_key: POPKey = match lop {
             LOP::TableScan { .. } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph)?,
             LOP::HashJoin { .. } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children)?,
-            LOP::Repartition { .. } => Self::compile_repartition(qgm, lop_graph, lop_key, pop_graph, pop_children)?,
+            LOP::Repartition { .. } => Self::compile_repartition_write(qgm, lop_graph, lop_key, pop_graph, pop_children, schema.clone().unwrap())?,
             LOP::Aggregation { .. } => Self::compile_aggregation(lop_graph, lop_key, pop_graph, pop_children)?,
         };
 
@@ -80,7 +88,7 @@ impl POP {
 
         // Add RepartionRead
         if matches!(lop, LOP::Repartition { .. }) {
-            let pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, pop_graph, vec![pop_key])?;
+            let pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, pop_graph, vec![pop_key], schema.unwrap())?;
 
             let new_pop_count: usize = stage_graph.increment_pop(stage_id);
             let mut props = &mut pop_graph.get_mut(pop_key).properties;
@@ -226,8 +234,8 @@ impl POP {
         }
     }
 
-    pub fn compile_repartition(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>,
+    pub fn compile_repartition_write(
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
     ) -> Result<POPKey, String> {
         // Repartition split into Repartition + CSVDirScan
         let (_, lopprops, children) = lop_graph.get3(lop_key);
@@ -254,13 +262,15 @@ impl POP {
         };
         debug!("Compile pkey end");
 
-        let pop_inner = pop_repartition::Repartition { repart_key };
-        let pop_key = pop_graph.add_node_with_props(POP::Repartition(pop_inner), props, Some(pop_children));
+        let pop_inner = pop_repartition::RepartitionWrite::new(repart_key, schema);
+        let pop_key = pop_graph.add_node_with_props(POP::RepartitionWrite(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)
     }
 
-    pub fn compile_repartition_read(lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>) -> Result<POPKey, String> {
+    pub fn compile_repartition_read(
+        lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
+    ) -> Result<POPKey, String> {
         let lopprops = &lop_graph.get(lop_key).properties;
 
         // No predicates
@@ -275,7 +285,7 @@ impl POP {
 
         let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-        let pop_inner = pop_repartition::RepartitionRead {};
+        let pop_inner = pop_repartition::RepartitionRead::new(schema);
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)

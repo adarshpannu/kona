@@ -164,7 +164,7 @@ impl Metadata {
         Metadata { tables: HashMap::new() }
     }
 
-    pub fn parse_columns(hm: &HashMap<String, Datum>) -> Result<Vec<Field>, String> {
+    pub fn parse_fields(hm: &HashMap<String, Datum>) -> Result<Vec<Field>, String> {
         // Parse: COLUMNS = "name=STRING,age=INT,emp_dept_id=INT"
 
         let colstr = hm.get("COLUMNS");
@@ -310,7 +310,7 @@ impl Metadata {
                 let table_stats = Self::get_table_stats(&hm)?;
 
                 let columns = if hm.get("COLUMNS").is_some() {
-                    Self::parse_columns(&hm)?
+                    Self::parse_fields(&hm)?
                 } else if matches!(tp, TableType::CSV) {
                     CSVDesc::infer_metadata(&path, separator, header)?
                 } else {

@@ -2,14 +2,14 @@
 
 use std::fmt;
 
-use regex::Regex;
-use Expr::*;
-
 use crate::{
     datum::Datum,
     graph::{ExprKey, Graph, QueryBlockKey},
     includes::*,
 };
+use getset::{Getters, Setters};
+use regex::Regex;
+use Expr::*;
 
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 
@@ -94,14 +94,15 @@ pub enum AggType {
 }
 
 /***************************************************************************************************/
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Getters, Setters)]
 pub struct ExprProp {
-    pub datatype: DataType,
+    #[getset(get = "pub", set = "pub")]
+    data_type: DataType,
 }
 
 impl std::default::Default for ExprProp {
     fn default() -> Self {
-        ExprProp { datatype: DataType::Null }
+        ExprProp { data_type: DataType::Null }
     }
 }
 
@@ -234,6 +235,12 @@ impl ExprKey {
             }
         }
         state.finish()
+    }
+
+    pub fn to_field(self, expr_graph: &ExprGraph) -> Field {
+        let props = expr_graph.get_properties(self);
+        let name = format!("{:?}", self);
+        Field::new(name, props.data_type().clone(), false)
     }
 
     pub fn get_boolean_factors(self, expr_graph: &ExprGraph, boolean_factors: &mut Vec<ExprKey>) {

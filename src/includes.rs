@@ -7,7 +7,9 @@ pub use arrow2::{
     chunk::Chunk,
     compute::{arithmetics, boolean, comparison},
     datatypes::{DataType, Field, Schema},
+    error::Result as A2Result,
 };
+
 pub use log::{debug, error, info, warn};
 pub use serde::{Deserialize, Serialize};
 pub use std::mem::replace;

@@ -2,9 +2,9 @@
 
 //#![allow(unused_variables)]
 
-use std::fs;
-
 use crate::{includes::*, qgm::ParserState};
+use getset::{CopyGetters, Getters, MutGetters, Setters};
+use std::fs;
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -111,11 +111,34 @@ fn run_job(env: &mut Env) -> Result<(), String> {
     }
     Ok(())
 }
+#[derive(Getters, Setters, MutGetters, CopyGetters, Default, Debug)]
+pub struct Foo<T>
+where
+    T: Copy + Clone + Default,
+{
+    /// Doc comments are supported!
+    /// Multiline, even.
+    #[getset(get, set, get_mut)]
+    private: T,
 
+    /// Doc comments are supported!
+    /// Multiline, even.
+    #[getset(get_copy = "pub", set = "pub", get_mut = "pub")]
+    public: T,
+}
 /*
 ********************************** main ****************************************************************
 */
 fn main() -> Result<(), String> {
+    let mut foo = Foo::default();
+    foo.set_private(1);
+    (*foo.private_mut()) += 1;
+    assert_eq!(*foo.private(), 2);
+
+    let _fp = foo.public();
+
+    dbg!(&foo);
+
     //std::env::set_var("RUST_LOG", "yarde::pcode=info");
 
     //std::env::set_var("RUST_LOG", "yarde=info,yarde::pop=debug,yarde::flow=debug");
@@ -124,7 +147,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/yarde/sql/repartition.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/yarde/sql/join.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/yarde/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 

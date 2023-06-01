@@ -9,7 +9,7 @@ use crate::{
     pop_aggregation::Aggregation,
     pop_csv::{CSVDir, CSVDirIter, CSVPartitionIter, CSV},
     pop_hashjoin::HashJoin,
-    pop_repartition::{Repartition, RepartitionRead},
+    pop_repartition::{RepartitionWrite, RepartitionRead, RepartitionWriteContext},
 };
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
@@ -19,6 +19,7 @@ pub enum POPContext {
     UninitializedContext,
     CSVContext { iter: CSVPartitionIter },
     CSVDirContext { iter: CSVDirIter },
+    RepartitionWriteContext(RepartitionWriteContext)
 }
 
 impl std::default::Default for POPContext {
@@ -85,13 +86,13 @@ pub enum POP {
     CSV(CSV),
     CSVDir(CSVDir),
     HashJoin(HashJoin),
-    Repartition(Repartition),
+    RepartitionWrite(RepartitionWrite),
     RepartitionRead(RepartitionRead),
     Aggregation(Aggregation),
 }
 
 impl POP {
     pub fn is_stage_root(&self) -> bool {
-        matches!(self, POP::Repartition { .. })
+        matches!(self, POP::RepartitionWrite { .. })
     }
 }

@@ -295,17 +295,17 @@ impl QueryBlock {
         if let Some(children) = children {
             for child_key in children {
                 self.resolve_expr(env, expr_graph, metadata, child_key, children_agg_fns_allowed)?;
-                let datatype = expr_graph.get(child_key).properties.datatype.clone();
+                let datatype = expr_graph.get(child_key).properties.data_type().clone();
                 children_datatypes.push(datatype);
             }
         }
 
-        let mut node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
+        let node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
         let expr = &mut node.value;
         //info!("Check: {:?}", expr);
 
         let datatype = match expr {
-            CID(_, _) => node.properties.datatype.clone(),
+            CID(_, _) => node.properties.data_type().clone(),
             RelExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
@@ -365,7 +365,7 @@ impl QueryBlock {
                 todo!();
             }
         };
-        node.properties.datatype = datatype;
+        node.properties.set_data_type(datatype);
         Ok(())
     }
 }

@@ -1,18 +1,20 @@
 // csv
 
-use std::{
-    fmt, fs,
-    fs::File,
-    io::{self, prelude::*, BufReader, SeekFrom},
+use crate::{
+    includes::*,
+    pop::{POPContext, POPProps},
+    task::Task,
 };
-
 use arrow2::io::csv::{
     read,
     read::{ByteRecord, Reader, ReaderBuilder},
 };
 use csv::Position;
-
-use crate::{includes::*, pop::POPContext, task::Task};
+use std::{
+    fmt, fs,
+    fs::File,
+    io::{self, prelude::*, BufReader, SeekFrom},
+};
 
 pub struct CSVPartitionIter {
     fields: Vec<Field>,
@@ -243,8 +245,8 @@ impl CSV {
         }
     }
 
-    pub fn next(&self, task: &mut Task) -> Result<Chunk<Box<dyn Array>>, String> {
-        let context = &mut task.contexts[0];
+    pub fn next(&self, task: &mut Task, props: &POPProps) -> Result<Chunk<Box<dyn Array>>, String> {
+        let context = &mut task.contexts[props.index_in_stage];
 
         if let POPContext::CSVContext { ref mut iter } = context {
             return iter.next().ok_or("CSV::next() failed!".to_string());
@@ -291,7 +293,7 @@ impl CSVDir {
         }
     }
 
-    pub fn next(&self, _task: &mut Task) -> Result<ChunkBox, String> {
+    pub fn next(&self, _task: &mut Task, _props: &POPProps) -> Result<ChunkBox, String> {
         todo!()
         /*
         let partition_id = task.partition_id;

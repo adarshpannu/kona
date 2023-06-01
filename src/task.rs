@@ -5,6 +5,7 @@ use crate::{
     includes::*,
     pop::{POPContext, POP},
     pop_csv::CSVPartitionIter,
+    pop_repartition::RepartitionWriteContext,
     stage::Stage,
 };
 
@@ -66,6 +67,10 @@ impl Task {
                 POP::CSV(csv) => {
                     let iter = CSVPartitionIter::new(csv, self.partition_id).unwrap();
                     POPContext::CSVContext { iter }
+                }
+                POP::RepartitionWrite(rpw) => {
+                    let rwc = RepartitionWriteContext::new(&rpw);
+                    POPContext::RepartitionWriteContext(rwc)
                 }
                 _ => unimplemented!(),
             };

@@ -20,6 +20,27 @@ pub type LOPGraph = Graph<LOPKey, LOP, LOPProps>;
 
 /***************************************************************************************************/
 impl LOPKey {
+    pub fn get_schema(&self, qgm: &mut QGM, lop_graph: &LOPGraph) -> Schema {
+        let lopprops = &lop_graph.get(*self).properties;
+        let expr_graph = &qgm.expr_graph;
+        let mut fields = vec![];
+
+        for quncol in lopprops.cols.elements() {
+            let field = qgm.metadata.get_field(quncol);
+            if let Some(field) = field {
+                fields.push(field.clone())
+            }
+        }
+
+        if let Some(virtcols) = &lopprops.virtcols {
+            for exprkey in virtcols.iter() {
+                let field = exprkey.to_field(expr_graph);
+                fields.push(field.clone())
+            }
+        }
+        Schema::from(fields)
+    }
+
     pub fn printable_key(&self) -> String {
         format!("{:?}", *self).replace("(", "").replace(")", "")
     }
@@ -201,7 +222,6 @@ impl QGM {
 
         match (&mut props.virtcols, &mut virtcols) {
             (Some(origcols), Some(newcols)) => {
-                // origcols.append(newcols),
                 let newcols = newcols.iter().filter(|&x| !newcols.contains(x));
                 origcols.extend(newcols)
             }

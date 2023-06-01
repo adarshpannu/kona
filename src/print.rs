@@ -192,7 +192,7 @@ impl QGM {
                 let extrastr = format!("");
                 (String::from("HashJoin"), extrastr)
             }
-            POP::Repartition(_) => {
+            POP::RepartitionWrite(_) => {
                 let extrastr = format!("");
                 (String::from("Repartition"), extrastr)
             }
@@ -326,7 +326,7 @@ impl Bitset<QunCol> {
             .elements()
             .iter()
             .map(|&quncol| {
-                let colname = qgm.metadata.get_colname(quncol);
+                let colname = qgm.metadata.get_fieldname(quncol);
                 format!("{} ({}.{})", colname, quncol.0, quncol.1)
             })
             .collect::<Vec<String>>();

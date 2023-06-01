@@ -24,7 +24,11 @@ impl QGMMetadata {
         self.tabledescmap.insert(qunid, tabledesc);
     }
 
-    pub fn get_colname(&self, quncol: QunCol) -> String {
+    pub fn get_tabledesc(&self, qunid: QunId) -> Option<Rc<dyn TableDesc>> {
+        self.tabledescmap.get(&qunid).map(|td| Rc::clone(td))
+    }
+
+    pub fn get_fieldname(&self, quncol: QunCol) -> String {
         if let Some(tabledesc) = self.tabledescmap.get(&quncol.0) {
             tabledesc.fields()[quncol.1].name.clone()
         } else {
@@ -32,9 +36,10 @@ impl QGMMetadata {
         }
     }
 
-    pub fn get_tabledesc(&self, qunid: QunId) -> Option<Rc<dyn TableDesc>> {
-        self.tabledescmap.get(&qunid).map(|td| Rc::clone(td))
+    pub fn get_field(&self, quncol: QunCol) -> Option<&Field> {
+        self.tabledescmap.get(&quncol.0).map(|tabledesc| &tabledesc.fields()[quncol.1])
     }
+
 }
 
 impl fmt::Debug for QGMMetadata {
