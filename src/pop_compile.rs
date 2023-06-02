@@ -10,7 +10,7 @@ use crate::{
     pcode::PCode,
     pop::{POPGraph, POPProps, Projection, ProjectionMap, POP},
     pop_aggregation,
-    pop_csv::{CSVDir, CSV},
+    pop_csv::CSV,
     pop_hashjoin, pop_repartition,
     qgm::QGM,
     stage::StageGraph,
@@ -119,6 +119,7 @@ impl POP {
         debug!("Compile predicates for lopkey {:?}", lop_key);
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &input_proj_map);
 
+
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
                 let inner = CSV::new(
@@ -130,17 +131,6 @@ impl POP {
                     input_projection,
                 );
                 POP::CSV(inner)
-            }
-            TableType::CSVDIR => {
-                let inner = CSVDir::new(
-                    tbldesc.pathname().clone(),
-                    tbldesc.fields().clone(),
-                    tbldesc.header(),
-                    tbldesc.separator(),
-                    lopprops.partdesc.npartitions,
-                    input_projection,
-                );
-                POP::CSVDir(inner)
             }
         };
 
@@ -237,7 +227,6 @@ impl POP {
     pub fn compile_repartition_write(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
     ) -> Result<POPKey, String> {
-        // Repartition split into Repartition + CSVDirScan
         let (_, lopprops, children) = lop_graph.get3(lop_key);
 
         // We shouldn't have any predicates

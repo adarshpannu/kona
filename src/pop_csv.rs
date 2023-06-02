@@ -12,8 +12,7 @@ use arrow2::io::csv::{
 use csv::Position;
 use std::{
     fmt, fs,
-    fs::File,
-    io::{self, prelude::*, BufReader, SeekFrom},
+    io::{prelude::*, BufReader, SeekFrom},
 };
 
 pub struct CSVContext {
@@ -25,16 +24,8 @@ impl CSVContext {
         Box::new(CSVContext { iter })
     }
 }
-pub struct CSVDirContext {
-    iter: CSVDirIter,
-}
 
 impl POPContext for CSVContext {
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-impl POPContext for CSVDirContext {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -181,70 +172,6 @@ fn test() {
 */
 
 /***************************************************************************************************/
-
-pub struct CSVDirIter {
-    pathnames: Vec<std::path::PathBuf>,
-    cur_file_offset: usize,
-    cur_read: u64,
-    reader: Option<io::BufReader<File>>,
-}
-
-impl CSVDirIter {
-    pub fn new(dirname: &String) -> Result<CSVDirIter, String> {
-        let pathnames = fs::read_dir(dirname).map_err(|err| stringify1(err, dirname))?;
-        let mut pathnames: Vec<_> = pathnames.map(|res| res.map(|e| e.path())).collect::<Result<Vec<_>, io::Error>>().unwrap();
-
-        pathnames.sort();
-
-        Ok(CSVDirIter {
-            pathnames,
-            cur_file_offset: 0,
-            cur_read: 0,
-            reader: None,
-        })
-    }
-}
-
-impl Iterator for CSVDirIter {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.reader.is_none() {
-                if self.cur_file_offset >= self.pathnames.len() {
-                    // Exhausted all files
-                    return None;
-                } else {
-                    // Open first/next file
-                    let pathname = &self.pathnames[self.cur_file_offset];
-                    let file = File::open(pathname).unwrap();
-                    let mut reader = BufReader::new(file);
-                    reader.seek(SeekFrom::Start(0)).unwrap();
-                    self.reader = Some(reader);
-                }
-            }
-            if let Some(reader) = self.reader.as_mut() {
-                let mut line = String::new();
-                reader.read_line(&mut line).unwrap();
-                if line.len() > 0 {
-                    // Return line read
-                    self.cur_read += line.len() as u64;
-                    //debug!("Read line: {}", line);
-                    return Some(line);
-                } else {
-                    // Exhausted all lines. Read next file, if any.
-                    self.reader = None;
-                    self.cur_file_offset += 1;
-                    continue;
-                }
-            } else {
-                return None;
-            }
-        }
-    }
-}
-
-/***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
 pub struct CSV {
     pub pathname: String,
@@ -282,79 +209,5 @@ impl fmt::Debug for CSV {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let pathname = self.pathname.split("/").last().unwrap();
         fmt.debug_struct("").field("file", &pathname).finish()
-    }
-}
-
-/***************************************************************************************************/
-
-#[derive(Serialize, Deserialize)]
-pub struct CSVDir {
-    pub dirname_prefix: String, // E.g.: $TEMPDIR/flow-99/stage  i.e. everything except the "-{partition#}"
-    pub fields: Vec<Field>,
-    pub header: bool,
-    pub separator: char,
-    pub npartitions: usize,
-    pub projection: Vec<ColId>,
-}
-
-impl fmt::Debug for CSVDir {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let dirname = self.dirname_prefix.split("/").last().unwrap();
-        fmt.debug_struct("").field("dir", &dirname).finish()
-    }
-}
-
-impl CSVDir {
-    pub fn new(dirname_prefix: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, projection: Vec<ColId>) -> Self {
-        CSVDir {
-            dirname_prefix,
-            fields,
-            header,
-            separator,
-            npartitions,
-            projection,
-        }
-    }
-
-    pub fn next(&self, _task: &mut Task, _props: &POPProps) -> Result<ChunkBox, String> {
-        todo!()
-        /*
-        let partition_id = task.partition_id;
-        let runtime = task.contexts.entry(pop_key).or_insert_with(|| {
-            let full_dirname = format!("{}-{}", self.dirname_prefix, partition_id);
-            let iter = CSVDirIter::new(&full_dirname).unwrap();
-            NodeRuntime::CSVDir { iter }
-        });
-
-        if let NodeRuntime::CSVDir { iter } = runtime {
-            if let Some(line) = iter.next() {
-                // debug!("line = :{}:", &line.trim_end());
-                line.trim_end()
-                    .split(self.separator)
-                    .enumerate()
-                    .filter(|(ix, col)| self.projection.get(ix).is_some())
-                    .for_each(|(ix, col)| {
-                        let ttuple_ix = *self.projection.get(&ix).unwrap();
-                        let datum = match self.coltypes[ix] {
-                            DataType::Int64 => {
-                                let ival = col.parse::<isize>();
-                                if ival.is_err() {
-                                    panic!("{} is not an INT", &col);
-                                } else {
-                                    Datum::INT(ival.unwrap())
-                                }
-                            }
-                            DataType::Utf8 => Datum::STR(Rc::new(col.to_owned())),
-                            _ => todo!(),
-                        };
-                        task.task_row.set_column(ttuple_ix, &datum);
-                    });
-                return Ok(true);
-            } else {
-                return Ok(false);
-            }
-        }
-        panic!("Cannot get NodeRuntime::CSV")
-        */
     }
 }

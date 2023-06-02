@@ -7,7 +7,7 @@ use crate::{
     includes::*,
     pcode::PCode,
     pop_aggregation::Aggregation,
-    pop_csv::{CSVDir, CSV},
+    pop_csv::CSV,
     pop_hashjoin::HashJoin,
     pop_repartition::{RepartitionRead, RepartitionWrite},
 };
@@ -70,7 +70,6 @@ impl POPProps {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum POP {
     CSV(CSV),
-    CSVDir(CSVDir),
     HashJoin(HashJoin),
     RepartitionWrite(RepartitionWrite),
     RepartitionRead(RepartitionRead),

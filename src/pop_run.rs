@@ -18,7 +18,6 @@ impl POPKey {
         loop {
             let mut chunk = match pop {
                 POP::CSV(inner_node) => inner_node.next(task, props)?,
-                POP::CSVDir(inner_node) => inner_node.next(task, props)?,
                 POP::RepartitionWrite(inner_node) => inner_node.next(task, props)?,
                 POP::RepartitionRead(inner_node) => inner_node.next(task, props)?,
                 POP::HashJoin(inner_node) => inner_node.next(task, props)?,

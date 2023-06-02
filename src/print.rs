@@ -181,13 +181,6 @@ impl QGM {
                     .replace("}", ")");
                 (String::from("CSV"), extrastr)
             }
-            POP::CSVDir(csvdir) => {
-                let dirname = csvdir.dirname_prefix.split("/").last().unwrap_or(&csvdir.dirname_prefix);
-                let mut projection = csvdir.projection.clone();
-                projection.sort_by(|a, b| a.cmp(b));
-                let extrastr = format!("file: {}, map: {:?}", dirname, projection).replace("{", "(").replace("}", ")");
-                (String::from("CSVDir"), extrastr)
-            }
             POP::HashJoin { .. } => {
                 let extrastr = format!("");
                 (String::from("HashJoin"), extrastr)

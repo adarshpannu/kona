@@ -9,7 +9,6 @@ use crate::{datum::Datum, expr::ExprGraph, graph::ExprKey, includes::*};
 #[derive(Debug, Clone, Copy)]
 pub enum TableType {
     CSV,
-    CSVDIR,
 }
 
 #[derive(Debug, Clone)]
@@ -164,7 +163,7 @@ impl Metadata {
         Metadata { tables: HashMap::new() }
     }
 
-    pub fn parse_fields(hm: &HashMap<String, Datum>) -> Result<Vec<Field>, String> {
+    pub fn parse_columns(hm: &HashMap<String, Datum>) -> Result<Vec<Field>, String> {
         // Parse: COLUMNS = "name=STRING,age=INT,emp_dept_id=INT"
 
         let colstr = hm.get("COLUMNS");
@@ -173,7 +172,6 @@ impl Metadata {
                 let fieldstr = &**fieldstr;
                 fieldstr
             }
-            None => return Err(f!("CSVDIRs need a COLUMNS specification")),
             _ => return Err(f!("Invalid value for option COLUMNS: '{colstr:?}'")),
         };
 
@@ -204,7 +202,6 @@ impl Metadata {
 
         let tp = match &tp[..] {
             "CSV" => TableType::CSV,
-            "CSVDIR" => TableType::CSVDIR,
             _ => return Err(f!("Table {name} has invalid TYPE.")),
         };
         Ok(tp)
@@ -267,7 +264,6 @@ impl Metadata {
     }
 
     fn get_part_desc(hm: &HashMap<String, Datum>) -> Result<PartDesc, String> {
-        // CSVDIRs cannot specify PARTITIONS. Only CSVs can.
         let npartitions = match hm.get("PARTITIONS") {
             Some(Datum::INT(npartitions)) => {
                 if *npartitions > 0 {
@@ -297,7 +293,7 @@ impl Metadata {
         let tp = Self::get_table_type(&hm, &name)?;
 
         match tp {
-            TableType::CSV | TableType::CSVDIR => {
+            TableType::CSV => {
                 // PATH, HEADER, SEPARATOR
                 let path = hm
                     .get("PATH")
@@ -310,7 +306,7 @@ impl Metadata {
                 let table_stats = Self::get_table_stats(&hm)?;
 
                 let columns = if hm.get("COLUMNS").is_some() {
-                    Self::parse_fields(&hm)?
+                    Self::parse_columns(&hm)?
                 } else if matches!(tp, TableType::CSV) {
                     CSVDesc::infer_metadata(&path, separator, header)?
                 } else {
