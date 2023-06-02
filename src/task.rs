@@ -3,9 +3,9 @@
 use crate::{
     flow::Flow,
     includes::*,
-    pop::{POPContext, POP, UninitializedContext},
-    pop_csv::{CSVContext, CSVPartitionIter},
-    pop_repartition::{RepartitionWriteContext},
+    pop::{POPContext, UninitializedContext, POP},
+    pop_csv::CSVContext,
+    pop_repartition::RepartitionWriteContext,
     stage::Stage,
 };
 
@@ -34,7 +34,7 @@ impl Task {
             stage.root_pop_key, self.partition_id, stage.npartitions_producer
         );
         */
-        self.init_contexts(flow, stage);
+        self.init_contexts(flow, stage)?;
 
         loop {
             let output_chunk = stage.root_pop_key.unwrap().next(flow, stage, self)?;
@@ -45,7 +45,7 @@ impl Task {
         Ok(())
     }
 
-    pub fn init_contexts(&mut self, flow: &Flow, stage: &Stage) {
+    pub fn init_contexts(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
         let root_pop_key = stage.root_pop_key.unwrap();
 
         for _ in 0..stage.pop_count {
@@ -65,15 +65,13 @@ impl Task {
             let ix = props.index_in_stage;
             let ctx = match &pop {
                 POP::CSV(csv) => {
-                    let iter = CSVPartitionIter::new(csv, self.partition_id).unwrap();
-                    CSVContext::new(iter)
+                    CSVContext::new(csv, self.partition_id)?
                 }
-                POP::RepartitionWrite(rpw) => {
-                    RepartitionWriteContext::new(&rpw)
-                }
+                POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(&rpw)?,
                 _ => unimplemented!(),
             };
             self.contexts[ix] = ctx;
         }
+        Ok(())
     }
 }

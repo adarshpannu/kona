@@ -147,7 +147,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/yarde/sql/simple.fsql".to_string();
+    let input_pathname = "/Users/adarshrp/Projects/yarde/sql/join.fsql".to_string();
     let output_dir = "/Users/adarshrp/Projects/yarde/tmp".to_string();
     let mut env = Env::new(1, input_pathname, output_dir);
 
@@ -255,12 +255,3 @@ fn test_arrow2_csv_reader() -> A2Result<()> {
     println!("{:?}", batch);
     Ok(())
 }
-
-/*
-use arrow2::datatypes::DataType as A2DataType;
-
-#[derive(Debug, Eq, PartialEq, PartialOrd, Serialize, Deserialize, Clone, Hash)]
-pub struct DataType0 {
-    dt: A2DataType
-}
-*/

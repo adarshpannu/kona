@@ -1,7 +1,6 @@
 // pop: Physical operators
 
 use std::collections::HashMap;
-
 use crate::{
     graph::{ExprKey, Graph, POPKey},
     includes::*,
@@ -14,21 +13,17 @@ use crate::{
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
-#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
+/***************************************************************************************************/
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Projection {
     QunCol(QunCol),
     VirtCol(ExprKey),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/***************************************************************************************************/
+#[derive(Debug)]
 pub struct ProjectionMap {
     pub hashmap: HashMap<Projection, ColId>,
-}
-
-impl std::default::Default for ProjectionMap {
-    fn default() -> Self {
-        ProjectionMap::new()
-    }
 }
 
 impl ProjectionMap {
@@ -45,6 +40,7 @@ impl ProjectionMap {
     }
 }
 
+/***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct POPProps {
     pub predicates: Option<Vec<PCode>>,
@@ -76,17 +72,12 @@ pub enum POP {
     Aggregation(Aggregation),
 }
 
-impl POP {
-    pub fn is_stage_root(&self) -> bool {
-        matches!(self, POP::RepartitionWrite { .. })
-    }
-}
-
 /***************************************************************************************************/
 pub trait POPContext {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
+/***************************************************************************************************/
 pub struct UninitializedContext {}
 impl POPContext for UninitializedContext {
     fn as_any_mut(&mut self) -> &mut dyn Any {

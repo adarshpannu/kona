@@ -6,11 +6,12 @@ use getset::Getters;
 use std::fs::File;
 use std::rc::Rc;
 
+/***************************************************************************************************/
 pub struct RepartitionWriteContext {}
 
 impl RepartitionWriteContext {
-    pub fn new(_rpw: &RepartitionWrite) -> Box<dyn POPContext> {
-        Box::new(RepartitionWriteContext {})
+    pub fn new(_rpw: &RepartitionWrite) -> Result<Box<dyn POPContext>, String> {
+        Ok(Box::new(RepartitionWriteContext {}))
     }
 }
 
