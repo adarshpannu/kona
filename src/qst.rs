@@ -92,17 +92,18 @@ impl QueryBlock {
 
     pub fn split_groupby(qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph) -> Result<(), String> {
         let inner_qb_key = qblock_graph.add_node(QueryBlock::new0(expr_graph.next_id(), QueryBlockType::Select), None);
-        let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
+        //let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
+        let outer_qb_node = qblock_graph.get_mut(qbkey);
 
-        let qblock = &mut outer_qb_node.value;
+        let outer_qb = &mut outer_qb_node.value;
 
         let agg_qun_id = expr_graph.next_id();
 
         // Replace group_by expressions with references to child qun
-        let group_by = replace(&mut qblock.group_by, None).unwrap();
+        let group_by = replace(&mut outer_qb.group_by, None).unwrap();
         let group_by_expr_count = group_by.len();
 
-        let having_clause = replace(&mut qblock.having_clause, None);
+        let having_clause = replace(&mut outer_qb.having_clause, None);
 
         // Construct inner select-list by first adding GROUP-BY clause expressions
         let mut inner_select_list = group_by
@@ -111,7 +112,7 @@ impl QueryBlock {
             .collect::<Vec<NamedExpr>>();
 
         // Augment inner select-list by extracting parameters from `agg(parameter)` expressions
-        for ne in qblock.select_list.iter_mut() {
+        for ne in outer_qb.select_list.iter_mut() {
             Self::transform_groupby_expr(env, expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut ne.expr_key)?;
         }
 
@@ -128,7 +129,6 @@ impl QueryBlock {
             None
         };
 
-        let outer_qb = qblock;
         let inner_qb = QueryBlock::new(
             expr_graph.next_id(),
             replace(&mut outer_qb.name, None),
@@ -149,13 +149,15 @@ impl QueryBlock {
             .map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
             .collect::<Vec<_>>();
 
-        inner_qb_node.value = inner_qb;
         let outer_qun = Quantifier::new_qblock(agg_qun_id, inner_qb_key, None);
         outer_qb.name = None;
         outer_qb.qbtype = QueryBlockType::GroupBy;
         outer_qb.quns = vec![outer_qun];
         outer_qb.pred_list = outer_pred_list;
         outer_qb.group_by = Some(group_by);
+
+        let inner_qb_node = qblock_graph.get_mut(inner_qb_key);
+        inner_qb_node.value = inner_qb;
 
         Ok(())
     }

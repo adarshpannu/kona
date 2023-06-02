@@ -9,9 +9,9 @@ pub use arrow2::{
     datatypes::{DataType, Field, Schema},
     error::Result as A2Result,
 };
-
 pub use log::{debug, error, info, warn};
 pub use serde::{Deserialize, Serialize};
+pub use std::any::Any;
 pub use std::mem::replace;
 
 //pub const DATADIR: &str = "/Users/adarshrp/Projects/yarde/data";

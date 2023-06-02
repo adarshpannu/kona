@@ -3,9 +3,9 @@
 use crate::{
     flow::Flow,
     includes::*,
-    pop::{POPContext, POP},
-    pop_csv::CSVPartitionIter,
-    pop_repartition::RepartitionWriteContext,
+    pop::{POPContext, POP, UninitializedContext},
+    pop_csv::{CSVContext, CSVPartitionIter},
+    pop_repartition::{RepartitionWriteContext},
     stage::Stage,
 };
 
@@ -15,7 +15,7 @@ pub struct Task {
     pub partition_id: PartitionId,
 
     #[serde(skip)]
-    pub contexts: Vec<POPContext>,
+    pub contexts: Vec<Box<dyn POPContext>>,
 }
 
 // Tasks write to flow-id / top-id / dest-part-id / source-part-id
@@ -49,7 +49,7 @@ impl Task {
         let root_pop_key = stage.root_pop_key.unwrap();
 
         for _ in 0..stage.pop_count {
-            self.contexts.push(POPContext::UninitializedContext)
+            self.contexts.push(UninitializedContext::new())
         }
 
         /*
@@ -66,11 +66,10 @@ impl Task {
             let ctx = match &pop {
                 POP::CSV(csv) => {
                     let iter = CSVPartitionIter::new(csv, self.partition_id).unwrap();
-                    POPContext::CSVContext { iter }
+                    CSVContext::new(iter)
                 }
                 POP::RepartitionWrite(rpw) => {
-                    let rwc = RepartitionWriteContext::new(&rpw);
-                    POPContext::RepartitionWriteContext(rwc)
+                    RepartitionWriteContext::new(&rpw)
                 }
                 _ => unimplemented!(),
             };

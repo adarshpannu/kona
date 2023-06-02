@@ -16,6 +16,30 @@ use std::{
     io::{self, prelude::*, BufReader, SeekFrom},
 };
 
+pub struct CSVContext {
+    iter: CSVPartitionIter,
+}
+
+impl CSVContext {
+    pub fn new(iter: CSVPartitionIter) -> Box<dyn POPContext> {
+        Box::new(CSVContext { iter })
+    }
+}
+pub struct CSVDirContext {
+    iter: CSVDirIter,
+}
+
+impl POPContext for CSVContext {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+impl POPContext for CSVDirContext {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 pub struct CSVPartitionIter {
     fields: Vec<Field>,
     projection: Vec<ColId>,
@@ -247,11 +271,10 @@ impl CSV {
 
     pub fn next(&self, task: &mut Task, props: &POPProps) -> Result<Chunk<Box<dyn Array>>, String> {
         let context = &mut task.contexts[props.index_in_stage];
+        let csv_context = context.as_any_mut().downcast_mut::<CSVContext>().expect("Wasn't a CSVContext!");
+        let iter = &mut csv_context.iter;
 
-        if let POPContext::CSVContext { ref mut iter } = context {
-            return iter.next().ok_or("CSV::next() failed!".to_string());
-        }
-        panic!("Cannot get NodeRuntime::CSV")
+        return iter.next().ok_or("CSV::next() failed!".to_string())
     }
 }
 

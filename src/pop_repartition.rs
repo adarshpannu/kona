@@ -1,10 +1,24 @@
 // pop_repartition
 
-use crate::{includes::*, pcode::PCode, pop::POPProps, task::Task};
+use crate::{includes::*, pcode::PCode, pop::POPContext, pop::POPProps, task::Task};
 use arrow2::io::ipc::write;
 use getset::Getters;
 use std::fs::File;
 use std::rc::Rc;
+
+pub struct RepartitionWriteContext {}
+
+impl RepartitionWriteContext {
+    pub fn new(_rpw: &RepartitionWrite) -> Box<dyn POPContext> {
+        Box::new(RepartitionWriteContext {})
+    }
+}
+
+impl POPContext for RepartitionWriteContext {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
 
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize, Getters)]
@@ -25,19 +39,6 @@ impl RepartitionWrite {
         debug!("RepartitionWrite:next():");
 
         todo!()
-    }
-}
-
-/***************************************************************************************************/
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RepartitionWriteContext {
-
-
-}
-
-impl RepartitionWriteContext {
-    pub fn new(_rpw: &RepartitionWrite) -> Self {
-        RepartitionWriteContext {}
     }
 }
 

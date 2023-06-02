@@ -3,35 +3,21 @@
 use std::collections::HashMap;
 
 use crate::{
-    graph::{Graph, ExprKey, POPKey},
+    graph::{ExprKey, Graph, POPKey},
     includes::*,
     pcode::PCode,
     pop_aggregation::Aggregation,
-    pop_csv::{CSVDir, CSVDirIter, CSVPartitionIter, CSV},
+    pop_csv::{CSVDir, CSV},
     pop_hashjoin::HashJoin,
-    pop_repartition::{RepartitionWrite, RepartitionRead, RepartitionWriteContext},
+    pop_repartition::{RepartitionRead, RepartitionWrite},
 };
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
-/***************************************************************************************************/
-pub enum POPContext {
-    UninitializedContext,
-    CSVContext { iter: CSVPartitionIter },
-    CSVDirContext { iter: CSVDirIter },
-    RepartitionWriteContext(RepartitionWriteContext)
-}
-
-impl std::default::Default for POPContext {
-    fn default() -> Self {
-        POPContext::UninitializedContext
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Projection {
     QunCol(QunCol),
-    VirtCol(ExprKey)
+    VirtCol(ExprKey),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,5 +80,23 @@ pub enum POP {
 impl POP {
     pub fn is_stage_root(&self) -> bool {
         matches!(self, POP::RepartitionWrite { .. })
+    }
+}
+
+/***************************************************************************************************/
+pub trait POPContext {
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+pub struct UninitializedContext {}
+impl POPContext for UninitializedContext {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl UninitializedContext {
+    pub fn new () -> Box<dyn POPContext> {
+        Box::new(UninitializedContext{})
     }
 }
