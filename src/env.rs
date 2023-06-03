@@ -1,18 +1,11 @@
 // env
 
 use crate::{datum::Datum, includes::*, metadata::Metadata, scheduler::Scheduler};
+
+#[derive(Debug, Default)]
 pub struct EnvSettings {
     pub parallel_degree: Option<usize>,
     pub parse_only: Option<bool>,
-}
-
-impl EnvSettings {
-    pub fn new() -> EnvSettings {
-        EnvSettings {
-            parallel_degree: None,
-            parse_only: None,
-        }
-    }
 }
 
 pub struct Env {
@@ -27,7 +20,7 @@ impl Env {
     pub fn new(nthreads: usize, input_pathname: String, output_dir: String) -> Self {
         let scheduler = Scheduler::new(nthreads);
         let metadata = Metadata::new();
-        let options = EnvSettings::new();
+        let options = EnvSettings::default();
 
         Env {
             scheduler,

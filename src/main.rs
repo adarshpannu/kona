@@ -3,7 +3,6 @@
 //#![allow(unused_variables)]
 
 use crate::{includes::*, qgm::ParserState};
-use getset::{CopyGetters, Getters, MutGetters, Setters};
 use std::fs;
 
 #[macro_use]
@@ -111,34 +110,11 @@ fn run_job(env: &mut Env) -> Result<(), String> {
     }
     Ok(())
 }
-#[derive(Getters, Setters, MutGetters, CopyGetters, Default, Debug)]
-pub struct Foo<T>
-where
-    T: Copy + Clone + Default,
-{
-    /// Doc comments are supported!
-    /// Multiline, even.
-    #[getset(get, set, get_mut)]
-    private: T,
 
-    /// Doc comments are supported!
-    /// Multiline, even.
-    #[getset(get_copy = "pub", set = "pub", get_mut = "pub")]
-    public: T,
-}
 /*
 ********************************** main ****************************************************************
 */
 fn main() -> Result<(), String> {
-    let mut foo = Foo::default();
-    foo.set_private(1);
-    (*foo.private_mut()) += 1;
-    assert_eq!(*foo.private(), 2);
-
-    let _fp = foo.public();
-
-    dbg!(&foo);
-
     //std::env::set_var("RUST_LOG", "yarde::pcode=info");
 
     //std::env::set_var("RUST_LOG", "yarde=info,yarde::pop=debug,yarde::flow=debug");
@@ -147,8 +123,9 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = "/Users/adarshrp/Projects/yarde/sql/join.fsql".to_string();
-    let output_dir = "/Users/adarshrp/Projects/yarde/tmp".to_string();
+    let input_pathname = f!("{TOPDIR}/sql/simple.fsql");
+    let output_dir = f!("{TOPDIR}/tmp");
+
     let mut env = Env::new(1, input_pathname, output_dir);
 
     let jobres = run_job(&mut env);
@@ -174,8 +151,8 @@ fn run_unit_tests() -> Result<(), String> {
     let diffcmd = "diff";
 
     for test in vec!["rst", "repartition", "groupby", "spja"] {
-        let input_pathname = f!("/Users/adarshrp/Projects/yarde/sql/{test}.fsql");
-        let output_dir = f!("/Users/adarshrp/Projects/yarde/tests/output/{test}/");
+        let input_pathname = f!("{TOPDIR}/sql/{test}.fsql");
+        let output_dir = f!("{TOPDIR}/tests/output/{test}/");
 
         println!("---------- Running subtest {}", input_pathname);
         std::fs::remove_dir_all(&output_dir).map_err(stringify)?;
@@ -192,7 +169,7 @@ fn run_unit_tests() -> Result<(), String> {
             error!("{}", errstr);
         }
         // Compare with gold output
-        let gold_dir = f!("/Users/adarshrp/Projects/yarde/tests/gold/{test}/");
+        let gold_dir = f!("{TOPDIR}/tests/gold/{test}/");
 
         let output = Command::new(diffcmd).arg(gold_dir).arg(output_dir).output().expect("failed to execute process");
 
@@ -210,48 +187,5 @@ fn run_unit_tests() -> Result<(), String> {
     }
 
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
-    Ok(())
-}
-
-use arrow2::{error::Result as A2Result, io::csv::read};
-
-#[allow(dead_code)]
-fn read_path(path: &str, projection: Option<&[usize]>) -> A2Result<Chunk<Box<dyn Array>>> {
-    // Create a CSV reader. This is typically created on the thread that reads the file and
-    // thus owns the read head.
-    let mut reader: read::Reader<fs::File> = read::ReaderBuilder::new().from_path(path)?;
-
-    // Infers the fields using the default inferer. The inferer is just a function that maps bytes
-    // to a `DataType`.
-    let (fields, _) = read::infer_schema(&mut reader, None, true, &read::infer)?;
-
-    println!("Fields: {:?}", &fields);
-
-    // allocate space to read from CSV to. The size of this vec denotes how many rows are read.
-    let mut rows = vec![read::ByteRecord::default(); 100];
-
-    // skip 0 (excluding the header) and read up to 100 rows.
-    // this is IO-intensive and performs minimal CPU work. In particular,
-    // no deserialization is performed.
-    let rows_read = read::read_rows(&mut reader, 0, &mut rows)?;
-    let rows = &rows[..rows_read];
-
-    //let projection: Option<&[usize]> = projection.map(|v| &v);
-    //let projection: Option<&[usize]> = if let Some(projection) = projection.as_ref() { Some(projection) } else { None };
-
-    // parse the rows into a `Chunk`. This is CPU-intensive, has no IO,
-    // and can be performed on a different thread by passing `rows` through a channel.
-    // `deserialize_column` is a function that maps rows and a column index to an Array
-    read::deserialize_batch(rows, &fields, projection, 0, read::deserialize_column)
-}
-
-#[test]
-fn test_arrow2_csv_reader() -> A2Result<()> {
-    let file_path = "/Users/adarshrp/Projects/yarde/data/emp.csv";
-
-    let projection: Vec<usize> = vec![2, 0];
-
-    let batch = read_path(file_path, Some(&projection))?;
-    println!("{:?}", batch);
     Ok(())
 }

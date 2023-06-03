@@ -1,10 +1,6 @@
 // csv
 
-use crate::{
-    includes::*,
-    pop::{POPContext, POPProps},
-    task::Task,
-};
+use crate::{graph::POPKey, includes::*, pop::POPContext, flow::Flow};
 use arrow2::io::csv::{
     read,
     read::{ByteRecord, Reader, ReaderBuilder},
@@ -15,7 +11,10 @@ use std::{
     io::{prelude::*, BufReader, SeekFrom},
 };
 
+/***************************************************************************************************/
+
 pub struct CSVContext {
+    pop_key: POPKey,
     fields: Vec<Field>,
     projection: Vec<ColId>,
     reader: Reader<fs::File>,
@@ -24,7 +23,7 @@ pub struct CSVContext {
 }
 
 impl CSVContext {
-    pub fn new(csv: &CSV, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn new(pop_key: POPKey, csv: &CSV, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let has_headers = if partition_id == 0 { csv.header } else { false };
         let partition = csv.partitions[partition_id];
 
@@ -36,7 +35,6 @@ impl CSVContext {
 
         // Position iterator to beginning of partition
         if partition_id > 0 {
-            //let mut pos = csv::Position::new();
             let mut pos = Position::new();
             pos.set_byte(partition.0);
             reader.seek(pos).map_err(stringify)?;
@@ -45,6 +43,7 @@ impl CSVContext {
         let rows = vec![ByteRecord::default(); CHUNK_SIZE];
 
         let csvctx = CSVContext {
+            pop_key,
             fields: csv.fields.clone(),
             projection: csv.projection.clone(),
             reader,
@@ -76,60 +75,45 @@ impl CSVContext {
         }
         Ok(row_number)
     }
+
+    fn next0(&mut self) -> Result<Chunk<Box<dyn Array>>, String> {
+        let rows_read = self.read_rows().map_err(stringify)?;
+
+        let rows = &self.rows[..rows_read];
+        read::deserialize_batch(rows, &self.fields, Some(&self.projection), 0, read::deserialize_column).map_err(stringify)
+    }
 }
+
 
 impl POPContext for CSVContext {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
-}
 
-impl Iterator for CSVContext {
-    type Item = Chunk<Box<dyn Array>>;
+    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+        let pop_key = self.pop_key;
+        let props = flow.pop_graph.get_properties(pop_key);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let rows_read = self.read_rows().map_err(|err| stringify(err)).ok();
-        if rows_read.is_none() {
-            return None;
+        loop {
+            let mut chunk = self.next0()?;
+
+            debug!("Before preds: {:?}", &chunk);
+
+            if chunk.len() > 0 {
+                // Run predicates and virtcols, if any
+                chunk = POPKey::eval_predicates(props, chunk);
+                debug!("After preds: {:?}", &chunk);
+
+                let projection_chunk: Option<Chunk<Box<dyn Array>>> = POPKey::eval_virtcols(props, &chunk);
+                if let Some(projection_chunk) = projection_chunk {
+                    debug!("Virtcols: {:?}", &projection_chunk);
+                }
+            }
+            return Ok(chunk);
         }
 
-        let rows = &self.rows[..rows_read.unwrap()];
-        let cols = read::deserialize_batch(rows, &self.fields, Some(&self.projection), 0, read::deserialize_column)
-            .map_err(|err| stringify(err))
-            .ok();
-        cols
     }
-}
 
-pub fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
-    let f = fs::File::open(&pathname).map_err(|err| stringify1(err, &pathname))?;
-    let mut reader = BufReader::new(f);
-
-    let metadata = fs::metadata(pathname).map_err(|err| stringify1(err, &pathname))?;
-    let sz = metadata.len();
-    let blk_size = sz / nsplits;
-
-    let mut begin = 0;
-    let mut end = 0;
-    let mut splits: Vec<TextFilePartition> = Vec::new();
-    let mut line = String::new();
-
-    debug!("Compute partitions for file {}", pathname);
-    while end < sz {
-        end = begin + blk_size;
-        if end > sz {
-            end = sz;
-        } else {
-            reader.seek(SeekFrom::Start(end)).map_err(|err| stringify1(err, &pathname))?;
-            line.clear();
-            reader.read_line(&mut line).map_err(|err| stringify1(err, &pathname))?;
-            end += line.len() as u64;
-        }
-        splits.push(TextFilePartition(begin, end));
-        debug!("   partition-{} offsets = [{}, {})", splits.len(), begin, end);
-        begin = end;
-    }
-    Ok(splits)
 }
 
 /***************************************************************************************************/
@@ -145,7 +129,7 @@ pub struct CSV {
 
 impl CSV {
     pub fn new(pathname: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, projection: Vec<ColId>) -> CSV {
-        let partitions = compute_partitions(&pathname, npartitions as u64).unwrap();
+        let partitions = Self::compute_partitions(&pathname, npartitions as u64).unwrap();
 
         CSV {
             pathname,
@@ -157,10 +141,35 @@ impl CSV {
         }
     }
 
-    pub fn next(&self, task: &mut Task, props: &POPProps) -> Result<Chunk<Box<dyn Array>>, String> {
-        let context = &mut task.contexts[props.index_in_stage];
-        let csv_context = context.as_any_mut().downcast_mut::<CSVContext>().expect("Wasn't a CSVContext!");
-        csv_context.next().ok_or("CSV::next() failed!".to_string())
+    fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
+        let f = fs::File::open(&pathname).map_err(|err| stringify1(err, pathname))?;
+        let mut reader = BufReader::new(f);
+
+        let metadata = fs::metadata(pathname).map_err(|err| stringify1(err, pathname))?;
+        let sz = metadata.len();
+        let blk_size = sz / nsplits;
+
+        let mut begin = 0;
+        let mut end = 0;
+        let mut splits: Vec<TextFilePartition> = Vec::new();
+        let mut line = String::new();
+
+        debug!("Compute partitions for file {}", pathname);
+        while end < sz {
+            end = begin + blk_size;
+            if end > sz {
+                end = sz;
+            } else {
+                reader.seek(SeekFrom::Start(end)).map_err(|err| stringify1(err, &pathname))?;
+                line.clear();
+                reader.read_line(&mut line).map_err(|err| stringify1(err, &pathname))?;
+                end += line.len() as u64;
+            }
+            splits.push(TextFilePartition(begin, end));
+            debug!("   partition-{} offsets = [{}, {})", splits.len(), begin, end);
+            begin = end;
+        }
+        Ok(splits)
     }
 }
 

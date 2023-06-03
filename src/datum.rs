@@ -35,7 +35,7 @@ impl Datum {
                 return Ok(*val as usize);
             }
         }
-        return Err(err_str.to_string());
+        Err(err_str.to_string())
     }
 }
 
@@ -45,7 +45,7 @@ impl fmt::Display for Datum {
             Datum::INT(il) => write!(f, "{}", il),
             Datum::STR(sl) => write!(f, "\"{}\"", sl),
             Datum::BOOL(bl) => write!(f, "{}", bl),
-            Datum::NULL => write!(f, "{}", "NULL"),
+            Datum::NULL => write!(f, "NULL"),
         }
     }
 }

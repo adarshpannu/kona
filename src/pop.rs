@@ -1,7 +1,7 @@
 // pop: Physical operators
 
-use std::collections::HashMap;
 use crate::{
+    flow::Flow,
     graph::{ExprKey, Graph, POPKey},
     includes::*,
     pcode::PCode,
@@ -10,6 +10,7 @@ use crate::{
     pop_hashjoin::HashJoin,
     pop_repartition::{RepartitionRead, RepartitionWrite},
 };
+use std::collections::HashMap;
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
@@ -75,18 +76,5 @@ pub enum POP {
 /***************************************************************************************************/
 pub trait POPContext {
     fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-/***************************************************************************************************/
-pub struct UninitializedContext {}
-impl POPContext for UninitializedContext {
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
-impl UninitializedContext {
-    pub fn new () -> Box<dyn POPContext> {
-        Box::new(UninitializedContext{})
-    }
+    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String>;
 }

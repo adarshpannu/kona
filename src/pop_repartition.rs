@@ -1,23 +1,35 @@
 // pop_repartition
 
-use crate::{includes::*, pcode::PCode, pop::POPContext, pop::POPProps, task::Task};
+use crate::{graph::POPKey, includes::*, pcode::PCode, pop::POPContext, flow::Flow};
 use arrow2::io::ipc::write;
 use getset::Getters;
 use std::fs::File;
 use std::rc::Rc;
 
 /***************************************************************************************************/
-pub struct RepartitionWriteContext {}
+pub struct RepartitionWriteContext {
+    pop_key: POPKey,
+    children: Vec<Box<dyn POPContext>>,
+}
 
 impl RepartitionWriteContext {
-    pub fn new(_rpw: &RepartitionWrite) -> Result<Box<dyn POPContext>, String> {
-        Ok(Box::new(RepartitionWriteContext {}))
+    pub fn new(pop_key: POPKey, _rpw: &RepartitionWrite, children: Vec<Box<dyn POPContext>>) -> Result<Box<dyn POPContext>, String> {
+        Ok(Box::new(RepartitionWriteContext { pop_key, children }))
     }
 }
+
 
 impl POPContext for RepartitionWriteContext {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+        let child = &mut self.children[0];
+        let chunk = child.next(flow)?;
+
+        debug!("Repartition::next: {:?}", &chunk);
+        Ok(chunk)
     }
 }
 
@@ -35,12 +47,6 @@ impl RepartitionWrite {
     pub fn new(repart_key: Vec<PCode>, schema: Rc<Schema>) -> Self {
         RepartitionWrite { repart_key, schema }
     }
-
-    pub fn next(&self, _task: &mut Task, _props: &POPProps) -> Result<ChunkBox, String> {
-        debug!("RepartitionWrite:next():");
-
-        todo!()
-    }
 }
 
 /***************************************************************************************************/
@@ -54,15 +60,9 @@ impl RepartitionRead {
     pub fn new(schema: Rc<Schema>) -> Self {
         RepartitionRead { schema }
     }
-
-    pub fn next(&self, _task: &mut Task, _props: &POPProps) -> Result<ChunkBox, String> {
-        debug!("RepartitionRead:next():");
-
-        todo!()
-    }
 }
 
-fn write_batches(path: &str, schema: Schema, chunks: &[Chunk<Box<dyn Array>>]) -> A2Result<()> {
+fn _write_batches(path: &str, schema: Schema, chunks: &[Chunk<Box<dyn Array>>]) -> A2Result<()> {
     let file = File::create(path)?;
 
     let options = write::WriteOptions { compression: None };

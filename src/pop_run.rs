@@ -2,44 +2,9 @@
 
 use arrow2::compute::filter::filter_chunk;
 
-use crate::{
-    graph::POPKey,
-    includes::*,
-    pop::{POPProps, POP},
-    stage::Stage,
-    task::Task,
-    Flow,
-};
+use crate::{graph::POPKey, includes::*, pop::POPProps};
 
 impl POPKey {
-    pub fn next(&self, flow: &Flow, _stage: &Stage, task: &mut Task) -> Result<ChunkBox, String> {
-        let (pop, props, ..) = flow.pop_graph.get3(*self);
-
-        loop {
-            let mut chunk = match pop {
-                POP::CSV(inner_node) => inner_node.next(task, props)?,
-                POP::RepartitionWrite(inner_node) => inner_node.next(task, props)?,
-                POP::RepartitionRead(inner_node) => inner_node.next(task, props)?,
-                POP::HashJoin(inner_node) => inner_node.next(task, props)?,
-                POP::Aggregation(inner_node) => inner_node.next(task, props)?,
-            };
-
-            debug!("Before preds: {:?}", &chunk);
-
-            if chunk.len() > 0 {
-                // Run predicates and virtcols, if any
-                chunk = Self::eval_predicates(props, chunk);
-                debug!("After preds: {:?}", &chunk);
-
-                let projection_chunk: Option<Chunk<Box<dyn Array>>> = Self::eval_virtcols(props, &chunk);
-                if let Some(projection_chunk) = projection_chunk {
-                    debug!("Virtcols: {:?}", &projection_chunk);
-                }
-            }
-            return Ok(chunk);
-        }
-    }
-
     pub fn eval_predicates(props: &POPProps, input: ChunkBox) -> ChunkBox {
         let mut filtered_chunk = input;
         if let Some(preds) = props.predicates.as_ref() {

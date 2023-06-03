@@ -2,8 +2,9 @@
 
 use crate::{
     flow::Flow,
+    graph::POPKey,
     includes::*,
-    pop::{POPContext, UninitializedContext, POP},
+    pop::{POPContext, POP},
     pop_csv::CSVContext,
     pop_repartition::RepartitionWriteContext,
     stage::Stage,
@@ -34,44 +35,36 @@ impl Task {
             stage.root_pop_key, self.partition_id, stage.npartitions_producer
         );
         */
-        self.init_contexts(flow, stage)?;
+        let root_pop_key = stage.root_pop_key.unwrap();
 
+        let mut root_context = self.init_context(flow, root_pop_key)?;
         loop {
-            let output_chunk = stage.root_pop_key.unwrap().next(flow, stage, self)?;
-            if output_chunk.len() == 0 {
-                break;
+            let chunk = root_context.next(flow)?;
+            if chunk.len() == 0 {
+                break
             }
         }
+
         Ok(())
     }
 
-    pub fn init_contexts(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
-        let root_pop_key = stage.root_pop_key.unwrap();
-
-        for _ in 0..stage.pop_count {
-            self.contexts.push(UninitializedContext::new())
-        }
-
-        /*
-        let stop_search = |popkey| {
-            let pop = &flow.pop_graph.get(popkey).value;
-            matches!(pop, POP::Repartition(_))
+    pub fn init_context(&self, flow: &Flow, popkey: POPKey) -> Result<Box<dyn POPContext>, String> {
+        let (pop, _, children) = flow.pop_graph.get3(popkey);
+        let child_contexts = if let Some(children) = children {
+            let children = children
+                .iter()
+                .map(|&child_popkey| self.init_context(flow, child_popkey).unwrap())
+                .collect::<Vec<_>>();
+            Some(children)
+        } else {
+            None
         };
-        */
 
-        let mut iter = flow.pop_graph.iter(root_pop_key);
-        while let Some(popkey) = iter.next(&flow.pop_graph) {
-            let (pop, props, ..) = flow.pop_graph.get3(popkey);
-            let ix = props.index_in_stage;
-            let ctx = match &pop {
-                POP::CSV(csv) => {
-                    CSVContext::new(csv, self.partition_id)?
-                }
-                POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(&rpw)?,
-                _ => unimplemented!(),
-            };
-            self.contexts[ix] = ctx;
-        }
-        Ok(())
+        let ctxt = match &pop {
+            POP::CSV(csv) => CSVContext::new(popkey, csv, self.partition_id)?,
+            POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap())?,
+            _ => unimplemented!(),
+        };
+        Ok(ctxt)
     }
 }
