@@ -117,8 +117,8 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "yarde::pcode=info");
 
-    //std::env::set_var("RUST_LOG", "yarde=info,yarde::pop=debug,yarde::flow=debug");
-    std::env::set_var("RUST_LOG", "debug");
+    std::env::set_var("RUST_LOG", "yarde=info,yarde::pop_repartition=debug,yarde::flow=debug");
+    //std::env::set_var("RUST_LOG", "debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");

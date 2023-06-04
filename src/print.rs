@@ -185,9 +185,9 @@ impl QGM {
                 let extrastr = format!("");
                 (String::from("HashJoin"), extrastr)
             }
-            POP::RepartitionWrite(_) => {
-                let extrastr = format!("");
-                (String::from("Repartition"), extrastr)
+            POP::RepartitionWrite(rpw) => {
+                let extrastr = format!("c = {}", rpw.cpartitions());
+                (String::from("RepartitionWrite"), extrastr)
             }
             POP::RepartitionRead(_) => {
                 let extrastr = format!("");

@@ -11,6 +11,8 @@ use crate::{
     pop_repartition::{RepartitionRead, RepartitionWrite},
 };
 use std::collections::HashMap;
+use std::io::{self, Write};
+use arrow2::io::csv::write;
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
@@ -77,4 +79,36 @@ pub enum POP {
 pub trait POPContext {
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String>;
+}
+
+struct VecWriter {
+    buffer: Vec<u8>,
+}
+
+impl VecWriter {
+    fn new() -> VecWriter {
+        VecWriter { buffer: Vec::new() }
+    }
+
+    fn as_string(self) -> String {
+        String::from_utf8(self.buffer).unwrap()
+    }
+}
+
+impl Write for VecWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.buffer.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+pub fn chunk_to_string(chunk: &ChunkBox) -> String {
+    let mut writer = VecWriter::new();
+    let options = write::SerializeOptions::default();
+    write::write_chunk(&mut writer, chunk, &options).unwrap();
+    writer.as_string()
 }

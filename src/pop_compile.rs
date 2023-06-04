@@ -71,7 +71,9 @@ impl POP {
         let pop_key: POPKey = match lop {
             LOP::TableScan { .. } => Self::compile_scan(qgm, lop_graph, lop_key, pop_graph)?,
             LOP::HashJoin { .. } => Self::compile_join(qgm, lop_graph, lop_key, pop_graph, pop_children)?,
-            LOP::Repartition { .. } => Self::compile_repartition_write(qgm, lop_graph, lop_key, pop_graph, pop_children, schema.clone().unwrap())?,
+            LOP::Repartition { cpartitions } => {
+                Self::compile_repartition_write(qgm, lop_graph, lop_key, pop_graph, pop_children, schema.clone().unwrap(), *cpartitions)?
+            }
             LOP::Aggregation { .. } => Self::compile_aggregation(lop_graph, lop_key, pop_graph, pop_children)?,
         };
 
@@ -87,13 +89,13 @@ impl POP {
         props.index_in_stage = new_pop_count - 1;
 
         // Add RepartionRead
-        if matches!(lop, LOP::Repartition { .. }) {
+        if let LOP::Repartition { cpartitions } = lop {
             let pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, pop_graph, vec![pop_key], schema.unwrap())?;
 
             let new_pop_count: usize = stage_graph.increment_pop(stage_id);
             let mut props = &mut pop_graph.get_mut(pop_key).properties;
             props.index_in_stage = new_pop_count - 1;
-
+            props.npartitions = *cpartitions;
             return Ok(pop_key);
         }
         Ok(pop_key)
@@ -118,7 +120,6 @@ impl POP {
         // Compile predicates
         debug!("Compile predicates for lopkey {:?}", lop_key);
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &input_proj_map);
-
 
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
@@ -225,7 +226,7 @@ impl POP {
     }
 
     pub fn compile_repartition_write(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>, cpartitions: usize,
     ) -> Result<POPKey, String> {
         let (_, lopprops, children) = lop_graph.get3(lop_key);
 
@@ -251,7 +252,7 @@ impl POP {
         };
         debug!("Compile pkey end");
 
-        let pop_inner = pop_repartition::RepartitionWrite::new(repart_key, schema);
+        let pop_inner = pop_repartition::RepartitionWrite::new(repart_key, schema, cpartitions);
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionWrite(pop_inner), props, Some(pop_children));
 
         Ok(pop_key)

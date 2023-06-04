@@ -1,10 +1,9 @@
 // csv
 
-use crate::{flow::Flow, graph::POPKey, includes::*, pop::POPContext};
+use crate::{flow::Flow, graph::POPKey, includes::*, pop::chunk_to_string, pop::POPContext};
 use arrow2::io::csv::{
     read,
     read::{ByteRecord, Reader, ReaderBuilder},
-    write,
 };
 use csv::Position;
 use std::{
@@ -102,7 +101,7 @@ impl POPContext for CSVContext {
             if chunk.len() > 0 {
                 // Run predicates and virtcols, if any
                 chunk = POPKey::eval_predicates(props, chunk);
-                println!("After preds: \n{}", chunk_to_string(&chunk));
+                debug!("After preds: \n{}", chunk_to_string(&chunk));
 
                 let projection_chunk = POPKey::eval_projection(props, &chunk);
                 debug!("Projection: \n{}", chunk_to_string(&projection_chunk));
@@ -195,37 +194,3 @@ fn test() {
     debug!("Done");
 }
 */
-
-use std::io::{self, Write};
-
-struct VecWriter {
-    buffer: Vec<u8>,
-}
-
-impl VecWriter {
-    fn new() -> VecWriter {
-        VecWriter { buffer: Vec::new() }
-    }
-
-    fn as_string(self) -> String {
-        String::from_utf8(self.buffer).unwrap()
-    }
-}
-
-impl Write for VecWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.buffer.extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-fn chunk_to_string(chunk: &ChunkBox) -> String {
-    let mut writer = VecWriter::new();
-    let options = write::SerializeOptions::default();
-    write::write_chunk(&mut writer, chunk, &options).unwrap();
-    writer.as_string()
-}

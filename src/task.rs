@@ -62,7 +62,7 @@ impl Task {
 
         let ctxt = match &pop {
             POP::CSV(csv) => CSVContext::new(popkey, csv, self.partition_id)?,
-            POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap())?,
+            POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap(), self.partition_id)?,
             _ => unimplemented!(),
         };
         Ok(ctxt)
