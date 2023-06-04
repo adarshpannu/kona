@@ -28,7 +28,7 @@ impl POPContext for RepartitionWriteContext {
         let child = &mut self.children[0];
         let chunk = child.next(flow)?;
 
-        debug!("Repartition::next: {:?}", &chunk);
+        debug!("RepartitionWriteContext::next: {:?}", &chunk);
         Ok(chunk)
     }
 }

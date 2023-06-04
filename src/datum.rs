@@ -4,6 +4,7 @@ use std::{fmt, rc::Rc};
 
 use crate::includes::*;
 
+// TODO! Datum needs to hold arrow2 scalars
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord, Serialize, Deserialize)]
 pub enum Datum {
     NULL,

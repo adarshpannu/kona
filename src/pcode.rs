@@ -1,6 +1,7 @@
 // pcode
 
 use arrow2::scalar::PrimitiveScalar;
+use arrow2::scalar::{Scalar, Utf8Scalar};
 
 use crate::{
     datum::Datum,
@@ -147,10 +148,23 @@ impl PCode {
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
-                        (PCodeStack::Column(lhs), relop, PCodeStack::Datum(Datum::INT(i))) => {
+                        (PCodeStack::Column(lhs), relop, PCodeStack::Datum(d)) => {
+                            let scalar_i64; // = PrimitiveScalar::new(DataType::Int64, Some(0 as i64));
+                            let scalar_utf8; // = PrimitiveScalar::new(DataType::Int64, Some(0 as i64));
+
                             let lhs = &**lhs.get();
-                            let scalar = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
-                            let rhs = &scalar;
+                            let rhs: &dyn Scalar = match d {
+                                Datum::INT(i) => {
+                                    scalar_i64 = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
+                                    &scalar_i64
+                                }
+                                Datum::STR(s) => {
+                                    let s = &*s.clone();
+                                    scalar_utf8 = Utf8Scalar::<i32>::new(Some(s));
+                                    &scalar_utf8
+                                }
+                                _ => todo!(),
+                            };
                             let array: Box<dyn Array> = match relop {
                                 RelOp::Lt => Box::new(comparison::lt_scalar(lhs, rhs)),
                                 RelOp::Le => Box::new(comparison::lt_eq_scalar(lhs, rhs)),

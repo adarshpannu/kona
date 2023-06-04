@@ -123,7 +123,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = f!("{TOPDIR}/sql/simple.fsql");
+    let input_pathname = f!("{TOPDIR}/sql/join.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
 
     let mut env = Env::new(1, input_pathname, output_dir);

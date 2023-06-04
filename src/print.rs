@@ -88,9 +88,9 @@ impl QGM {
         let predstring = props.preds.printable(self, true);
 
         let (label, extrastr) = match &lop {
-            LOP::TableScan { input_projection: input_cols } => {
-                let input_cols = input_cols.printable(self);
-                let extrastr = format!("(input = {})", input_cols);
+            LOP::TableScan { input_projection } => {
+                let input_projection = input_projection.printable(self);
+                let extrastr = format!("(input = {})", input_projection);
                 (String::from("TableScan"), extrastr)
             }
             LOP::HashJoin { lhs_join_keys, rhs_join_keys } => {
@@ -176,7 +176,7 @@ impl QGM {
                 let pathname = csv.pathname.split("/").last().unwrap_or(&csv.pathname);
                 //let mut projection = csv.projection.clone();
                 //projection.sort_by(|a, b| a.cmp(b));
-                let extrastr = format!("file: {}, projection: {:?}", pathname, &csv.projection)
+                let extrastr = format!("file: {}, input_projection: {:?}", pathname, &csv.input_projection)
                     .replace("{", "(")
                     .replace("}", ")");
                 (String::from("CSV"), extrastr)

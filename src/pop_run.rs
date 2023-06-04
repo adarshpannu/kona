@@ -18,18 +18,23 @@ impl POPKey {
         return filtered_chunk;
     }
 
-    pub fn eval_virtcols(props: &POPProps, input: &ChunkBox) -> Option<ChunkBox> {
-        if let Some(virtcols) = props.virtcols.as_ref() {
-            let virtoutput = virtcols
-                .iter()
-                .map(|pcode| {
-                    let result = pcode.eval(&input);
-                    result
-                })
-                .collect::<Vec<_>>();
-            Some(Chunk::new(virtoutput))
-        } else {
-            None
+    pub fn eval_projection(props: &POPProps, input: &ChunkBox) -> ChunkBox {
+        let mut output = vec![];
+        let arrays = input.columns();
+
+        if let Some(colids) = props.cols.as_ref() {
+            for &colid in colids.iter() {
+                let arr = arrays[colid].clone();
+                output.push(arr)
+            }
         }
+
+        if let Some(virtcols) = props.virtcols.as_ref() {
+            for pcode in virtcols.iter() {
+                let arr = pcode.eval(&input);
+                output.push(arr)
+            }
+        }
+        Chunk::new(output)
     }
 }
