@@ -50,7 +50,6 @@ pub struct POPProps {
     pub cols: Option<Vec<ColId>>,
     pub virtcols: Option<Vec<PCode>>,
     pub npartitions: usize,
-    pub index_in_stage: usize,
 }
 
 impl POPProps {
@@ -60,7 +59,6 @@ impl POPProps {
             cols,
             virtcols,
             npartitions,
-            index_in_stage: 0,
         }
     }
 }

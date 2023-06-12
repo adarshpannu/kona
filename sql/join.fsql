@@ -4,12 +4,12 @@ CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yarde/da
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
 
-set PARALLEL_DEGREE = 5;
+set PARALLEL_DEGREE = 2;
 
 // All engineers aged 35+ 
 SELECT EMP.name, DEPT.DEPT_ID 
 from EMP, DEPT
-where EMP.EMP_DEPT_ID * 1 = DEPT.DEPT_ID
+where EMP.EMP_DEPT_ID * 7 = DEPT.DEPT_ID * 13
 AND EMP.age > 35
 AND DEPT.NAME = "Engineering"
 ;

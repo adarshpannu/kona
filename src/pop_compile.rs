@@ -83,19 +83,9 @@ impl POP {
             stage_graph.set_pop_key(pop_graph, effective_stage_id, pop_key)
         }
 
-        // Assign indexes to POP, increment stage pop count
-        let new_pop_count: usize = stage_graph.increment_pop(effective_stage_id);
-        let mut props = &mut pop_graph.get_mut(pop_key).properties;
-        props.index_in_stage = new_pop_count - 1;
-
         // Add RepartionRead
         if let LOP::Repartition { cpartitions } = lop {
-            let pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, pop_graph, vec![pop_key], schema.unwrap())?;
-
-            let new_pop_count: usize = stage_graph.increment_pop(stage_id);
-            let mut props = &mut pop_graph.get_mut(pop_key).properties;
-            props.index_in_stage = new_pop_count - 1;
-            props.npartitions = *cpartitions;
+            let pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, pop_graph, vec![pop_key], schema.unwrap(), *cpartitions)?;
             return Ok(pop_key);
         }
         Ok(pop_key)
@@ -259,7 +249,7 @@ impl POP {
     }
 
     pub fn compile_repartition_read(
-        lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
+        lop_graph: &LOPGraph, lop_key: LOPKey, pop_graph: &mut POPGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>, npartitions: usize
     ) -> Result<POPKey, String> {
         let lopprops = &lop_graph.get(lop_key).properties;
 
@@ -273,7 +263,7 @@ impl POP {
         // No virtcols
         let virtcols = None;
 
-        let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
+        let props = POPProps::new(predicates, cols, virtcols, npartitions);
 
         let pop_inner = pop_repartition::RepartitionRead::new(schema);
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, Some(pop_children));

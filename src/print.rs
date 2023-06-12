@@ -208,11 +208,10 @@ impl QGM {
 
         fprint!(
             file,
-            "    popkey{}[label=\"{}-{}|ix = {}|p = {}|cols = {}, vcols = #{}|{}\", color=\"{}\"];\n",
+            "    popkey{}[label=\"{}-{}|p = {}|cols = {}, vcols = #{}|{}\", color=\"{}\"];\n",
             id,
             label,
             pop_key.printable_id(),
-            props.index_in_stage,
             props.npartitions,
             colstr,
             props.virtcols.as_ref().map_or(0, |v| v.len()),

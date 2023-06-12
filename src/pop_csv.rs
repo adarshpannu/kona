@@ -93,20 +93,20 @@ impl POPContext for CSVContext {
         let pop_key = self.pop_key;
         let props = flow.pop_graph.get_properties(pop_key);
 
-        loop {
-            let mut chunk = self.next0()?;
+        let mut chunk = self.next0()?;
 
-            debug!("Before preds: \n{}", chunk_to_string(&chunk));
+        debug!("Before preds: \n{}", chunk_to_string(&chunk));
 
-            if chunk.len() > 0 {
-                // Run predicates and virtcols, if any
-                chunk = POPKey::eval_predicates(props, chunk);
-                debug!("After preds: \n{}", chunk_to_string(&chunk));
+        if chunk.len() > 0 {
+            // Run predicates and virtcols, if any
+            chunk = POPKey::eval_predicates(props, chunk);
+            debug!("After preds: \n{}", chunk_to_string(&chunk));
 
-                let projection_chunk = POPKey::eval_projection(props, &chunk);
-                debug!("Projection: \n{}", chunk_to_string(&projection_chunk));
-            }
-            return Ok(chunk);
+            let projection_chunk = POPKey::eval_projection(props, &chunk);
+            debug!("Projection: \n{}", chunk_to_string(&projection_chunk));
+            return Ok(projection_chunk);
+        } else {
+            Ok(chunk)
         }
     }
 }
