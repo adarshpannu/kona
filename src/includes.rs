@@ -14,10 +14,10 @@ pub use serde::{Deserialize, Serialize};
 pub use std::any::Any;
 pub use std::mem::replace;
 
-pub const TOPDIR: &str = "/Users/adarshrp/Projects/yarde";
+pub const TOPDIR: &str = "/Users/adarshrp/Projects/yard";
 pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
-pub const TEMPDIR: &str = "/Users/adarshrp/Projects/yarde/tmp";
-pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/yarde";
+pub const TEMPDIR: &str = "/Users/adarshrp/Projects/yard/tmp";
+pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/yard";
 
 pub type ColId = usize;
 pub type QunId = usize;

@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'yarde'",
+            "name": "Debug executable 'yard'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=yarde",
-                    "--package=yarde"
+                    "--bin=yard",
+                    "--package=yard"
                 ],
                 "filter": {
-                    "name": "yarde",
+                    "name": "yard",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'yarde'",
+            "name": "Debug unit tests in executable 'yard'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=yarde",
-                    "--package=yarde"
+                    "--bin=yard",
+                    "--package=yard"
                 ],
                 "filter": {
-                    "name": "yarde",
+                    "name": "yard",
                     "kind": "bin"
                 }
             },
@@ -44,8 +44,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "run yarde",
-            "program": "${workspaceRoot}/target/debug/yarde",
+            "name": "run yard",
+            "program": "${workspaceRoot}/target/debug/yard",
             "args": [],
             "cwd": "${workspaceRoot}",
             "sourceMap": {},

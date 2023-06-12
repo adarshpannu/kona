@@ -2,7 +2,7 @@
 authors = ["Adarsh Pannu <13154869+adarshpannu@users.noreply.github.com>"]
 build = "build.rs"
 edition = "2018"
-name = "yarde"
+name = "yard"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

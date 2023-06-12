@@ -3,7 +3,7 @@
 //cataLog TABLE cust ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/tpch-data/sf0.01/customer.tbl", "HEADER" = "NO", "SEPARATOR" = "|" );
 //DESCRIBE TABLE cust;
 
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yarde/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
 
 DESCRIBE TABLE emp;
 
