@@ -6,8 +6,8 @@ use crate::{
     includes::*,
     pop::{POPContext, POP},
     pop_csv::CSVContext,
-    pop_repartition::RepartitionWriteContext,
-    stage::Stage,
+    pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
+    stage::Stage, pop_hashjoin::HashJoinContext,
 };
 
 /***************************************************************************************************/
@@ -41,7 +41,7 @@ impl Task {
         loop {
             let chunk = root_context.next(flow)?;
             if chunk.len() == 0 {
-                break
+                break;
             }
         }
 
@@ -63,6 +63,12 @@ impl Task {
         let ctxt = match &pop {
             POP::CSV(csv) => CSVContext::new(popkey, csv, self.partition_id)?,
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap(), self.partition_id)?,
+            POP::RepartitionRead(rpr) => {
+                let pop_key_of_writer = children.unwrap()[0];
+                RepartitionReadContext::new(flow.id, popkey, pop_key_of_writer, &rpr, child_contexts.unwrap(), self.partition_id)?
+            },
+            POP::HashJoin(hj) => HashJoinContext::new(popkey, &hj, child_contexts.unwrap(), self.partition_id)?,
+
             _ => unimplemented!(),
         };
         Ok(ctxt)

@@ -4,6 +4,7 @@ use crate::{flow::Flow, graph::POPKey, includes::*, pcode::PCode, pop::chunk_to_
 use arrow2::compute::arithmetics::ArrayRem;
 use arrow2::compute::filter::filter_chunk;
 use arrow2::compute::hash::hash;
+use arrow2::io::ipc::read::{read_file_metadata, FileReader};
 use arrow2::io::ipc::write::{FileWriter, WriteOptions};
 use getset::Getters;
 use std::fs::File;
@@ -47,7 +48,7 @@ impl RepartitionWriteContext {
 
     fn get_writer(&mut self, flow_id: usize, rpw: &RepartitionWrite, cpartition: PartitionId) -> Result<&mut FileWriter<File>, String> {
         if self.writers[cpartition].is_none() {
-            let dirname = format!("{}/flow-{}/stage-{}/consumer-{}", TEMPDIR, flow_id, self.pop_key.printable_id(), cpartition);
+            let dirname = get_partition_dir(flow_id, self.pop_key, cpartition);
             let path = format!("{}/producer-{}.arrow", dirname, self.partition_id);
             std::fs::create_dir_all(dirname).map_err(stringify)?;
 
@@ -181,4 +182,91 @@ impl RepartitionRead {
     pub fn new(schema: Rc<Schema>) -> Self {
         RepartitionRead { schema }
     }
+}
+
+pub struct RepartitionReadContext {
+    pop_key: POPKey,
+    pop_key_of_writer: POPKey,
+    children: Vec<Box<dyn POPContext>>,
+    partition_id: PartitionId,
+    files: Vec<String>,
+    //reader: Box<dyn Iterator<Item = ChunkBox>>,
+}
+
+impl RepartitionReadContext {
+    pub fn new(
+        flow_id: usize, pop_key: POPKey, pop_key_of_writer: POPKey, rpw: &RepartitionRead, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId,
+    ) -> Result<Box<dyn POPContext>, String> {
+        // Enumerate directory
+        let dirname = get_partition_dir(flow_id, pop_key_of_writer, partition_id);
+        let files = list_files(&dirname);
+        let files = if let Err(errstr) = files {
+            if errstr.find("kind: NotFound").is_none() {
+                return Err(errstr);
+            }
+            vec![]
+        } else {
+            files.unwrap()
+        };
+
+        /*
+        let reader = files.iter().flat_map(|path| {
+            let mut reader = File::open(&path).unwrap();
+            let metadata = read_file_metadata(&mut reader).unwrap();
+            let mut reader = FileReader::new(reader, metadata, None, None);
+            reader.next().unwrap()
+        });
+        let reader: Box<dyn Iterator<Item = ChunkBox>> = Box::new(reader);
+        */
+
+        debug!("RepartitionReadContext::new, partition = {}, files = {:?}", partition_id, &files);
+
+        Ok(Box::new(RepartitionReadContext {
+            pop_key,
+            pop_key_of_writer,
+            children,
+            partition_id,
+            files,
+            //reader,
+        }))
+    }
+}
+
+impl POPContext for RepartitionReadContext {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+        let pop_key = self.pop_key;
+        let pop = flow.pop_graph.get_value(pop_key);
+
+        /*
+        if let POP::RepartitionRead(rpw) = pop {
+            todo!()
+        } else {
+            panic!("ugh")
+        }
+        */
+
+        Ok(Chunk::new(vec![]))
+    }
+}
+
+fn get_partition_dir(flow_id: usize, pop_key: POPKey, pid: PartitionId) -> String {
+    format!("{}/flow-{}/stage-{}/consumer-{}", TEMPDIR, flow_id, pop_key.printable_id(), pid)
+}
+
+pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {
+    let dir = fs::read_dir(dirname).map_err(|err| stringify1(err, &dirname))?;
+    let mut pathnames = vec![];
+    for entry in dir {
+        let entry = entry.map_err(stringify)?;
+        let path = entry.path();
+        if !path.is_dir() {
+            let pathstr = path.into_os_string().into_string().map_err(stringify)?;
+            pathnames.push(pathstr)
+        }
+    }
+    Ok(pathnames)
 }
