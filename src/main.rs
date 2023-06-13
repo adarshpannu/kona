@@ -61,9 +61,9 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     std::fs::remove_dir_all(&dirname).unwrap_or_default();
 
     // Run the flow
-    env.scheduler.run_flow(env, flow, &flow.stage_graph);
+    env.scheduler.run_flow(env, flow)?;
 
-    env.scheduler.close_all();
+    env.scheduler.end_all_threads();
     env.scheduler.join();
     Ok(())
 }
@@ -117,8 +117,8 @@ fn run_job(env: &mut Env) -> Result<(), String> {
 fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "yard::pcode=info");
 
-    std::env::set_var("RUST_LOG", "yard=info,yard::pop_repartition=debug,yard::flow=debug");
-    //std::env::set_var("RUST_LOG", "debug");
+    //std::env::set_var("RUST_LOG", "yard=info,yard::pop_repartition=debug,yard::flow=debug");
+    //std::env::set_var("RUST_LOG", "yard=info,yard::stage=debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
@@ -126,7 +126,7 @@ fn main() -> Result<(), String> {
     let input_pathname = f!("{TOPDIR}/sql/join.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
 
-    let mut env = Env::new(1, input_pathname, output_dir);
+    let mut env = Env::new(99, 1, input_pathname, output_dir);
 
     let jobres = run_job(&mut env);
     if let Err(errstr) = &jobres {
@@ -150,7 +150,7 @@ fn run_unit_tests() -> Result<(), String> {
     //let diffcmd = "/Applications/DiffMerge.app/Contents/MacOS/DiffMerge";
     let diffcmd = "diff";
 
-    for test in vec!["rst", "repartition", "groupby", "spja"] {
+    for (id, test) in vec!["rst", "repartition", "groupby", "spja"].iter().enumerate() {
         let input_pathname = f!("{TOPDIR}/sql/{test}.fsql");
         let output_dir = f!("{TOPDIR}/tests/output/{test}/");
 
@@ -159,7 +159,7 @@ fn run_unit_tests() -> Result<(), String> {
         std::fs::create_dir_all(&output_dir).map_err(stringify)?;
 
         ntotal = ntotal + 1;
-        let mut env = Env::new(1, input_pathname, output_dir.clone());
+        let mut env = Env::new(id, 1, input_pathname, output_dir.clone());
         env.set_option("PARSE_ONLY".to_string(), datum::Datum::STR(Rc::new("true".to_string())))
             .unwrap();
 

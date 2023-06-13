@@ -17,23 +17,22 @@ pub struct Stage {
     pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
     pub root_lop_key: LOPKey,
     pub root_pop_key: Option<POPKey>,
-    pub orig_child_count: usize,
+    pub nchildren: usize, // # of stages this stage depends on
     pub npartitions: usize,
-    pub pop_count: usize, // # of POPs in this stage
 }
 
 #[derive(Debug)]
-pub struct StageStatus {
+pub struct StageContext {
     // Runtime details
-    pub completed_child_count: usize,
-    pub completed_npartitions: usize,
+    pub nchildren_completed: usize,
+    pub npartitions_completed: usize,
 }
 
-impl StageStatus {
+impl StageContext {
     pub fn new() -> Self {
-        StageStatus {
-            completed_child_count: 0,
-            completed_npartitions: 0,
+        StageContext {
+            nchildren_completed: 0,
+            npartitions_completed: 0,
         }
     }
 }
@@ -48,26 +47,27 @@ impl Stage {
             parent_stage_id,
             root_lop_key,
             root_pop_key: None,
-            orig_child_count: 0,
+            nchildren: 0,
             npartitions: 0,
-            pop_count: 0,
         }
     }
 
-    pub fn run(&self, env: &Env, flow: &Flow) {
+    pub fn schedule(&self, env: &Env, flow: &Flow) {
+        debug!("Schedule stage: {:?}", self.root_pop_key);
+
         let (_, props, ..) = flow.pop_graph.get3(self.root_pop_key.unwrap());
         let npartitions = props.npartitions;
         for partition_id in 0..npartitions {
             let task = Task::new(partition_id);
             //task.run(flow, self);
 
-            let thread_id = partition_id % (env.scheduler.size());
+            let thread_id = partition_id % (env.scheduler.nthreads());
 
             let task_triplet = &(flow, self, task);
             let task_serialized: Vec<u8> = bincode::serialize(&task_triplet).unwrap();
 
             env.scheduler.s2t_channels_sx[thread_id]
-                .send(SchedulerMessage::RunTask(task_serialized))
+                .send(SchedulerMessage::ScheduleTask(task_serialized))
                 .unwrap();
         }
     }
@@ -96,7 +96,7 @@ impl StageGraph {
             assert!(parent_stage_id <= self.stages.len());
 
             let parent_stage = &mut self.stages[parent_stage_id];
-            parent_stage.orig_child_count = parent_stage.orig_child_count + 1;
+            parent_stage.nchildren = parent_stage.nchildren + 1;
         }
 
         debug!("Added new stage: {:?}", new_id);
@@ -110,15 +110,10 @@ impl StageGraph {
         stage.root_pop_key = Some(pop_key)
     }
 
-    pub fn increment_pop(&mut self, stage_id: StageId) -> usize {
-        let stage = &mut self.stages[stage_id];
-        stage.pop_count += 1;
-        return stage.pop_count;
-    }
-
     pub fn print(&self) {
+        debug!("Stage graph");
         for stage in self.stages.iter() {
-            debug!("--- Stage: {:?}", stage)
+            debug!("    Stage: {:?}", stage)
         }
     }
 

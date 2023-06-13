@@ -4,16 +4,17 @@ use std::{sync::mpsc, thread, thread::JoinHandle};
 
 use crate::{
     includes::*,
-    stage::{Stage, StageGraph, StageStatus},
+    stage::{Stage, StageContext},
     task::Task,
     Flow,
 };
 
 #[derive(Debug)]
 pub enum SchedulerMessage {
-    RunTask(Vec<u8>),
-    EndTask,
-    TaskEnded { stage_id: StageId, partition_id: usize },
+    ScheduleTask(Vec<u8>),
+    TaskCompleted { stage_id: StageId, partition_id: usize },
+    StageCompleted { stage_id: StageId },
+    EndThread,
 }
 
 /***************************************************************************************************/
@@ -31,17 +32,13 @@ impl Scheduler {
         }
     }
 
-    pub fn size(&self) -> usize {
-        if let Some(threads) = &self.threads {
-            threads.len()
-        } else {
-            0
-        }
+    pub fn nthreads(&self) -> usize {
+        self.threads.as_ref().map_or(0, |threads| threads.len())
     }
 
-    pub fn close_all(&mut self) {
+    pub fn end_all_threads(&mut self) {
         for tx in self.s2t_channels_sx.iter() {
-            tx.send(SchedulerMessage::EndTask).unwrap();
+            tx.send(SchedulerMessage::EndThread).unwrap();
         }
     }
 
@@ -59,11 +56,11 @@ impl Scheduler {
             let thrd = thread::Builder::new().name(format!("thread-{}", i)).spawn(move || {
                 for msg in s2t_channel_rx {
                     match msg {
-                        SchedulerMessage::EndTask => {
+                        SchedulerMessage::EndThread => {
                             debug!("End of thread");
                             break;
                         }
-                        SchedulerMessage::RunTask(encoded) => {
+                        SchedulerMessage::ScheduleTask(encoded) => {
                             let (flow, stage, mut task): (Flow, Stage, Task) = bincode::deserialize(&encoded[..]).unwrap();
 
                             /*
@@ -78,13 +75,16 @@ impl Scheduler {
 
                             // The following send may not succeed if the scheduler is gone
                             t2s_channel_tx_clone
-                                .send(SchedulerMessage::TaskEnded {
+                                .send(SchedulerMessage::TaskCompleted {
                                     stage_id: stage.stage_id,
                                     partition_id: task.partition_id,
                                 })
                                 .unwrap_or_default()
                         }
-                        SchedulerMessage::TaskEnded { .. } => {
+                        SchedulerMessage::TaskCompleted { .. } => {
+                            panic!("Invalid message")
+                        }
+                        SchedulerMessage::StageCompleted { .. } => {
                             panic!("Invalid message")
                         }
                     }
@@ -102,12 +102,12 @@ impl Scheduler {
         }
     }
 
-    pub fn runnable<'a>(stages: &'a Vec<Stage>, stage_status: &Vec<StageStatus>) -> Vec<&'a Stage> {
+    pub fn runnable<'a>(stages: &'a Vec<Stage>, stage_status: &Vec<StageContext>) -> Vec<&'a Stage> {
         let v = stages
             .iter()
             .zip(stage_status.iter())
             .filter_map(|(stage, ss)| {
-                if stage.orig_child_count == ss.completed_child_count && ss.completed_npartitions == 0 {
+                if stage.nchildren == ss.nchildren_completed && ss.npartitions_completed == 0 {
                     Some(stage)
                 } else {
                     None
@@ -117,39 +117,71 @@ impl Scheduler {
         v
     }
 
-    pub fn run_flow(&self, env: &Env, flow: &Flow, stage_graph: &StageGraph) {
-        let mut stage_status = (0..stage_graph.stages.len()).map(|_| StageStatus::new()).collect::<Vec<_>>();
+    pub fn init_flow_tmpdir(&self, flow_id: usize) -> Result<(), String> {
+        let dirname: &str = &format!("{}/flow-{}/", TEMPDIR, flow_id);
 
-        let stages = Self::runnable(&stage_graph.stages, &stage_status);
-        for stage in stages {
-            debug!("Running stage: {}", stage.stage_id);
-            stage.run(env, flow);
+        // Add some protection against inadvertant deletion
+        if dirname.find("tmp").is_none() {
+            let errstr = f!("init_flow(): Temporary directory {TEMPDIR} doesn't have substring 'tmp'.");
+            Err(errstr)
+        } else {
+            std::fs::remove_dir_all(dirname).map_err(|e| stringify1(e, &dirname)).unwrap_or_default();
+            std::fs::create_dir_all(dirname).map_err(|e| stringify1(e, &dirname))?;
+            Ok(())
         }
+    }
+
+    pub fn set_stage_completed(flow: &Flow, stage_contexts: &mut Vec<StageContext>, stage_id: StageId) {
+        let stage_graph = &flow.stage_graph;
+        if stage_id > 0 {
+            let parent_stage_id = stage_graph.stages[stage_id].parent_stage_id.unwrap();
+            stage_contexts[parent_stage_id].nchildren_completed = stage_contexts[parent_stage_id].nchildren_completed + 1;
+        }
+    }
+
+    pub fn schedule_stages(&self, env: &Env, flow: &Flow, stage_contexts: &Vec<StageContext>) -> usize {
+        let stage_graph = &flow.stage_graph;
+
+        let stages = Self::runnable(&stage_graph.stages, &stage_contexts);
+        for stage in stages.iter() {
+            stage.schedule(env, flow);
+        }
+        stages.len()
+    }
+
+    pub fn run_flow(&self, env: &Env, flow: &Flow) -> Result<(), String> {
+        self.init_flow_tmpdir(env.id)?;
+
+        let stage_graph = &flow.stage_graph;
+        let mut stage_contexts = (0..stage_graph.stages.len()).map(|_| StageContext::new()).collect::<Vec<_>>();
+
+        self.schedule_stages(env, flow, &stage_contexts);
 
         for msg in &self.t2s_channel_rx {
-            let mut stage_ended = None;
-
             debug!("run_flow message recv: {:?}", msg);
 
             match msg {
-                SchedulerMessage::TaskEnded { stage_id, .. } => {
-                    let mut ss = &mut stage_status[stage_id];
+                SchedulerMessage::TaskCompleted { stage_id, .. } => {
+                    let mut ss = &mut stage_contexts[stage_id];
                     let stage = &stage_graph.stages[stage_id];
 
-                    ss.completed_npartitions = ss.completed_npartitions + 1;
-                    if stage.npartitions == ss.completed_npartitions {
-                        stage_ended = Some(stage_id)
+                    // If this was the last task in a stage, schedule any dependent stages
+                    ss.npartitions_completed = ss.npartitions_completed + 1;
+                    if stage.npartitions == ss.npartitions_completed {
+                        debug!("Stage {} completed", stage_id);
+                        Self::set_stage_completed(flow, &mut stage_contexts, stage_id);
+
+                        debug!("Stage contexts: {:?}", &stage_contexts);
+                        if self.schedule_stages(env, flow, &stage_contexts) == 0 {
+                            break;
+                        }
                     }
                 }
                 _ => {
-                    panic!("Invalid message")
+                    panic!("Unexpected message received by scheduler.")
                 }
             }
-
-            if let Some(stage_ended) = stage_ended {
-                debug!("run_flow stage ended: {:?}", stage_ended);
-                return;
-            }
         }
+        Ok(())
     }
 }

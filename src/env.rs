@@ -9,6 +9,7 @@ pub struct EnvSettings {
 }
 
 pub struct Env {
+    pub id: usize,
     pub scheduler: Scheduler,
     pub metadata: Metadata,
     pub input_pathname: String,
@@ -17,12 +18,13 @@ pub struct Env {
 }
 
 impl Env {
-    pub fn new(nthreads: usize, input_pathname: String, output_dir: String) -> Self {
+    pub fn new(id: usize, nthreads: usize, input_pathname: String, output_dir: String) -> Self {
         let scheduler = Scheduler::new(nthreads);
         let metadata = Metadata::new();
         let options = EnvSettings::default();
 
         Env {
+            id,
             scheduler,
             metadata,
             input_pathname,

@@ -23,10 +23,12 @@ pub fn init(default_log_level: &str) {
 
         writeln!(
             buf,
-            "[{} {} {} {}] - {}",
+            "[{} {} {}:{} {}] - {}",
             now.to_rfc3339(),
             level_style.value(record.level()),
-            record.module_path().unwrap_or("<no-mod>"),
+            //record.module_path().unwrap_or("<no-mod>"),
+            record.file().unwrap_or("unknown"),
+            record.line().unwrap_or(0),
             thread::current().name().unwrap_or("<unnamed-thread>"),
             record.args()
         )

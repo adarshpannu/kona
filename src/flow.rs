@@ -4,6 +4,7 @@ use crate::{graph::POPKey, includes::*, pop::POPGraph, stage::StageGraph, POP};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Flow {
+    pub id: usize,
     pub pop_graph: POPGraph,
     pub stage_graph: StageGraph,
 }

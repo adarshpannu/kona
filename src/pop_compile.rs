@@ -34,7 +34,7 @@ impl POP {
         QGM::write_physical_plan_to_graphviz(qgm, &stage_graph, &pop_graph, root_pop_key, &plan_pathname)?;
 
         // Build flow (POPs + Stages)
-        let flow = Flow { pop_graph, stage_graph };
+        let flow = Flow { id: env.id, pop_graph, stage_graph };
         return Ok(flow);
     }
 

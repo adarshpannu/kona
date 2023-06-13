@@ -45,9 +45,9 @@ impl RepartitionWriteContext {
         hashed.rem(&(npartitions as u64))
     }
 
-    fn get_writer(&mut self, rpw: &RepartitionWrite, cpartition: PartitionId) -> Result<&mut FileWriter<File>, String> {
+    fn get_writer(&mut self, flow_id: usize, rpw: &RepartitionWrite, cpartition: PartitionId) -> Result<&mut FileWriter<File>, String> {
         if self.writers[cpartition].is_none() {
-            let dirname = format!("{}/flow-99/stage-{}/consumer-{}", TEMPDIR, self.pop_key.printable_id(), cpartition);
+            let dirname = format!("{}/flow-{}/stage-{}/consumer-{}", TEMPDIR, flow_id, self.pop_key.printable_id(), cpartition);
             let path = format!("{}/producer-{}.arrow", dirname, self.partition_id);
             std::fs::create_dir_all(dirname).map_err(stringify)?;
 
@@ -78,12 +78,12 @@ impl RepartitionWriteContext {
         filter_chunk(chunk, &arr).map_err(stringify)
     }
 
-    fn write_partitions(&mut self, rpw: &RepartitionWrite, chunk: ChunkBox, part_array: PrimitiveArray<u64>) -> Result<(), String> {
+    fn write_partitions(&mut self, flow_id: usize, rpw: &RepartitionWrite, chunk: ChunkBox, part_array: PrimitiveArray<u64>) -> Result<(), String> {
         for cpartition in 0..rpw.cpartitions {
             // Filter chunk to only grab this partition
             let filtered_chunk = Self::filter_partition(&chunk, &part_array, cpartition)?;
             if filtered_chunk.len() > 0 {
-                let writer = self.get_writer(rpw, cpartition)?;
+                let writer = self.get_writer(flow_id, rpw, cpartition)?;
                 writer.write(&filtered_chunk, None).map_err(stringify)?
             }
         }
@@ -136,7 +136,7 @@ impl POPContext for RepartitionWriteContext {
                 );
 
                 // Write partitions
-                self.write_partitions(rpw, chunk, part_array)?;
+                self.write_partitions(flow.id, rpw, chunk, part_array)?;
             }
             self.finish_writers(rpw)?;
         } else {
