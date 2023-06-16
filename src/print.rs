@@ -125,7 +125,7 @@ impl QGM {
         Ok(())
     }
 
-    pub fn write_physical_plan_to_graphviz(self: &QGM, stage_graph: &StageGraph, pop_graph: &POPGraph, pop_key: POPKey, pathname: &str) -> Result<(), String> {
+    pub fn write_physical_plan_to_graphviz(self: &QGM, stage_graph: &StageGraph, pathname: &str) -> Result<(), String> {
         let mut file = std::fs::File::create(pathname).map_err(|err| f!("{:?}: {}", err, pathname))?;
 
         fprint!(file, "digraph example1 {{\n");
@@ -134,9 +134,26 @@ impl QGM {
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
 
-        let pop2stage: HashMap<POPKey, &Stage> = stage_graph.get_pop_to_stage_map();
+        // Write stages
+        for stage in &stage_graph.stages {
+            fprint!(file, "  subgraph cluster_stage_{} {{\n", stage.stage_id);
+            //fprint!(file, "    \"stage_{}_stub\"[label=\"select_list\",shape=box,style=filled];\n", stage.stage_id);
 
-        self.write_pop_to_graphviz(stage_graph, pop_graph, &pop2stage, pop_key, &mut file)?;
+            self.write_pop_to_graphviz(stage, stage.root_pop_key.unwrap(), &mut file)?;
+            fprint!(file, "    color = \"red\"\n");
+            fprint!(file, "}}\n");
+
+            if let Some(pop_key) = stage.root_pop_key {
+                let pop = stage.pop_graph.get_value(pop_key);
+
+                if let POP::RepartitionRead(rpr) = &pop {
+                    let child_name = rpr.child_pop_key().printable_key(*rpr.child_stage_id());
+                    let name = pop_key.printable_key(stage.stage_id);
+
+                    fprint!(file, "    popkey{} -> popkey{};\n", child_name, name);
+                }
+            }
+        }
 
         fprint!(file, "}}\n");
 
@@ -155,21 +172,20 @@ impl QGM {
         Ok(())
     }
 
-    pub fn write_pop_to_graphviz(
-        self: &QGM, stage_graph: &StageGraph, pop_graph: &POPGraph, pop2stage: &HashMap<POPKey, &Stage>, pop_key: POPKey, file: &mut File,
-    ) -> Result<(), String> {
-        let id = pop_key.printable_key();
+    pub fn write_pop_to_graphviz(self: &QGM, stage: &Stage, pop_key: POPKey, file: &mut File) -> Result<(), String> {
+        let id = pop_key.printable_key(stage.stage_id);
+        let pop_graph = &stage.pop_graph;
         let (pop, props, children) = pop_graph.get3(pop_key);
 
         if let Some(children) = children {
             for &child_key in children.iter() {
-                let child_name = child_key.printable_key();
+                let child_name = child_key.printable_key(stage.stage_id);
                 fprint!(file, "    popkey{} -> popkey{};\n", child_name, id);
-                self.write_pop_to_graphviz(stage_graph, pop_graph, pop2stage, child_key, file)?;
+                self.write_pop_to_graphviz(stage, child_key, file)?;
             }
         }
 
-        let color = if pop2stage.get(&pop_key).is_some() { "red" } else { "black" };
+        let color = if stage.root_pop_key.unwrap() == pop_key { "red" } else { "black" };
 
         let (label, extrastr) = match &pop {
             POP::CSV(csv) => {
@@ -374,8 +390,8 @@ pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> S
 }
 
 impl POPKey {
-    pub fn printable_key(&self) -> String {
-        format!("{:?}", *self).replace("(", "").replace(")", "")
+    pub fn printable_key(&self, stage_id: StageId) -> String {
+        format!("{:?}_stage{}", *self, stage_id).replace("(", "").replace(")", "")
     }
 
     pub fn printable(&self, pop_graph: &POPGraph) -> String {

@@ -76,13 +76,20 @@ where
     }
 
     pub fn get3(&self, key: K) -> (&V, &P, Option<&Vec<K>>) {
-        let node = self.sm.get(key).unwrap();
+        let node = self.sm.get(key);
+        if node.is_none() {
+            panic!("hello")
+        }
+        let node = node.unwrap();
         (&node.value, &node.properties, node.children.as_ref())
     }
 
     pub fn get(&self, key: K) -> &Node<K, V, P> {
-        let node = self.sm.get(key).unwrap();
-        node
+        let node = self.sm.get(key);
+        if node.is_none() {
+            panic!("hello")
+        }
+        node.unwrap()
     }
 
     pub fn get_value(&self, key: K) -> &V {

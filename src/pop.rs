@@ -9,10 +9,11 @@ use crate::{
     pop_csv::CSV,
     pop_hashjoin::HashJoin,
     pop_repartition::{RepartitionRead, RepartitionWrite},
+    stage::Stage,
 };
+use arrow2::io::csv::write;
 use std::collections::HashMap;
 use std::io::{self, Write};
-use arrow2::io::csv::write;
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
@@ -76,7 +77,7 @@ pub enum POP {
 /***************************************************************************************************/
 pub trait POPContext {
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String>;
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String>;
 }
 
 struct VecWriter {

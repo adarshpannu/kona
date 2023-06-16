@@ -1,6 +1,8 @@
 // pop_repartition
 
-use crate::{flow::Flow, graph::POPKey, includes::*, pcode::PCode, pop::chunk_to_string, pop::POPContext, pop::POP};
+use crate::flow::Flow;
+use crate::stage::Stage;
+use crate::{graph::POPKey, includes::*, pcode::PCode, pop::chunk_to_string, pop::POPContext, pop::POP};
 use arrow2::compute::arithmetics::ArrayRem;
 use arrow2::compute::filter::filter_chunk;
 use arrow2::compute::hash::hash;
@@ -97,15 +99,15 @@ impl POPContext for RepartitionWriteContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
-        let pop = flow.pop_graph.get_value(pop_key);
+        let pop = stage.pop_graph.get_value(pop_key);
         if let POP::RepartitionWrite(rpw) = pop {
             let repart_key_code = &rpw.repart_key;
 
             loop {
                 let child = &mut self.children[0];
-                let chunk = child.next(flow)?;
+                let chunk = child.next(flow, stage)?;
                 if chunk.len() == 0 {
                     break;
                 }
@@ -137,7 +139,7 @@ impl POPContext for RepartitionWriteContext {
                 );
 
                 // Write partitions
-                self.write_partitions(flow.id, rpw, chunk, part_array)?;
+                self.write_partitions(flow.id, rpw, chunk, part_array)?; // FIXME
             }
             self.finish_writers(rpw)?;
         } else {
@@ -176,18 +178,27 @@ impl RepartitionWrite {
 pub struct RepartitionRead {
     #[getset(get = "pub")]
     schema: Rc<Schema>,
+
+    #[getset(get = "pub")]
+    child_stage_id: StageId,
+
+    #[getset(get = "pub")]
+    child_pop_key: POPKey,
 }
 
 impl RepartitionRead {
-    pub fn new(schema: Rc<Schema>) -> Self {
-        RepartitionRead { schema }
+    pub fn new(schema: Rc<Schema>, child_stage_id: StageId, child_pop_key: POPKey) -> Self {
+        RepartitionRead {
+            schema,
+            child_stage_id,
+            child_pop_key,
+        }
     }
 }
 
 pub struct RepartitionReadContext {
     pop_key: POPKey,
     pop_key_of_writer: POPKey,
-    children: Vec<Box<dyn POPContext>>,
     partition_id: PartitionId,
     files: Vec<String>,
     //reader: Box<dyn Iterator<Item = ChunkBox>>,
@@ -195,7 +206,7 @@ pub struct RepartitionReadContext {
 
 impl RepartitionReadContext {
     pub fn new(
-        flow_id: usize, pop_key: POPKey, pop_key_of_writer: POPKey, rpw: &RepartitionRead, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId,
+        flow_id: usize, pop_key: POPKey, pop_key_of_writer: POPKey, rpw: &RepartitionRead, partition_id: PartitionId,
     ) -> Result<Box<dyn POPContext>, String> {
         // Enumerate directory
         let dirname = get_partition_dir(flow_id, pop_key_of_writer, partition_id);
@@ -224,7 +235,6 @@ impl RepartitionReadContext {
         Ok(Box::new(RepartitionReadContext {
             pop_key,
             pop_key_of_writer,
-            children,
             partition_id,
             files,
             //reader,
@@ -237,9 +247,9 @@ impl POPContext for RepartitionReadContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
-        let pop = flow.pop_graph.get_value(pop_key);
+        let pop = stage.pop_graph.get_value(pop_key);
 
         /*
         if let POP::RepartitionRead(rpw) = pop {

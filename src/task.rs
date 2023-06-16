@@ -37,9 +37,9 @@ impl Task {
         */
         let root_pop_key = stage.root_pop_key.unwrap();
 
-        let mut root_context = self.init_context(flow, root_pop_key)?;
+        let mut root_context = self.init_context(flow, stage, root_pop_key)?;
         loop {
-            let chunk = root_context.next(flow)?;
+            let chunk = root_context.next(flow, stage)?;
             if chunk.len() == 0 {
                 break;
             }
@@ -48,12 +48,12 @@ impl Task {
         Ok(())
     }
 
-    pub fn init_context(&self, flow: &Flow, popkey: POPKey) -> Result<Box<dyn POPContext>, String> {
-        let (pop, _, children) = flow.pop_graph.get3(popkey);
+    pub fn init_context(&self, flow: &Flow, stage: &Stage, popkey: POPKey) -> Result<Box<dyn POPContext>, String> {
+        let (pop, _, children) = stage.pop_graph.get3(popkey);
         let child_contexts = if let Some(children) = children {
             let children = children
                 .iter()
-                .map(|&child_popkey| self.init_context(flow, child_popkey).unwrap())
+                .map(|&child_popkey| self.init_context(flow, stage, child_popkey).unwrap())
                 .collect::<Vec<_>>();
             Some(children)
         } else {
@@ -64,8 +64,8 @@ impl Task {
             POP::CSV(csv) => CSVContext::new(popkey, csv, self.partition_id)?,
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap(), self.partition_id)?,
             POP::RepartitionRead(rpr) => {
-                let pop_key_of_writer = children.unwrap()[0];
-                RepartitionReadContext::new(flow.id, popkey, pop_key_of_writer, &rpr, child_contexts.unwrap(), self.partition_id)?
+                let pop_key_of_writer = *rpr.child_pop_key();
+                RepartitionReadContext::new(flow.id, popkey, pop_key_of_writer, &rpr, self.partition_id)?
             },
             POP::HashJoin(hj) => HashJoinContext::new(popkey, &hj, child_contexts.unwrap(), self.partition_id)?,
 

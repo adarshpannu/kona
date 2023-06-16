@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    graph::{LOPKey, POPKey},
+    graph::{Graph, LOPKey, POPKey},
     includes::*,
     pop::POPGraph,
     scheduler::SchedulerMessage,
@@ -19,6 +19,7 @@ pub struct Stage {
     pub root_pop_key: Option<POPKey>,
     pub nchildren: usize, // # of stages this stage depends on
     pub npartitions: usize,
+    pub pop_graph: POPGraph,
 }
 
 #[derive(Debug)]
@@ -41,6 +42,7 @@ impl StageContext {
 impl Stage {
     pub fn new(stage_id: usize, parent_stage_id: Option<usize>, root_lop_key: LOPKey) -> Self {
         debug!("New stage with root_lop_key: {:?}", root_lop_key);
+        let pop_graph = Graph::new();
 
         Stage {
             stage_id,
@@ -49,13 +51,14 @@ impl Stage {
             root_pop_key: None,
             nchildren: 0,
             npartitions: 0,
+            pop_graph,
         }
     }
 
     pub fn schedule(&self, env: &Env, flow: &Flow) {
         debug!("Schedule stage: {:?}", self.root_pop_key);
 
-        let (_, props, ..) = flow.pop_graph.get3(self.root_pop_key.unwrap());
+        let (_, props, ..) = self.pop_graph.get3(self.root_pop_key.unwrap());
         let npartitions = props.npartitions;
         for partition_id in 0..npartitions {
             let task = Task::new(partition_id);
@@ -73,7 +76,7 @@ impl Stage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct StageGraph {
     pub stages: Vec<Stage>, // Stage hierarchy encoded in this array
 }
@@ -103,9 +106,9 @@ impl StageGraph {
         new_id
     }
 
-    pub fn set_pop_key(&mut self, pop_graph: &POPGraph, stage_id: StageId, pop_key: POPKey) {
+    pub fn set_pop_key(&mut self, stage_id: StageId, pop_key: POPKey) {
         let stage = &mut self.stages[stage_id];
-        let props = &pop_graph.get(pop_key).properties;
+        let props = &stage.pop_graph.get(pop_key).properties;
         stage.npartitions = props.npartitions;
         stage.root_pop_key = Some(pop_key)
     }

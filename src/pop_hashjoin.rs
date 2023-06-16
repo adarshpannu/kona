@@ -4,7 +4,7 @@ use crate::{
     flow::Flow,
     graph::POPKey,
     includes::*,
-    pop::{POPContext, POP},
+    pop::{POPContext, POP}, stage::Stage,
 };
 
 /***************************************************************************************************/
@@ -26,15 +26,15 @@ impl POPContext for HashJoinContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
-        let pop = flow.pop_graph.get_value(pop_key);
+        let pop = stage.pop_graph.get_value(pop_key);
         if let POP::HashJoin(hj) = pop {
             // Drain build-side (i.e. right child), then drain probe-side (left child)
             loop {
                 let child = if self.built_hashtable { &mut self.children[0] } else { &mut self.children[1] };
 
-                let chunk = child.next(flow)?;
+                let chunk = child.next(flow, stage)?;
                 if chunk.len() == 0 {
                     if !self.built_hashtable {
                         self.built_hashtable = true

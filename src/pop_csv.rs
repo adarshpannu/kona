@@ -1,6 +1,6 @@
 // csv
 
-use crate::{flow::Flow, graph::POPKey, includes::*, pop::chunk_to_string, pop::POPContext};
+use crate::{graph::POPKey, includes::*, pop::chunk_to_string, pop::POPContext, stage::Stage, flow::Flow};
 use arrow2::io::csv::{
     read,
     read::{ByteRecord, Reader, ReaderBuilder},
@@ -89,9 +89,9 @@ impl POPContext for CSVContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
-        let props = flow.pop_graph.get_properties(pop_key);
+        let props = stage.pop_graph.get_properties(pop_key);
 
         let mut chunk = self.next0()?;
 
