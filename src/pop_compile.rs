@@ -3,17 +3,17 @@
 use crate::{
     bitset::Bitset,
     flow::Flow,
-    graph::{ExprKey, Graph, LOPKey, POPKey},
+    graph::{ExprKey, LOPKey, POPKey},
     includes::*,
     lop::{LOPGraph, LOPProps, VirtCol, LOP},
     metadata::{PartType, TableType},
     pcode::PCode,
-    pop::{POPGraph, POPProps, Projection, ProjectionMap, POP},
+    pop::{POPProps, Projection, ProjectionMap, POP},
     pop_aggregation,
     pop_csv::CSV,
     pop_hashjoin, pop_repartition,
     qgm::QGM,
-    stage::StageGraph,
+    stage::{StageLink, StageGraph},
 };
 use std::rc::Rc;
 
@@ -24,7 +24,7 @@ impl POP {
 
         let root_stage_id = stage_graph.add_stage(lop_key, None);
         let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut stage_graph, root_stage_id)?;
-        stage_graph.set_pop_key(root_stage_id, root_pop_key);
+        stage_graph.set_root_pop_key(root_stage_id, root_pop_key);
 
         // Diagnostics
         stage_graph.print();
@@ -41,10 +41,12 @@ impl POP {
         let (lop, _, lop_children) = lop_graph.get3(lop_key);
 
         // Do we have a new stage?
-        let effective_stage_id = if matches!(lop, LOP::Repartition { .. }) {
-            stage_graph.add_stage(lop_key, Some(stage_id))
+        let (effective_stage_id, stage_link) = if matches!(lop, LOP::Repartition { .. }) {
+            let child_stage_id = stage_graph.add_stage(lop_key, Some(stage_id));
+            let stage_link = Some(StageLink(child_stage_id, stage_id));
+            (child_stage_id, stage_link)
         } else {
-            stage_id
+            (stage_id, None)
         };
 
         // Compile children first
@@ -73,9 +75,9 @@ impl POP {
                 lop_graph,
                 lop_key,
                 stage_graph,
-                effective_stage_id,
                 pop_children,
                 schema.clone().unwrap(),
+                stage_link.unwrap(),
                 *cpartitions,
             )?,
             LOP::Aggregation { .. } => Self::compile_aggregation(lop_graph, lop_key, stage_graph, effective_stage_id, pop_children)?,
@@ -84,24 +86,15 @@ impl POP {
         debug!("Compiled LOP = {:?} -> POP = {:?} to stage {}", lop_key, pop_key, effective_stage_id);
         debug!("   children =  {:?}", pop_children_clone);
 
-        if stage_id != effective_stage_id {
-            stage_graph.set_pop_key(effective_stage_id, pop_key)
-        }
-
         // Add RepartionRead
         if let LOP::Repartition { cpartitions } = lop {
-            let pop_key: POPKey = Self::compile_repartition_read(
-                lop_graph,
-                lop_key,
-                stage_graph,
-                stage_id,
-                effective_stage_id,
-                pop_key,
-                schema.unwrap(),
-                *cpartitions,
-            )?;
-            debug!("Compiled LOP = {:?} -> POP = {:?} to stage {}", lop_key, pop_key, stage_id);
-            return Ok(pop_key);
+            let read_pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, stage_graph, stage_link.unwrap(), schema.unwrap(), *cpartitions)?;
+            debug!("Compiled LOP = {:?} -> POP = {:?} to stage {}", lop_key, read_pop_key, stage_id);
+
+            stage_graph.set_root_pop_key(effective_stage_id, pop_key);
+            stage_graph.set_parent_pop_key(effective_stage_id, read_pop_key);
+
+            return Ok(read_pop_key);
         }
         Ok(pop_key)
     }
@@ -232,9 +225,10 @@ impl POP {
     }
 
     pub fn compile_repartition_write(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>, schema: Rc<Schema>,
-        cpartitions: usize,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
+        stage_link: StageLink, cpartitions: usize,
     ) -> Result<POPKey, String> {
+        let stage_id = stage_link.0;
         let (_, lopprops, children) = lop_graph.get3(lop_key);
 
         // We shouldn't have any predicates
@@ -259,7 +253,7 @@ impl POP {
         };
         debug!("Compile pkey end");
 
-        let pop_inner = pop_repartition::RepartitionWrite::new(repart_key, schema, cpartitions);
+        let pop_inner = pop_repartition::RepartitionWrite::new(repart_key, schema, stage_link, cpartitions);
         let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionWrite(pop_inner), props, Some(pop_children));
 
@@ -267,9 +261,9 @@ impl POP {
     }
 
     pub fn compile_repartition_read(
-        lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, child_stage_id: StageId, child_pop_key: POPKey,
-        schema: Rc<Schema>, npartitions: usize,
+        lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, schema: Rc<Schema>, npartitions: usize,
     ) -> Result<POPKey, String> {
+        let stage_id = stage_link.1;
         let lopprops = &lop_graph.get(lop_key).properties;
 
         // No predicates
@@ -284,7 +278,7 @@ impl POP {
 
         let props = POPProps::new(predicates, cols, virtcols, npartitions);
 
-        let pop_inner = pop_repartition::RepartitionRead::new(schema, child_stage_id, child_pop_key);
+        let pop_inner = pop_repartition::RepartitionRead::new(schema, stage_link);
         let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, None);

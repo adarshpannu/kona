@@ -1,7 +1,7 @@
 // pop_repartition
 
 use crate::flow::Flow;
-use crate::stage::Stage;
+use crate::stage::{StageLink, Stage};
 use crate::{graph::POPKey, includes::*, pcode::PCode, pop::chunk_to_string, pop::POPContext, pop::POP};
 use arrow2::compute::arithmetics::ArrayRem;
 use arrow2::compute::filter::filter_chunk;
@@ -50,7 +50,7 @@ impl RepartitionWriteContext {
 
     fn get_writer(&mut self, flow_id: usize, rpw: &RepartitionWrite, cpartition: PartitionId) -> Result<&mut FileWriter<File>, String> {
         if self.writers[cpartition].is_none() {
-            let dirname = get_partition_dir(flow_id, self.pop_key, cpartition);
+            let dirname = get_partition_dir(flow_id, rpw.stage_link, cpartition);
             let path = format!("{}/producer-{}.arrow", dirname, self.partition_id);
             std::fs::create_dir_all(dirname).map_err(stringify)?;
 
@@ -161,13 +161,18 @@ pub struct RepartitionWrite {
 
     #[getset(get = "pub")]
     cpartitions: PartitionId,
+
+    #[getset(get = "pub")]
+    stage_link: StageLink,
+
 }
 
 impl RepartitionWrite {
-    pub fn new(repart_key: Vec<PCode>, schema: Rc<Schema>, cpartitions: PartitionId) -> Self {
+    pub fn new(repart_key: Vec<PCode>, schema: Rc<Schema>, stage_link: StageLink, cpartitions: PartitionId) -> Self {
         RepartitionWrite {
             repart_key,
             schema,
+            stage_link,
             cpartitions,
         }
     }
@@ -180,36 +185,27 @@ pub struct RepartitionRead {
     schema: Rc<Schema>,
 
     #[getset(get = "pub")]
-    child_stage_id: StageId,
-
-    #[getset(get = "pub")]
-    child_pop_key: POPKey,
+    stage_link: StageLink,
 }
 
 impl RepartitionRead {
-    pub fn new(schema: Rc<Schema>, child_stage_id: StageId, child_pop_key: POPKey) -> Self {
-        RepartitionRead {
-            schema,
-            child_stage_id,
-            child_pop_key,
-        }
+    pub fn new(schema: Rc<Schema>, stage_link: StageLink) -> Self {
+        RepartitionRead { schema, stage_link }
     }
 }
 
+/***************************************************************************************************/
 pub struct RepartitionReadContext {
     pop_key: POPKey,
-    pop_key_of_writer: POPKey,
     partition_id: PartitionId,
     files: Vec<String>,
     //reader: Box<dyn Iterator<Item = ChunkBox>>,
 }
 
 impl RepartitionReadContext {
-    pub fn new(
-        flow_id: usize, pop_key: POPKey, pop_key_of_writer: POPKey, rpw: &RepartitionRead, partition_id: PartitionId,
-    ) -> Result<Box<dyn POPContext>, String> {
+    pub fn new(flow_id: usize, pop_key: POPKey, rpw: &RepartitionRead, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         // Enumerate directory
-        let dirname = get_partition_dir(flow_id, pop_key_of_writer, partition_id);
+        let dirname = get_partition_dir(flow_id, rpw.stage_link, partition_id);
         let files = list_files(&dirname);
         let files = if let Err(errstr) = files {
             if errstr.find("kind: NotFound").is_none() {
@@ -234,7 +230,6 @@ impl RepartitionReadContext {
 
         Ok(Box::new(RepartitionReadContext {
             pop_key,
-            pop_key_of_writer,
             partition_id,
             files,
             //reader,
@@ -263,8 +258,8 @@ impl POPContext for RepartitionReadContext {
     }
 }
 
-fn get_partition_dir(flow_id: usize, pop_key: POPKey, pid: PartitionId) -> String {
-    format!("{}/flow-{}/stage-{}/consumer-{}", TEMPDIR, flow_id, pop_key.printable_id(), pid)
+fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId) -> String {
+    format!("{}/flow-{}/pipeline-{}-{}/consumer-{}", TEMPDIR, flow_id, stage_link.0, stage_link.1, pid)
 }
 
 pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {

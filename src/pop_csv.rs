@@ -89,7 +89,7 @@ impl POPContext for CSVContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
 

@@ -2,7 +2,7 @@
 
 #![allow(warnings)]
 
-use crate::{includes::*, qgm::ParserState, stage::Stage};
+use crate::{includes::*, qgm::ParserState};
 use std::fs;
 
 #[macro_use]

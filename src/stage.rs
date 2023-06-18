@@ -15,6 +15,7 @@ use crate::{
 pub struct Stage {
     pub stage_id: StageId,
     pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
+    pub parent_pop_key: Option<POPKey>, // POPKey that 'reads' this stage
     pub root_lop_key: LOPKey,
     pub root_pop_key: Option<POPKey>,
     pub nchildren: usize, // # of stages this stage depends on
@@ -47,6 +48,7 @@ impl Stage {
         Stage {
             stage_id,
             parent_stage_id,
+            parent_pop_key: None,
             root_lop_key,
             root_pop_key: None,
             nchildren: 0,
@@ -106,11 +108,16 @@ impl StageGraph {
         new_id
     }
 
-    pub fn set_pop_key(&mut self, stage_id: StageId, pop_key: POPKey) {
+    pub fn set_root_pop_key(&mut self, stage_id: StageId, pop_key: POPKey) {
         let stage = &mut self.stages[stage_id];
         let props = &stage.pop_graph.get(pop_key).properties;
         stage.npartitions = props.npartitions;
         stage.root_pop_key = Some(pop_key)
+    }
+
+    pub fn set_parent_pop_key(&mut self, stage_id: StageId, pop_key: POPKey) {
+        let stage = &mut self.stages[stage_id];
+        stage.parent_pop_key = Some(pop_key)
     }
 
     pub fn print(&self) {
@@ -124,3 +131,8 @@ impl StageGraph {
         self.stages.iter().map(|s| (s.root_pop_key.unwrap(), s)).collect()
     }
 }
+
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub struct StageLink(pub StageId, pub StageId); // (from, to)
+

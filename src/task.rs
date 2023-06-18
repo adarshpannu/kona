@@ -6,8 +6,9 @@ use crate::{
     includes::*,
     pop::{POPContext, POP},
     pop_csv::CSVContext,
+    pop_hashjoin::HashJoinContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
-    stage::Stage, pop_hashjoin::HashJoinContext,
+    stage::Stage,
 };
 
 /***************************************************************************************************/
@@ -63,12 +64,10 @@ impl Task {
         let ctxt = match &pop {
             POP::CSV(csv) => CSVContext::new(popkey, csv, self.partition_id)?,
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap(), self.partition_id)?,
-            POP::RepartitionRead(rpr) => {
-                let pop_key_of_writer = *rpr.child_pop_key();
-                RepartitionReadContext::new(flow.id, popkey, pop_key_of_writer, &rpr, self.partition_id)?
-            },
-            POP::HashJoin(hj) => HashJoinContext::new(popkey, &hj, child_contexts.unwrap(), self.partition_id)?,
 
+            // FIXME: Since POP graphs are local to stages, repartition directories may not be unique. Use LOPKey?
+            POP::RepartitionRead(rpr) => RepartitionReadContext::new(flow.id, popkey, &rpr, self.partition_id)?,
+            POP::HashJoin(hj) => HashJoinContext::new(popkey, &hj, child_contexts.unwrap(), self.partition_id)?,
             _ => unimplemented!(),
         };
         Ok(ctxt)

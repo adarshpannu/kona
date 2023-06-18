@@ -1,6 +1,6 @@
 // Print: Diagnostics, Graphviz,
 
-use std::{collections::HashMap, fs::File, io::Write, process::Command};
+use std::{fs::File, io::Write, process::Command};
 
 use regex::Regex;
 
@@ -138,20 +138,20 @@ impl QGM {
         for stage in &stage_graph.stages {
             fprint!(file, "  subgraph cluster_stage_{} {{\n", stage.stage_id);
             //fprint!(file, "    \"stage_{}_stub\"[label=\"select_list\",shape=box,style=filled];\n", stage.stage_id);
+            fprint!(file, "    label = \"Stage {}\"\n", stage.stage_id);
 
             self.write_pop_to_graphviz(stage, stage.root_pop_key.unwrap(), &mut file)?;
-            fprint!(file, "    color = \"red\"\n");
+            //fprint!(file, "    color = \"red\"\n");
             fprint!(file, "}}\n");
 
-            if let Some(pop_key) = stage.root_pop_key {
-                let pop = stage.pop_graph.get_value(pop_key);
-
-                if let POP::RepartitionRead(rpr) = &pop {
-                    let child_name = rpr.child_pop_key().printable_key(*rpr.child_stage_id());
-                    let name = pop_key.printable_key(stage.stage_id);
-
-                    fprint!(file, "    popkey{} -> popkey{};\n", child_name, name);
-                }
+            // For every non-root stage, point to POP in parent stage
+            if let Some(to_stage_id) = stage.parent_stage_id {
+                let from_stage_id = stage.stage_id;
+                let from_pop_key = stage.root_pop_key.unwrap();
+                let from_name = from_pop_key.printable_key(from_stage_id);
+                let to_pop_key = stage.parent_pop_key.unwrap();
+                let to_name = to_pop_key.printable_key(to_stage_id);
+                fprint!(file, "    popkey{} -> popkey{};\n", from_name, to_name);
             }
         }
 
