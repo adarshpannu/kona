@@ -30,7 +30,7 @@ impl POPContext for HashJoinContext {
     fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
-        if let POP::HashJoin(hj) = pop {
+        if let POP::HashJoin(_) = pop {
             // Drain build-side (i.e. right child), then drain probe-side (left child)
             loop {
                 let child = if self.built_hashtable { &mut self.children[0] } else { &mut self.children[1] };
@@ -62,7 +62,7 @@ impl POPContext for HashJoinContext {
 }
 
 impl HashJoinContext {
-    pub fn new(pop_key: POPKey, hj: &HashJoin, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn new(pop_key: POPKey, _: &HashJoin, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         Ok(Box::new(HashJoinContext {
             pop_key,
             children,

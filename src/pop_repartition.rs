@@ -9,7 +9,8 @@ use arrow2::compute::hash::hash;
 use arrow2::io::ipc::read::{read_file_metadata, FileReader};
 use arrow2::io::ipc::write::{FileWriter, WriteOptions};
 use getset::Getters;
-use std::fs::{read, File};
+use self_cell::self_cell;
+use std::fs::File;
 use std::rc::Rc;
 
 /***************************************************************************************************/
@@ -200,8 +201,24 @@ impl RepartitionRead {
 pub struct RepartitionReadContext {
     pop_key: POPKey,
     partition_id: PartitionId,
-    files: Box<Vec<String>>,
-    reader: Box<dyn Iterator<Item = ChunkBox>>,
+    cell: RepartitionReadCell,
+}
+
+type ChunkIter<'a> = Box<dyn Iterator<Item = ChunkBox> + 'a>;
+
+self_cell!(
+    struct RepartitionReadCell {
+        owner: Vec<String>,
+
+        #[covariant]
+        dependent: ChunkIter,
+    }
+);
+
+impl RepartitionReadCell {
+    fn next(&mut self) -> Option<Chunk<Box<dyn Array>>> {
+        self.with_dependent_mut(|_, dependent| dependent.next())
+    }
 }
 
 impl RepartitionReadContext {
@@ -217,25 +234,20 @@ impl RepartitionReadContext {
         } else {
             files.unwrap()
         };
-        let files = Box::new(files);
-
-        let reader = files.iter().flat_map(|path| {
-            let mut reader = File::open(&path).unwrap();
-            let metadata = read_file_metadata(&mut reader).unwrap();
-            let mut reader = FileReader::new(reader, metadata, None, None);
-            reader.next().unwrap()
-        });
-        let reader: Box<dyn Iterator<Item = ChunkBox>> = Box::new(reader);
-        let reader = unsafe { std::mem::transmute(reader) };
-
         debug!("RepartitionReadContext::new, partition = {}, files = {:?}", partition_id, &files);
 
-        Ok(Box::new(RepartitionReadContext {
-            pop_key,
-            partition_id,
-            files,
-            reader,
-        }))
+        let cell = RepartitionReadCell::new(files, |files| {
+            let reader = files.iter().flat_map(|path| {
+                let mut reader = File::open(&path).unwrap();
+                let metadata = read_file_metadata(&mut reader).unwrap();
+                let reader = FileReader::new(reader, metadata, None, None).map(|e| e.unwrap());
+                reader
+            });
+            let reader: Box<dyn Iterator<Item = ChunkBox>> = Box::new(reader);
+            reader
+        });
+
+        Ok(Box::new(RepartitionReadContext { pop_key, partition_id, cell }))
     }
 }
 
@@ -244,12 +256,12 @@ impl POPContext for RepartitionReadContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
 
-        if let POP::RepartitionRead(rpw) = pop {
-            let chunk = self.reader.next();
+        if let POP::RepartitionRead(_) = pop {
+            let chunk = self.cell.next();
             if let Some(chunk) = chunk {
                 debug!(
                     "RepartitionReadContext {:?} partition = {}::child chunk: \n{}",

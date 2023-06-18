@@ -1,6 +1,6 @@
 // main
 
-#![allow(warnings)]
+//#![allow(warnings)]
 
 use crate::{includes::*, qgm::ParserState};
 use std::fs;
