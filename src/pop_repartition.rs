@@ -1,7 +1,7 @@
 // pop_repartition
 
 use crate::flow::Flow;
-use crate::stage::{StageLink, Stage};
+use crate::stage::{Stage, StageLink};
 use crate::{graph::POPKey, includes::*, pcode::PCode, pop::chunk_to_string, pop::POPContext, pop::POP};
 use arrow2::compute::arithmetics::ArrayRem;
 use arrow2::compute::filter::filter_chunk;
@@ -9,7 +9,7 @@ use arrow2::compute::hash::hash;
 use arrow2::io::ipc::read::{read_file_metadata, FileReader};
 use arrow2::io::ipc::write::{FileWriter, WriteOptions};
 use getset::Getters;
-use std::fs::File;
+use std::fs::{read, File};
 use std::rc::Rc;
 
 /***************************************************************************************************/
@@ -87,6 +87,9 @@ impl RepartitionWriteContext {
             let filtered_chunk = Self::filter_partition(&chunk, &part_array, cpartition)?;
             if filtered_chunk.len() > 0 {
                 let writer = self.get_writer(flow_id, rpw, cpartition)?;
+
+                debug!("write_partitions {:?} {:?}", rpw.stage_link, chunk_to_string(&filtered_chunk));
+
                 writer.write(&filtered_chunk, None).map_err(stringify)?
             }
         }
@@ -164,7 +167,6 @@ pub struct RepartitionWrite {
 
     #[getset(get = "pub")]
     stage_link: StageLink,
-
 }
 
 impl RepartitionWrite {
@@ -198,8 +200,8 @@ impl RepartitionRead {
 pub struct RepartitionReadContext {
     pop_key: POPKey,
     partition_id: PartitionId,
-    files: Vec<String>,
-    //reader: Box<dyn Iterator<Item = ChunkBox>>,
+    files: Box<Vec<String>>,
+    reader: Box<dyn Iterator<Item = ChunkBox>>,
 }
 
 impl RepartitionReadContext {
@@ -215,8 +217,8 @@ impl RepartitionReadContext {
         } else {
             files.unwrap()
         };
+        let files = Box::new(files);
 
-        /*
         let reader = files.iter().flat_map(|path| {
             let mut reader = File::open(&path).unwrap();
             let metadata = read_file_metadata(&mut reader).unwrap();
@@ -224,7 +226,7 @@ impl RepartitionReadContext {
             reader.next().unwrap()
         });
         let reader: Box<dyn Iterator<Item = ChunkBox>> = Box::new(reader);
-        */
+        let reader = unsafe { std::mem::transmute(reader) };
 
         debug!("RepartitionReadContext::new, partition = {}, files = {:?}", partition_id, &files);
 
@@ -232,7 +234,7 @@ impl RepartitionReadContext {
             pop_key,
             partition_id,
             files,
-            //reader,
+            reader,
         }))
     }
 }
@@ -246,14 +248,20 @@ impl POPContext for RepartitionReadContext {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
 
-        /*
         if let POP::RepartitionRead(rpw) = pop {
-            todo!()
+            let chunk = self.reader.next();
+            if let Some(chunk) = chunk {
+                debug!(
+                    "RepartitionReadContext {:?} partition = {}::child chunk: \n{}",
+                    self.pop_key,
+                    self.partition_id,
+                    chunk_to_string(&chunk)
+                );
+                return Ok(chunk);
+            }
         } else {
             panic!("ugh")
         }
-        */
-
         Ok(Chunk::new(vec![]))
     }
 }

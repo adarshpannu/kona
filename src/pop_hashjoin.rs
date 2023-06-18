@@ -4,7 +4,8 @@ use crate::{
     flow::Flow,
     graph::POPKey,
     includes::*,
-    pop::{POPContext, POP}, stage::Stage,
+    pop::{chunk_to_string, POPContext, POP},
+    stage::Stage,
 };
 
 /***************************************************************************************************/
@@ -41,6 +42,15 @@ impl POPContext for HashJoinContext {
                     } else {
                         break;
                     }
+                } else {
+                    let side = if !self.built_hashtable { "build " } else { "probe " };
+                    debug!(
+                        "HashJoinContext {:?} partition = {}, side = {}::\n{}",
+                        self.pop_key,
+                        self.partition_id,
+                        side,
+                        chunk_to_string(&chunk)
+                    );
                 }
             }
         } else {
