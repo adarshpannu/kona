@@ -143,17 +143,17 @@ impl Expr {
                     format!("{} (${}.{})", colname, *qunid, *colid)
                 }
             }
-            Star => format!("*"),
-            Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
+            Star => String::from("*"),
+            Literal(v) => format!("{}", v).replace('"', r#"\""#),
             BinaryExpr(op) => format!("{}", op),
             NegatedExpr => "-".to_string(),
             RelExpr(op) => format!("{}", op),
-            BetweenExpr => format!("BETWEEEN"),
-            InListExpr => format!("IN"),
-            InSubqExpr => format!("IN_SUBQ"),
-            ExistsExpr => format!("EXISTS"),
+            BetweenExpr => String::from("BETWEEEN"),
+            InListExpr => String::from("IN"),
+            InSubqExpr => String::from("IN_SUBQ"),
+            ExistsExpr => String::from("EXISTS"),
             LogExpr(op) => format!("{:?}", op),
-            Subquery(_) => format!("(subquery)"),
+            Subquery(_) => String::from("(subquery)"),
             AggFunction(aggtype, ..) => format!("{:?}", aggtype),
             ScalarFunction(name) => format!("{}()", name),
         }
@@ -168,7 +168,7 @@ impl Expr {
                 if let Some(expr_key2) = iter2.next(graph) {
                     let expr1 = &graph.get(expr_key1).value;
                     let expr2 = &graph.get(expr_key2).value;
-                    if expr1.equals(expr2) == false {
+                    if !expr1.equals(expr2) {
                         return false;
                     }
                 } else {
@@ -183,7 +183,7 @@ impl Expr {
     }
 
     pub fn equals(&self, other: &Expr) -> bool {
-        let cmp_status = match (self, other) {
+        match (self, other) {
             (CID(qunid1, colid1), CID(qunid2, colid2)) => qunid1 == qunid2 && colid1 == colid2,
             (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
             (RelExpr(c1), RelExpr(c2)) => *c1 == *c2,
@@ -207,8 +207,7 @@ impl Expr {
             (BetweenExpr, BetweenExpr) => true,
             (InListExpr, InListExpr) => true,
             _ => false,
-        };
-        cmp_status
+        }
     }
 }
 
@@ -257,7 +256,7 @@ impl ExprKey {
     }
 
     pub fn to_string(self: &ExprKey) -> String {
-        format!("{:?}", *self).replace("(", "").replace(")", "")
+        format!("{:?}", *self).replace('(', "").replace(')', "")
     }
 
     pub fn is_column(&self, graph: &ExprGraph) -> bool {
@@ -275,11 +274,11 @@ impl ExprKey {
                 if let Some(prefix) = prefix {
                     format!("{}.{}", prefix, colname)
                 } else {
-                    format!("{}", colname)
+                    colname.to_string()
                 }
             }
-            Star => format!("*"),
-            Literal(v) => format!("{}", v).replace(r#"""#, r#"\""#),
+            Star => String::from("*"),
+            Literal(v) => format!("{}", v).replace('"', r#"\""#),
             BinaryExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
                 format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
@@ -296,19 +295,11 @@ impl ExprKey {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
                 format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
             }
-            BetweenExpr => {
-                format!("BETWEEEN")
-            }
-            InListExpr => format!("IN"),
-            InSubqExpr => {
-                format!("IN_SUBQ")
-            }
-            ExistsExpr => {
-                format!("EXISTS")
-            }
-            Subquery(_) => {
-                format!("(subquery)")
-            }
+            BetweenExpr => String::from("BETWEEEN"),
+            InListExpr => String::from("IN"),
+            InSubqExpr => String::from("IN_SUBQ"),
+            ExistsExpr => String::from("EXISTS"),
+            Subquery(_) => String::from("(subquery)"),
             AggFunction(aggtype, _) => {
                 let child_id = children.unwrap()[0];
                 format!("{:?}({})", aggtype, child_id.printable(graph, false))

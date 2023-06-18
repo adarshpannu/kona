@@ -58,7 +58,7 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     // Clear output directories
     let dirname = format!("{}/flow", TEMPDIR);
     //std::fs::remove_dir_all(&dirname).map_err(|err| format!("Cannot remove temporary directory: {}", dirname))?;
-    std::fs::remove_dir_all(&dirname).unwrap_or_default();
+    std::fs::remove_dir_all(dirname).unwrap_or_default();
 
     // Run the flow
     env.scheduler.run_flow(env, flow)?;
@@ -70,9 +70,9 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
 
 fn run_job(env: &mut Env) -> Result<(), String> {
     let pathname = &env.input_pathname;
-    let contents = fs::read_to_string(pathname).expect(&format!("Cannot open file: {}", &pathname));
+    let contents = fs::read_to_string(pathname).map_err(|err| stringify1("Cannot open file: {}", err))?;
 
-    let mut parser_state = ParserState::new();
+    let mut parser_state = ParserState::default();
 
     let qgm_raw_pathname = format!("{}/{}", env.output_dir, "qgm_raw.dot");
     let qgm_resolved_pathname = format!("{}/{}", env.output_dir, "qgm_resolved.dot");
@@ -93,7 +93,7 @@ fn run_job(env: &mut Env) -> Result<(), String> {
             AST::QGM(mut qgm) => {
                 // Resolve QGM
                 qgm.write_qgm_to_graphviz(&qgm_raw_pathname, false)?;
-                qgm.resolve(&env)?;
+                qgm.resolve(env)?;
                 qgm.write_qgm_to_graphviz(&qgm_resolved_pathname, false)?;
 
                 // Build LOPs
@@ -118,10 +118,10 @@ fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "yard::pcode=info");
 
     //std::env::set_var("RUST_LOG", "yard=info,yard::pop_repartition=debug,yard::flow=debug");
-    std::env::set_var("RUST_LOG", "yard=info,yard::pop_hashjoin=debug");
+    //std::env::set_var("RUST_LOG", "yard=info,yard::pop_hashjoin=debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
-    logging::init("info");
+    logging::init("debug");
 
     let input_pathname = f!("{TOPDIR}/sql/join.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
@@ -130,7 +130,7 @@ fn main() -> Result<(), String> {
 
     let jobres = run_job(&mut env);
     if let Err(errstr) = &jobres {
-        let errstr = format!("{}", &errstr);
+        let errstr = errstr.to_string();
         error!("{}", errstr);
         return Err(errstr);
     }
@@ -175,7 +175,7 @@ fn run_unit_tests() -> Result<(), String> {
 
         let mut mismatch = false;
         for (tag, buf) in vec![("out", output.stdout), ("err", output.stderr)].iter() {
-            if buf.len() > 0 {
+            if ! buf.is_empty() {
                 mismatch = true;
                 let s = String::from_utf8_lossy(buf);
                 println!("{}:\n{}", tag, s);

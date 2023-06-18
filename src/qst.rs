@@ -51,15 +51,15 @@ impl QueryBlock {
         // Resolve select list
         for ne in qblock.select_list.iter() {
             let expr_key = ne.expr_key;
-            qblock.resolve_expr(env, expr_graph, metadata, expr_key, true)?;
+            qblock.resolve_expr(env, expr_graph, expr_key, true)?;
         }
 
         // Resolve predicates
         if let Some(pred_list) = qblock.pred_list.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_key in pred_list {
-                qblock.resolve_expr(env, expr_graph, metadata, expr_key, false)?;
-                expr_key.get_boolean_factors(&expr_graph, &mut boolean_factors)
+                qblock.resolve_expr(env, expr_graph, expr_key, false)?;
+                expr_key.get_boolean_factors(expr_graph, &mut boolean_factors)
             }
             qblock.pred_list = Some(boolean_factors);
         }
@@ -67,7 +67,7 @@ impl QueryBlock {
         // Resolve group-by
         if let Some(group_by) = qblock.group_by.as_ref() {
             for &expr_key in group_by.iter() {
-                qblock.resolve_expr(env, expr_graph, metadata, expr_key, false)?;
+                qblock.resolve_expr(env, expr_graph, expr_key, false)?;
             }
         }
 
@@ -75,8 +75,8 @@ impl QueryBlock {
         if let Some(having_clause) = qblock.having_clause.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_key in having_clause {
-                qblock.resolve_expr(env, expr_graph, metadata, expr_key, true)?;
-                expr_key.get_boolean_factors(&expr_graph, &mut boolean_factors)
+                qblock.resolve_expr(env, expr_graph, expr_key, true)?;
+                expr_key.get_boolean_factors(expr_graph, &mut boolean_factors)
             }
             qblock.having_clause = Some(boolean_factors);
         }
@@ -84,13 +84,13 @@ impl QueryBlock {
         // Resolve group-by/having clauses, if they exist
         // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
         if qblock.group_by.is_some() {
-            Self::split_groupby(qbkey, env, qblock_graph, expr_graph)?;
+            Self::split_groupby(qbkey, qblock_graph, expr_graph)?;
         }
         info!("Resolved qblock id: {}", qblock_id);
         Ok(())
     }
 
-    pub fn split_groupby(qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph) -> Result<(), String> {
+    pub fn split_groupby(qbkey: QueryBlockKey, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph) -> Result<(), String> {
         let inner_qb_key = qblock_graph.add_node(QueryBlock::new0(expr_graph.next_id(), QueryBlockType::Select), None);
         //let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
         let outer_qb_node = qblock_graph.get_mut(qbkey);
@@ -108,12 +108,12 @@ impl QueryBlock {
         // Construct inner select-list by first adding GROUP-BY clause expressions
         let mut inner_select_list = group_by
             .iter()
-            .map(|&expr_key| NamedExpr::new(None, expr_key, &expr_graph))
+            .map(|&expr_key| NamedExpr::new(None, expr_key, expr_graph))
             .collect::<Vec<NamedExpr>>();
 
         // Augment inner select-list by extracting parameters from `agg(parameter)` expressions
         for ne in outer_qb.select_list.iter_mut() {
-            Self::transform_groupby_expr(env, expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut ne.expr_key)?;
+            Self::transform_groupby_expr(expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut ne.expr_key)?;
         }
 
         // Transform HAVING clause expressions -> outer qb predicates
@@ -121,7 +121,7 @@ impl QueryBlock {
             let mut new_having_clause = vec![];
             for having_pred in having_clause.iter() {
                 let mut new_pred_id = *having_pred;
-                Self::transform_groupby_expr(env, expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut new_pred_id)?;
+                Self::transform_groupby_expr(expr_graph, &mut inner_select_list, group_by_expr_count, agg_qun_id, &mut new_pred_id)?;
                 new_having_clause.push(new_pred_id);
             }
             Some(new_having_clause)
@@ -134,8 +134,8 @@ impl QueryBlock {
             replace(&mut outer_qb.name, None),
             QueryBlockType::Select,
             inner_select_list,
-            replace(&mut outer_qb.quns, vec![]),
-            replace(&mut outer_qb.pred_list, None),
+            std::mem::take(&mut outer_qb.quns),
+            std::mem::take(&mut outer_qb.pred_list),
             None,
             None,
             None,
@@ -162,7 +162,7 @@ impl QueryBlock {
         Ok(())
     }
 
-    fn find(graph: &ExprGraph, select_list: &Vec<NamedExpr>, group_by_expr_count: usize, expr_key: ExprKey) -> Option<usize> {
+    fn find(graph: &ExprGraph, select_list: &[NamedExpr], group_by_expr_count: usize, expr_key: ExprKey) -> Option<usize> {
         // Does this expression already exist in the select_list[..until_index]?
         for (ix, ne) in select_list.iter().enumerate() {
             if ix >= group_by_expr_count {
@@ -182,13 +182,13 @@ impl QueryBlock {
         }
         // ... append it to list
         select_list.push(NamedExpr { alias: None, expr_key });
-        return select_list.len() - 1;
+        select_list.len() - 1
     }
 
     // transform_groupby_expr: Traverse expression `expr_key` (which is part of aggregate qb select list) such that any subexpressions are replaced with
     // corresponding references to inner/select qb select-list using CID#
     pub fn transform_groupby_expr(
-        env: &Env, expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId, expr_key: &mut ExprKey,
+        expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId, expr_key: &mut ExprKey,
     ) -> Result<(), String> {
         //debug!("transform_groupby_expr: {:?}", expr_key.printable(&expr_graph, false));
 
@@ -211,7 +211,7 @@ impl QueryBlock {
             if aggtype == AggType::AVG {
                 *expr_key = new_child_key;
             }
-        } else if let Some(cid) = Self::find(&expr_graph, &select_list, group_by_expr_count, *expr_key) {
+        } else if let Some(cid) = Self::find(expr_graph, select_list, group_by_expr_count, *expr_key) {
             // Expression in GROUP-BY list, all good
             let new_child_key = expr_graph.add_node(CID(qunid, cid), None);
             *expr_key = new_child_key;
@@ -224,7 +224,7 @@ impl QueryBlock {
         } else if let Some(mut children) = node.children.clone() {
             let mut children2 = vec![];
             for child_key in children.iter_mut() {
-                Self::transform_groupby_expr(env, expr_graph, select_list, group_by_expr_count, qunid, child_key)?;
+                Self::transform_groupby_expr(expr_graph, select_list, group_by_expr_count, qunid, child_key)?;
                 children2.push(*child_key);
             }
             let node = expr_graph.get_mut(*expr_key);
@@ -274,15 +274,13 @@ impl QueryBlock {
             let colstr = if let Some(prefix) = prefix {
                 format!("{}.{}", prefix, colname)
             } else {
-                format!("{}", colname)
+                colname.to_string()
             };
             Err(format!("Column {} not found in any table.", colstr))
         }
     }
 
-    pub fn resolve_expr(
-        &self, env: &Env, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata, expr_key: ExprKey, agg_fns_allowed: bool,
-    ) -> Result<(), String> {
+    pub fn resolve_expr(&self, env: &Env, expr_graph: &mut ExprGraph, expr_key: ExprKey, agg_fns_allowed: bool) -> Result<(), String> {
         let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_key).value {
             // Nested aggregate functions not allowed
             false
@@ -296,7 +294,7 @@ impl QueryBlock {
 
         if let Some(children) = children {
             for child_key in children {
-                self.resolve_expr(env, expr_graph, metadata, child_key, children_agg_fns_allowed)?;
+                self.resolve_expr(env, expr_graph, child_key, children_agg_fns_allowed)?;
                 let datatype = expr_graph.get(child_key).properties.data_type().clone();
                 children_datatypes.push(datatype);
             }
@@ -359,7 +357,7 @@ impl QueryBlock {
                 if is_numeric(&children_datatypes[0]) {
                     children_datatypes[0].clone()
                 } else {
-                    return Err(format!("Only numeric datatypes can be negated."));
+                    return Err(String::from("Only numeric datatypes can be negated."));
                 }
             }
             _ => {
@@ -373,8 +371,5 @@ impl QueryBlock {
 }
 
 fn is_numeric(dt: &DataType) -> bool {
-    match dt {
-        DataType::Int64 => true,
-        _ => false,
-    }
+    matches!(dt, DataType::Int64)
 }

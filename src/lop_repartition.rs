@@ -19,7 +19,7 @@ impl QGM {
             &empty_vec
         };
 
-        if Self::compare_part_keys(&self.expr_graph, &expected_partitioning, actual_partitioning, &eqclass) {
+        if Self::compare_part_keys(&self.expr_graph, expected_partitioning, actual_partitioning, eqclass) {
             lop_key
         } else {
             let partdesc = PartDesc {
@@ -41,7 +41,7 @@ impl QGM {
 
     pub fn repartition_join_legs(
         self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey,
-        equi_join_preds: &Vec<(ExprKey, PredicateAlignment)>, eqclass: &ExprEqClass,
+        equi_join_preds: &[(ExprKey, PredicateAlignment)], eqclass: &ExprEqClass,
     ) -> (LOPKey, LOPKey, Vec<ExprKey>, Vec<ExprKey>, usize) {
         let lhs_props = &lop_graph.get(lhs_plan_key).properties;
         let rhs_props = &lop_graph.get(rhs_plan_key).properties;
@@ -112,7 +112,7 @@ impl QGM {
         if expected_desc.npartitions == actual_desc.npartitions {
             match (&expected_desc.part_type, &actual_desc.part_type) {
                 (PartType::RAW, PartType::RAW) => true,
-                (PartType::HASHEXPR(keys1), PartType::HASHEXPR(keys2)) => Self::compare_part_keys(expr_graph, &keys1, &keys2, eqclass),
+                (PartType::HASHEXPR(keys1), PartType::HASHEXPR(keys2)) => Self::compare_part_keys(expr_graph, keys1, keys2, eqclass),
                 _ => false,
             }
         } else {
@@ -122,7 +122,7 @@ impl QGM {
 
     // harmonize_partitions: Return a triplet indicating whether either/both legs of a join need to be repartitioned
     pub fn harmonize_partitions(
-        env: &Env, lop_graph: &LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
+        env: &Env, lop_graph: &LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, expr_graph: &ExprGraph, join_preds: &[(ExprKey, PredicateAlignment)],
         eqclass: &ExprEqClass,
     ) -> (Option<PartDesc>, Option<PartDesc>, Vec<ExprKey>, Vec<ExprKey>, usize) {
         // Compare expected vs actual partitioning keys on both sides of the join
@@ -171,7 +171,7 @@ impl QGM {
     }
 
     pub fn compute_join_partitioning_descs(
-        env: &Env, expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>,
+        env: &Env, expr_graph: &ExprGraph, join_preds: &[(ExprKey, PredicateAlignment)],
     ) -> (PartDesc, PartDesc, Vec<ExprKey>, Vec<ExprKey>) {
         let (lhs_join_keys, rhs_join_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
         let npartitions = env.settings.parallel_degree.unwrap_or(1);
@@ -189,7 +189,7 @@ impl QGM {
         (lhs_part_desc, rhs_part_desc, lhs_join_keys, rhs_join_keys)
     }
 
-    pub fn compute_join_partitioning_keys(expr_graph: &ExprGraph, join_preds: &Vec<(ExprKey, PredicateAlignment)>) -> (Vec<ExprKey>, Vec<ExprKey>) {
+    pub fn compute_join_partitioning_keys(expr_graph: &ExprGraph, join_preds: &[(ExprKey, PredicateAlignment)]) -> (Vec<ExprKey>, Vec<ExprKey>) {
         // Compute expected partitioning keys
         let mut lhs_join_keys = vec![];
         let mut rhs_join_keys = vec![];
@@ -205,7 +205,7 @@ impl QGM {
                     lhs_join_keys.push(rhs_pred_key);
                     rhs_join_keys.push(lhs_pred_key);
                 } else {
-                    assert!(false);
+                    panic!("compute_join_partitioning_keys: bad alignment");
                 }
             }
         }

@@ -23,7 +23,7 @@ pub struct CSVContext {
 }
 
 impl CSVContext {
-    pub fn new(pop_key: POPKey, csv: &CSV, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn try_new(pop_key: POPKey, csv: &CSV, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let has_headers = if partition_id == 0 { csv.header } else { false };
         let partition = csv.partitions[partition_id];
 
@@ -97,14 +97,14 @@ impl POPContext for CSVContext {
 
         debug!("Before preds: \n{}", chunk_to_string(&chunk));
 
-        if chunk.len() > 0 {
+        if ! chunk.is_empty() {
             // Run predicates and virtcols, if any
             chunk = POPKey::eval_predicates(props, chunk);
             debug!("After preds: \n{}", chunk_to_string(&chunk));
 
             let projection_chunk = POPKey::eval_projection(props, &chunk);
             debug!("Projection: \n{}", chunk_to_string(&projection_chunk));
-            return Ok(projection_chunk);
+            Ok(projection_chunk)
         } else {
             Ok(chunk)
         }
@@ -137,7 +137,7 @@ impl CSV {
     }
 
     fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
-        let f = fs::File::open(&pathname).map_err(|err| stringify1(err, pathname))?;
+        let f = fs::File::open(pathname).map_err(|err| stringify1(err, pathname))?;
         let mut reader = BufReader::new(f);
 
         let metadata = fs::metadata(pathname).map_err(|err| stringify1(err, pathname))?;
@@ -155,9 +155,9 @@ impl CSV {
             if end > sz {
                 end = sz;
             } else {
-                reader.seek(SeekFrom::Start(end)).map_err(|err| stringify1(err, &pathname))?;
+                reader.seek(SeekFrom::Start(end)).map_err(|err| stringify1(err, pathname))?;
                 line.clear();
-                reader.read_line(&mut line).map_err(|err| stringify1(err, &pathname))?;
+                reader.read_line(&mut line).map_err(|err| stringify1(err, pathname))?;
                 end += line.len() as u64;
             }
             splits.push(TextFilePartition(begin, end));
@@ -170,7 +170,7 @@ impl CSV {
 
 impl fmt::Debug for CSV {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let pathname = self.pathname.split("/").last().unwrap();
+        let pathname = self.pathname.split('/').last().unwrap();
         fmt.debug_struct("").field("file", &pathname).finish()
     }
 }

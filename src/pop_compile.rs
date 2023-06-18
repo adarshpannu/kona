@@ -13,17 +13,17 @@ use crate::{
     pop_csv::CSV,
     pop_hashjoin, pop_repartition,
     qgm::QGM,
-    stage::{StageLink, StageGraph},
+    stage::{StageGraph, StageLink},
 };
 use std::rc::Rc;
 
 impl POP {
     pub fn compile(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
         // Build physical plan
-        let mut stage_graph = StageGraph::new();
+        let mut stage_graph = StageGraph::default();
 
         let root_stage_id = stage_graph.add_stage(lop_key, None);
-        let root_pop_key = Self::compile_lop(qgm, &lop_graph, lop_key, &mut stage_graph, root_stage_id)?;
+        let root_pop_key = Self::compile_lop(qgm, lop_graph, lop_key, &mut stage_graph, root_stage_id)?;
         stage_graph.set_root_pop_key(root_stage_id, root_pop_key);
 
         // Diagnostics
@@ -34,7 +34,7 @@ impl POP {
 
         // Build flow (POPs + Stages)
         let flow = Flow { id: env.id, stage_graph };
-        return Ok(flow);
+        Ok(flow)
     }
 
     pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId) -> Result<POPKey, String> {
@@ -111,7 +111,7 @@ impl POP {
             let input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
             (input_projection, proj_map)
         } else {
-            return Err(format!("Internal error: compile_scan() received a POP that isn't a TableScan"));
+            return Err(String::from("Internal error: compile_scan() received a POP that isn't a TableScan"));
         };
         debug!("Compile input_projection for lopkey {:?}: {:?}", lop_key, input_projection);
 
@@ -153,12 +153,12 @@ impl POP {
                 proj_map.get(prj).unwrap()
             })
             .collect::<Vec<ColId>>();
-        let cols = if cols.len() > 0 { Some(cols) } else { None };
+        let cols = if !cols.is_empty() { Some(cols) } else { None };
 
         debug!("Compile real cols for lopkey: {:?} = {:?}", lop_key, cols);
 
         debug!("Compile virtcols for lopkey: {:?}", lop_key);
-        let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &proj_map);
+        let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), proj_map);
 
         (cols, virtcols)
     }
@@ -168,8 +168,8 @@ impl POP {
             let pcodevec = virtcols
                 .iter()
                 .map(|expr_key| {
-                    let mut pcode = PCode::new();
-                    expr_key.compile(&qgm.expr_graph, &mut pcode, &proj_map);
+                    let mut pcode = PCode::default();
+                    expr_key.compile(&qgm.expr_graph, &mut pcode, proj_map);
                     pcode
                 })
                 .collect::<Vec<_>>();
@@ -180,7 +180,7 @@ impl POP {
     }
 
     pub fn compute_projection_map(cols: &Bitset<QunCol>, virtcols: Option<&Vec<VirtCol>>) -> ProjectionMap {
-        let mut proj_map = ProjectionMap::new();
+        let mut proj_map = ProjectionMap::default();
 
         // Add singleton columns
         for (ix, &quncol) in cols.elements().iter().enumerate() {
@@ -200,7 +200,7 @@ impl POP {
     }
 
     pub fn compile_predicates(qgm: &QGM, preds: &Bitset<ExprKey>, proj_map: &ProjectionMap) -> Option<Vec<PCode>> {
-        if preds.len() > 0 {
+        if !preds.is_empty() {
             let exprs = preds.elements();
             Self::compile_exprs(qgm, &exprs, proj_map)
         } else {
@@ -210,12 +210,12 @@ impl POP {
 
     pub fn compile_exprs(qgm: &QGM, exprs: &Vec<ExprKey>, proj_map: &ProjectionMap) -> Option<Vec<PCode>> {
         let mut pcodevec = vec![];
-        if exprs.len() > 0 {
+        if !exprs.is_empty() {
             for expr_key in exprs.iter() {
                 debug!("Compile expression: {:?}", expr_key.printable(&qgm.expr_graph, false));
 
-                let mut pcode = PCode::new();
-                expr_key.compile(&qgm.expr_graph, &mut pcode, &proj_map);
+                let mut pcode = PCode::default();
+                expr_key.compile(&qgm.expr_graph, &mut pcode, proj_map);
                 pcodevec.push(pcode);
             }
             Some(pcodevec)
@@ -233,7 +233,7 @@ impl POP {
 
         // We shouldn't have any predicates
         let predicates = None;
-        assert!(lopprops.preds.len() == 0);
+        assert!(lopprops.preds.is_empty());
 
         // Build projection map of child. This will be used to resolve any column references in this LOP
         let child_lop_key = children.unwrap()[0];
@@ -246,8 +246,7 @@ impl POP {
 
         let repart_key = if let PartType::HASHEXPR(partkey) = &lopprops.partdesc.part_type {
             debug!("Compile pkey start");
-            let repart_code = Self::compile_exprs(qgm, partkey, &proj_map).unwrap();
-            repart_code
+            Self::compile_exprs(qgm, partkey, &proj_map).unwrap()
         } else {
             panic!("Invalid partitioning type")
         };

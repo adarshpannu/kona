@@ -36,7 +36,7 @@ impl POPContext for HashJoinContext {
                 let child = if self.built_hashtable { &mut self.children[0] } else { &mut self.children[1] };
 
                 let chunk = child.next(flow, stage)?;
-                if chunk.len() == 0 {
+                if chunk.is_empty() {
                     if !self.built_hashtable {
                         self.built_hashtable = true
                     } else {
@@ -62,7 +62,7 @@ impl POPContext for HashJoinContext {
 }
 
 impl HashJoinContext {
-    pub fn new(pop_key: POPKey, _: &HashJoin, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn try_new(pop_key: POPKey, _: &HashJoin, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         Ok(Box::new(HashJoinContext {
             pop_key,
             children,

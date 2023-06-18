@@ -20,7 +20,7 @@ pub struct Env {
 impl Env {
     pub fn new(id: usize, nthreads: usize, input_pathname: String, output_dir: String) -> Self {
         let scheduler = Scheduler::new(nthreads);
-        let metadata = Metadata::new();
+        let metadata = Metadata::default();
         let options = EnvSettings::default();
 
         Env {
@@ -52,14 +52,13 @@ impl Env {
                 _ => Ok(false),
             };
         }
-
-        return Err(f!("Option {name} needs to be a string. It holds {value} instead."));
+        Err(f!("Option {name} needs to be a string. It holds {value} instead."))
     }
 
     pub fn get_int_option(&self, name: &str, value: &Datum) -> Result<isize, String> {
         if let Datum::INT(ival) = value {
             return Ok(*ival);
         }
-        return Err(f!("Option {name} needs to be an integer. It holds {value} instead."));
+        Err(f!("Option {name} needs to be an integer. It holds {value} instead."))
     }
 }

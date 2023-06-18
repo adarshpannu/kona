@@ -12,10 +12,10 @@ impl POPKey {
                 let bool_chunk = pred.eval(&filtered_chunk);
                 let bool_array = bool_chunk.as_any().downcast_ref::<BooleanArray>().unwrap();
 
-                filtered_chunk = filter_chunk(&filtered_chunk, &bool_array).unwrap();
+                filtered_chunk = filter_chunk(&filtered_chunk, bool_array).unwrap();
             }
         }
-        return filtered_chunk;
+        filtered_chunk
     }
 
     pub fn eval_projection(props: &POPProps, input: &ChunkBox) -> ChunkBox {
@@ -31,7 +31,7 @@ impl POPKey {
 
         if let Some(virtcols) = props.virtcols.as_ref() {
             for pcode in virtcols.iter() {
-                let arr = pcode.eval(&input);
+                let arr = pcode.eval(input);
                 output.push(arr)
             }
         }

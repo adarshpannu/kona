@@ -22,7 +22,9 @@ pub struct RepartitionWriteContext {
 }
 
 impl RepartitionWriteContext {
-    pub fn new(pop_key: POPKey, rpw: &RepartitionWrite, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn try_new(
+        pop_key: POPKey, rpw: &RepartitionWrite, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId,
+    ) -> Result<Box<dyn POPContext>, String> {
         let writers = (0..rpw.cpartitions).map(|_| None).collect();
 
         Ok(Box::new(RepartitionWriteContext {
@@ -33,8 +35,8 @@ impl RepartitionWriteContext {
         }))
     }
 
-    fn eval_repart_keys(repart_code: &Vec<PCode>, input: &ChunkBox) -> ChunkBox {
-        let arrays = repart_code.iter().map(|code| code.eval(&input)).collect();
+    fn eval_repart_keys(repart_code: &[PCode], input: &ChunkBox) -> ChunkBox {
+        let arrays = repart_code.iter().map(|code| code.eval(input)).collect();
         Chunk::new(arrays)
     }
 
@@ -86,7 +88,7 @@ impl RepartitionWriteContext {
         for cpartition in 0..rpw.cpartitions {
             // Filter chunk to only grab this partition
             let filtered_chunk = Self::filter_partition(&chunk, &part_array, cpartition)?;
-            if filtered_chunk.len() > 0 {
+            if !filtered_chunk.is_empty() {
                 let writer = self.get_writer(flow_id, rpw, cpartition)?;
 
                 debug!("write_partitions {:?} {:?}", rpw.stage_link, chunk_to_string(&filtered_chunk));
@@ -112,7 +114,7 @@ impl POPContext for RepartitionWriteContext {
             loop {
                 let child = &mut self.children[0];
                 let chunk = child.next(flow, stage)?;
-                if chunk.len() == 0 {
+                if chunk.is_empty() {
                     break;
                 }
 
@@ -124,7 +126,7 @@ impl POPContext for RepartitionWriteContext {
                 );
 
                 // Compute partitioning keys
-                let repart_keys = Self::eval_repart_keys(&repart_key_code, &chunk);
+                let repart_keys = Self::eval_repart_keys(repart_key_code, &chunk);
                 debug!(
                     "RepartitionWriteContext {:?} partition = {}::repart_keys: \n{}",
                     self.pop_key,
@@ -222,12 +224,12 @@ impl RepartitionReadCell {
 }
 
 impl RepartitionReadContext {
-    pub fn new(flow_id: usize, pop_key: POPKey, rpw: &RepartitionRead, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn try_new(flow_id: usize, pop_key: POPKey, rpw: &RepartitionRead, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         // Enumerate directory
         let dirname = get_partition_dir(flow_id, rpw.stage_link, partition_id);
         let files = list_files(&dirname);
         let files = if let Err(errstr) = files {
-            if errstr.find("kind: NotFound").is_none() {
+            if ! errstr.contains("kind: NotFound") {
                 return Err(errstr);
             }
             vec![]
@@ -238,10 +240,9 @@ impl RepartitionReadContext {
 
         let cell = RepartitionReadCell::new(files, |files| {
             let reader = files.iter().flat_map(|path| {
-                let mut reader = File::open(&path).unwrap();
+                let mut reader = File::open(path).unwrap();
                 let metadata = read_file_metadata(&mut reader).unwrap();
-                let reader = FileReader::new(reader, metadata, None, None).map(|e| e.unwrap());
-                reader
+                FileReader::new(reader, metadata, None, None).map(|e| e.unwrap())
             });
             let reader: Box<dyn Iterator<Item = ChunkBox>> = Box::new(reader);
             reader
@@ -283,7 +284,7 @@ fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId) ->
 }
 
 pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {
-    let dir = fs::read_dir(dirname).map_err(|err| stringify1(err, &dirname))?;
+    let dir = fs::read_dir(dirname).map_err(|err| stringify1(err, dirname))?;
     let mut pathnames = vec![];
     for entry in dir {
         let entry = entry.map_err(stringify)?;

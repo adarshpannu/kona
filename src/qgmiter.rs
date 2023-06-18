@@ -18,7 +18,7 @@ pub struct QueryBlockIter<'a> {
 impl<'a> Iterator for QueryBlockIter<'a> {
     type Item = QueryBlockKey;
     fn next(&mut self) -> Option<Self::Item> {
-        while self.queue.len() > 0 {
+        if ! self.queue.is_empty() {
             let qbkey = self.queue.pop().unwrap();
             let qblocknode = &self.qblock_graph.get(qbkey).value;
             /*
@@ -27,8 +27,8 @@ impl<'a> Iterator for QueryBlockIter<'a> {
                 self.queue.append(&mut children.clone());
             }
             */
-            let children: Vec<QueryBlockKey> = qblocknode.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
-            self.queue.append(&mut children.clone());
+            let mut children: Vec<QueryBlockKey> = qblocknode.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
+            self.queue.append(&mut children);
             return Some(qbkey);
         }
         None
@@ -89,7 +89,7 @@ impl QueryBlockKey {
 
         // Append pred_list, group_by and having_clause expressions
         // todo: order_by
-        for expr_list in vec![&qblock.pred_list, &qblock.group_by, &qblock.having_clause] {
+        for &expr_list in &[&qblock.pred_list, &qblock.group_by, &qblock.having_clause] {
             if let Some(expr_list) = expr_list {
                 iter = Box::new(iter.chain(expr_list.iter().copied()));
             }

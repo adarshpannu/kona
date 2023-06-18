@@ -48,17 +48,22 @@ where
     }
 }
 
-impl<K, V, P> Graph<K, V, P>
+impl<K, V, P> Default for Graph<K, V, P>
 where
     K: slotmap::Key,
 {
-    pub fn new() -> Self {
+    fn default() -> Self {
         Graph {
             sm: SlotMap::with_key(),
             next_id: 1, // Starts at 1. There's code out these that handles zero-valued things differently. So keep this at 1.
         }
     }
+}
 
+impl<K, V, P> Graph<K, V, P>
+where
+    K: slotmap::Key,
+{
     pub fn next_id(&mut self) -> usize {
         let retval = self.next_id;
         self.next_id += 1;
@@ -69,10 +74,6 @@ where
         let mut node = Node::new(v, properties);
         node.children = children;
         self.sm.insert(node)
-    }
-
-    pub fn len(&self) -> usize {
-        self.sm.len()
     }
 
     pub fn get3(&self, key: K) -> (&V, &P, Option<&Vec<K>>) {
@@ -145,14 +146,13 @@ where
         }
     }
 
-    pub fn true_iter<'a>(&'a self, root: K) -> TrueGraphIterator<'a, K, V, P> {
+    pub fn true_iter(&self, root: K) -> TrueGraphIterator<'_, K, V, P> {
         let graph_iter = GraphIterator {
             queue: vec![root],
             stop_depth_traversal: None,
         };
         TrueGraphIterator { graph_iter, graph: self }
     }
-
 }
 
 pub struct GraphIterator<K>
@@ -168,9 +168,8 @@ where
     K: slotmap::Key,
 {
     graph_iter: GraphIterator<K>,
-    graph: &'a Graph<K, V, P>
+    graph: &'a Graph<K, V, P>,
 }
-
 
 // Breadth-first iterator
 impl<K> GraphIterator<K>
@@ -178,7 +177,7 @@ where
     K: slotmap::Key,
 {
     pub fn next<V, P>(&mut self, graph: &Graph<K, V, P>) -> Option<K> {
-        if self.queue.len() == 0 {
+        if self.queue.is_empty() {
             return None;
         }
         let cur_key_option = self.queue.pop();
@@ -196,7 +195,6 @@ where
         cur_key_option
     }
 }
-
 
 impl<'a, K, V, P> Iterator for TrueGraphIterator<'a, K, V, P>
 where

@@ -25,16 +25,12 @@ pub enum Projection {
 }
 
 /***************************************************************************************************/
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ProjectionMap {
     pub hashmap: HashMap<Projection, ColId>,
 }
 
 impl ProjectionMap {
-    pub fn new() -> ProjectionMap {
-        ProjectionMap { hashmap: HashMap::new() }
-    }
-
     pub fn set(&mut self, prj: Projection, colid: ColId) {
         self.hashmap.insert(prj, colid);
     }
@@ -89,7 +85,7 @@ impl VecWriter {
         VecWriter { buffer: Vec::new() }
     }
 
-    fn as_string(self) -> String {
+    fn into_string(self) -> String {
         String::from_utf8(self.buffer).unwrap()
     }
 }
@@ -109,5 +105,5 @@ pub fn chunk_to_string(chunk: &ChunkBox) -> String {
     let mut writer = VecWriter::new();
     let options = write::SerializeOptions::default();
     write::write_chunk(&mut writer, chunk, &options).unwrap();
-    writer.as_string()
+    writer.into_string()
 }

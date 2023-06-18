@@ -102,7 +102,7 @@ impl Scheduler {
         }
     }
 
-    pub fn runnable<'a>(stages: &'a Vec<Stage>, stage_status: &Vec<StageContext>) -> Vec<&'a Stage> {
+    pub fn runnable<'a>(stages: &'a [Stage], stage_status: &[StageContext]) -> Vec<&'a Stage> {
         let v = stages
             .iter()
             .zip(stage_status.iter())
@@ -121,28 +121,28 @@ impl Scheduler {
         let dirname: &str = &format!("{}/flow-{}/", TEMPDIR, flow_id);
 
         // Add some protection against inadvertant deletion
-        if dirname.find("tmp").is_none() {
+        if ! dirname.contains("tmp") {
             let errstr = f!("init_flow(): Temporary directory {TEMPDIR} doesn't have substring 'tmp'.");
             Err(errstr)
         } else {
-            std::fs::remove_dir_all(dirname).map_err(|e| stringify1(e, &dirname)).unwrap_or_default();
-            std::fs::create_dir_all(dirname).map_err(|e| stringify1(e, &dirname))?;
+            std::fs::remove_dir_all(dirname).map_err(|e| stringify1(e, dirname)).unwrap_or_default();
+            std::fs::create_dir_all(dirname).map_err(|e| stringify1(e, dirname))?;
             Ok(())
         }
     }
 
-    pub fn set_stage_completed(flow: &Flow, stage_contexts: &mut Vec<StageContext>, stage_id: StageId) {
+    pub fn set_stage_completed(flow: &Flow, stage_contexts: &mut [StageContext], stage_id: StageId) {
         let stage_graph = &flow.stage_graph;
         if stage_id > 0 {
             let parent_stage_id = stage_graph.stages[stage_id].parent_stage_id.unwrap();
-            stage_contexts[parent_stage_id].nchildren_completed = stage_contexts[parent_stage_id].nchildren_completed + 1;
+            stage_contexts[parent_stage_id].nchildren_completed += 1;
         }
     }
 
-    pub fn schedule_stages(&self, env: &Env, flow: &Flow, stage_contexts: &Vec<StageContext>) -> usize {
+    pub fn schedule_stages(&self, env: &Env, flow: &Flow, stage_contexts: &[StageContext]) -> usize {
         let stage_graph = &flow.stage_graph;
 
-        let stages = Self::runnable(&stage_graph.stages, &stage_contexts);
+        let stages = Self::runnable(&stage_graph.stages, stage_contexts);
         for stage in stages.iter() {
             stage.schedule(env, flow);
         }
@@ -153,7 +153,7 @@ impl Scheduler {
         self.init_flow_tmpdir(env.id)?;
 
         let stage_graph = &flow.stage_graph;
-        let mut stage_contexts = (0..stage_graph.stages.len()).map(|_| StageContext::new()).collect::<Vec<_>>();
+        let mut stage_contexts = (0..stage_graph.stages.len()).map(|_| StageContext::default()).collect::<Vec<_>>();
 
         self.schedule_stages(env, flow, &stage_contexts);
 
@@ -166,7 +166,7 @@ impl Scheduler {
                     let stage = &stage_graph.stages[stage_id];
 
                     // If this was the last task in a stage, schedule any dependent stages
-                    ss.npartitions_completed = ss.npartitions_completed + 1;
+                    ss.npartitions_completed += 1;
                     if stage.npartitions == ss.npartitions_completed {
                         debug!("Stage {} completed", stage_id);
                         Self::set_stage_completed(flow, &mut stage_contexts, stage_id);

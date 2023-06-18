@@ -82,7 +82,7 @@ impl QGM {
         let mut colstring = props.cols.printable(self);
 
         if let Some(virtcols) = props.virtcols.as_ref() {
-            colstring = format!("{{{}|{}}}", colstring, printable_virtcols(&virtcols, self, true));
+            colstring = format!("{{{}|{}}}", colstring, printable_virtcols(virtcols, self, true));
         };
 
         let predstring = props.preds.printable(self, true);
@@ -94,8 +94,8 @@ impl QGM {
                 (String::from("TableScan"), extrastr)
             }
             LOP::HashJoin { lhs_join_keys, rhs_join_keys } => {
-                let lhsstr = printable_preds(&lhs_join_keys, self, true, false);
-                let rhsstr = printable_preds(&rhs_join_keys, self, true, false);
+                let lhsstr = printable_preds(lhs_join_keys, self, true, false);
+                let rhsstr = printable_preds(rhs_join_keys, self, true, false);
                 let extrastr = format!("{} = {}", lhsstr, rhsstr);
                 (String::from("HashJoin"), extrastr)
             }
@@ -140,7 +140,7 @@ impl QGM {
             //fprint!(file, "    \"stage_{}_stub\"[label=\"select_list\",shape=box,style=filled];\n", stage.stage_id);
             fprint!(file, "    label = \"Stage {}\"\n", stage.stage_id);
 
-            self.write_pop_to_graphviz(stage, stage.root_pop_key.unwrap(), &mut file)?;
+            stage.write_pop_to_graphviz(stage.root_pop_key.unwrap(), &mut file)?;
             //fprint!(file, "    color = \"red\"\n");
             fprint!(file, "}}\n");
 
@@ -171,34 +171,36 @@ impl QGM {
 
         Ok(())
     }
+}
 
-    pub fn write_pop_to_graphviz(self: &QGM, stage: &Stage, pop_key: POPKey, file: &mut File) -> Result<(), String> {
-        let id = pop_key.printable_key(stage.stage_id);
-        let pop_graph = &stage.pop_graph;
+impl Stage {
+    pub fn write_pop_to_graphviz(&self, pop_key: POPKey, file: &mut File) -> Result<(), String> {
+        let id = pop_key.printable_key(self.stage_id);
+        let pop_graph = &self.pop_graph;
         let (pop, props, children) = pop_graph.get3(pop_key);
 
         if let Some(children) = children {
             for &child_key in children.iter() {
-                let child_name = child_key.printable_key(stage.stage_id);
+                let child_name = child_key.printable_key(self.stage_id);
                 fprint!(file, "    popkey{} -> popkey{};\n", child_name, id);
-                self.write_pop_to_graphviz(stage, child_key, file)?;
+                self.write_pop_to_graphviz(child_key, file)?;
             }
         }
 
-        let color = if stage.root_pop_key.unwrap() == pop_key { "red" } else { "black" };
+        let color = if self.root_pop_key.unwrap() == pop_key { "red" } else { "black" };
 
         let (label, extrastr) = match &pop {
             POP::CSV(csv) => {
-                let pathname = csv.pathname.split("/").last().unwrap_or(&csv.pathname);
+                let pathname = csv.pathname.split('/').last().unwrap_or(&csv.pathname);
                 //let mut projection = csv.projection.clone();
                 //projection.sort_by(|a, b| a.cmp(b));
                 let extrastr = format!("file: {}, input_projection: {:?}", pathname, &csv.input_projection)
-                    .replace("{", "(")
-                    .replace("}", ")");
+                    .replace('{', "(")
+                    .replace('}', ")");
                 (String::from("CSV"), extrastr)
             }
             POP::HashJoin { .. } => {
-                let extrastr = format!("");
+                let extrastr = String::new();
                 (String::from("HashJoin"), extrastr)
             }
             POP::RepartitionWrite(rpw) => {
@@ -206,20 +208,20 @@ impl QGM {
                 (String::from("RepartitionWrite"), extrastr)
             }
             POP::RepartitionRead(_) => {
-                let extrastr = format!("");
+                let extrastr = String::new();
                 (String::from("RepartitionRead"), extrastr)
             }
             POP::Aggregation(_) => {
-                let extrastr = format!("");
+                let extrastr = String::new();
                 (String::from("Aggregation"), extrastr)
             }
         };
 
-        let label = label.replace("\"", "").replace("{", "").replace("}", "");
+        let label = label.replace(['"', '{', '}'], "");
         let colstr = if let Some(cols) = &props.cols {
-            format!("{:?}", cols).replace("{", "(").replace("}", ")")
+            format!("{:?}", cols).replace('{', "(").replace('}', ")")
         } else {
-            format!("")
+            String::new()
         };
 
         fprint!(
@@ -341,7 +343,7 @@ impl Bitset<QunCol> {
         let mut colstring = String::from("");
         for col in cols {
             colstring.push_str(&col);
-            colstring.push_str(" ");
+            colstring.push(' ')
         }
         colstring
     }
@@ -357,21 +359,21 @@ pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool, do_colu
     let mut predstring = String::from("");
 
     if do_column_split {
-        predstring.push_str("{");
+        predstring.push('{')
     }
     for (ix, &pred_key) in preds.iter().enumerate() {
         let predstr = pred_key.printable(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
         if ix < preds.len() - 1 {
             if do_column_split {
-                predstring.push_str("|")
+                predstring.push('|')
             } else {
-                predstring.push_str(",")
+                predstring.push(',')
             }
         }
     }
     if do_column_split {
-        predstring.push_str("}");
+        predstring.push('}')
     }
     predstring
 }
@@ -382,16 +384,15 @@ pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> S
         let predstr = expr_key.printable(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
         if ix < preds.len() - 1 {
-            predstring.push_str("|")
+            predstring.push('|')
         }
     }
-    predstring.push_str("");
     predstring
 }
 
 impl POPKey {
     pub fn printable_key(&self, stage_id: StageId) -> String {
-        format!("{:?}_stage{}", *self, stage_id).replace("(", "").replace(")", "")
+        format!("{:?}_stage{}", *self, stage_id).replace('(', "").replace(')', "")
     }
 
     pub fn printable(&self, pop_graph: &POPGraph) -> String {

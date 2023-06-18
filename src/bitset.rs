@@ -19,15 +19,6 @@ impl<T> Bitset<T>
 where
     T: Hash + PartialEq + Eq + Copy,
 {
-    pub fn new() -> Bitset<T> {
-        Bitset {
-            bitmap: Bitmap::new(),
-            dict: Rc::new(RefCell::new(HashMap::new())),
-            rev_dict: Rc::new(RefCell::new(HashMap::new())),
-            next_id: Rc::new(RefCell::new(0)),
-        }
-    }
-
     pub fn are_clones(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.dict, &other.dict) && Rc::ptr_eq(&self.rev_dict, &other.rev_dict)
     }
@@ -40,7 +31,7 @@ where
         let ix = dict.entry(elem).or_insert_with(|| {
             let mut id = (*self.next_id).borrow_mut();
             let retval = *id;
-            *id = *id + 1;
+            *id += 1;
             retval
         });
         self.bitmap.set(*ix, true);
@@ -70,13 +61,17 @@ where
     }
 
     pub fn elements(&self) -> Vec<T> {
-        let bitmap = self.bitmap.clone();
+        let bitmap = self.bitmap;
         let rev_dict = (*self.rev_dict).borrow();
         bitmap.into_iter().map(|ix| *rev_dict.get(&ix).unwrap()).collect()
     }
 
     pub fn len(&self) -> usize {
         self.bitmap.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bitmap.len() == 0
     }
 
     pub fn init(mut self, it: impl Iterator<Item = T>) -> Self {
@@ -91,7 +86,21 @@ where
     }
 
     pub fn is_disjoint(&self, other: &Self) -> bool {
-        (self.bitmap & other.bitmap).len() == 0
+        (self.bitmap & other.bitmap).is_empty()
+    }
+}
+
+impl<T> Default for Bitset<T>
+where
+    T: Hash + PartialEq + Eq + Copy,
+{
+    fn default() -> Self {
+        Bitset {
+            bitmap: Bitmap::new(),
+            dict: Rc::new(RefCell::new(HashMap::new())),
+            rev_dict: Rc::new(RefCell::new(HashMap::new())),
+            next_id: Rc::new(RefCell::new(0)),
+        }
     }
 }
 
@@ -101,7 +110,7 @@ where
 {
     fn clone(&self) -> Bitset<T> {
         Bitset {
-            bitmap: self.bitmap.clone(),
+            bitmap: self.bitmap,
             dict: Rc::clone(&self.dict),
             rev_dict: Rc::clone(&self.rev_dict),
             next_id: Rc::clone(&self.next_id),
@@ -117,7 +126,7 @@ where
 
     // rhs is the "right-hand side" of the expression `a & b`
     fn bitand(self, rhs: &'a Bitset<T>) -> Self::Output {
-        let mut other = self.clone();
+        let mut other = self;
         other.bitmap &= rhs.bitmap;
         other
     }
@@ -137,7 +146,7 @@ where
     }
 }
 
-impl<'a, T> BitAndAssign<Bitset<T>> for Bitset<T>
+impl<T> BitAndAssign<Bitset<T>> for Bitset<T>
 where
     T: Hash + PartialEq + Eq + Copy,
 {
@@ -154,7 +163,7 @@ where
 
     // rhs is the "right-hand side" of the expression `a & b`
     fn bitor(self, rhs: &'a Bitset<T>) -> Self::Output {
-        let mut other = self.clone();
+        let mut other = self;
         other.bitmap |= rhs.bitmap;
         other
     }

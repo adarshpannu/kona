@@ -11,7 +11,7 @@ use crate::{
     pop::{Projection, ProjectionMap},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct PCode {
     instructions: Vec<PInstruction>,
 }
@@ -91,9 +91,6 @@ enum PCodeStack<'a> {
 }
 
 impl PCode {
-    pub fn new() -> PCode {
-        PCode { instructions: vec![] }
-    }
     pub fn push(&mut self, inst: PInstruction) {
         debug!("Instruction: {:?}", inst);
         self.instructions.push(inst)

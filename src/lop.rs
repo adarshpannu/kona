@@ -42,7 +42,7 @@ impl LOPKey {
     }
 
     pub fn printable_key(&self) -> String {
-        format!("{:?}", *self).replace("(", "").replace(")", "")
+        format!("{:?}", *self).replace('(', "").replace(')', "")
     }
 
     pub fn printable(&self, lop_graph: &LOPGraph) -> String {
@@ -120,9 +120,9 @@ pub struct APSContext {
 
 impl APSContext {
     fn new(qgm: &QGM) -> Self {
-        let mut all_quncols = Bitset::new();
-        let mut all_quns = Bitset::new();
-        let mut all_preds = Bitset::new();
+        let mut all_quncols = Bitset::default();
+        let mut all_quns = Bitset::default();
+        let mut all_preds = Bitset::default();
 
         for quncol in qgm.iter_quncols() {
             all_quncols.set(quncol);
@@ -160,15 +160,17 @@ pub struct ExprEqClass {
     disjoint_sets: PartitionVec<ExprKey>,
 }
 
-impl ExprEqClass {
-    pub fn new() -> Self {
+impl Default for ExprEqClass {
+    fn default() -> Self {
         ExprEqClass {
             next_id: 0,
             expr_id_map: BiMap::new(),
             disjoint_sets: PartitionVec::with_capacity(64),
         }
     }
+}
 
+impl ExprEqClass {
     pub fn set_eq(&mut self, expr1: ExprKey, expr2: ExprKey) {
         let id1 = self.key2id(expr1);
         let id2 = self.key2id(expr2);
@@ -181,7 +183,7 @@ impl ExprEqClass {
                 return self.disjoint_sets.same_set(id1, id2);
             }
         }
-        return false;
+        false
     }
 
     fn key2id(&mut self, expr_key: ExprKey) -> usize {
@@ -190,7 +192,7 @@ impl ExprEqClass {
         } else {
             let id = self.next_id;
             self.expr_id_map.insert(expr_key, id);
-            self.next_id = self.next_id + 1;
+            self.next_id += 1;
             self.disjoint_sets.push(expr_key);
             id
         }
@@ -201,7 +203,7 @@ impl QGM {
     pub fn build_logical_plan(self: &mut QGM, env: &Env) -> Result<(LOPGraph, LOPKey), String> {
         // Construct bitmaps
         let aps_context = APSContext::new(self);
-        let mut lop_graph: LOPGraph = Graph::new();
+        let mut lop_graph: LOPGraph = Graph::default();
 
         let lop_key = self.build_qblock_logical_plan(env, self.main_qblock_key, &aps_context, &mut lop_graph, None);
         if let Ok(lop_key) = lop_key {
@@ -217,7 +219,7 @@ impl QGM {
     }
 
     fn append_virt_cols(lop_graph: &mut LOPGraph, lop_key: LOPKey, virtcols: Option<&Vec<VirtCol>>) {
-        let mut virtcols = virtcols.map(|v| v.iter().map(|&e| e.clone()).collect::<Vec<_>>());
+        let mut virtcols = virtcols.cloned();
         let props = &mut lop_graph.get_mut(lop_key).properties;
 
         match (&mut props.virtcols, &mut virtcols) {
@@ -237,7 +239,7 @@ impl QGM {
             if matches!(lop.value, LOP::Repartition { .. }) {
                 let child_lop_key = lop.children.as_ref().unwrap()[0];
                 let partdesc = &lop.properties.partdesc;
-                let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, &partdesc);
+                let virtcols: Option<Vec<VirtCol>> = Self::partdesc_to_virtcols(&self.expr_graph, partdesc);
 
                 // Add partitioning columns to the Repartition projection
                 Self::append_virt_cols(lop_graph, lop_key, virtcols.as_ref());
@@ -255,7 +257,7 @@ impl QGM {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
 
-        assert!(self.cte_list.len() == 0);
+        assert!(self.cte_list.is_empty());
 
         let all_preds = &aps_context.all_preds;
 
@@ -306,7 +308,7 @@ impl QGM {
                         .iter()
                         .filter_map(|&pred_key| {
                             if let Some(eqjoin_desc) = pred_map.get(&pred_key).unwrap().eqjoin_desc.as_ref() {
-                                let join_class = Self::classify_predicate(&*eqjoin_desc, lhs_props, rhs_props);
+                                let join_class = Self::classify_predicate(eqjoin_desc, lhs_props, rhs_props);
                                 if join_class.0 == PredicateType::EquiJoin {
                                     Some((pred_key, join_class.1))
                                 } else {
@@ -322,12 +324,12 @@ impl QGM {
                     equi_join_preds.sort_by(|a, b| a.0.cmp(&b.0));
                     let eqq = equi_join_preds.iter().map(|e| e.0).collect::<Vec<_>>();
 
-                    if equi_join_preds.len() > 0 {
+                    if !equi_join_preds.is_empty() {
                         let mut preds = all_preds.clone_metadata();
 
                         for pred_key in join_preds.iter() {
                             // Don't add equijoin preds to the after-join list
-                            if ! eqq.contains(pred_key) {
+                            if !eqq.contains(pred_key) {
                                 preds.set(*pred_key);
                             }
                             pred_map.remove_entry(pred_key);
@@ -351,7 +353,7 @@ impl QGM {
                         let lhs_props = &lop_graph.get(new_lhs_plan_key).properties;
                         let mut partdesc = lhs_props.partdesc.clone();
                         partdesc.npartitions = cpartitions;
-                        
+
                         let props = LOPProps::new(quns, cols, preds, partdesc, None);
 
                         let join_lop_key = lop_graph.add_node_with_props(
@@ -424,7 +426,7 @@ impl QGM {
         let expr_graph = &self.expr_graph;
         let mut pred_map: PredMap = HashMap::new();
 
-        let mut eqclass = ExprEqClass::new();
+        let mut eqclass = ExprEqClass::default();
         let mut eqpred_legs = vec![];
 
         if let Some(pred_list) = qblock.pred_list.as_ref() {
@@ -446,7 +448,7 @@ impl QGM {
                     let lhs_quns = aps_context.all_quns.clone_metadata().init(lhs_child_key.iter_quns(expr_graph));
                     let rhs_quns = aps_context.all_quns.clone_metadata().init(rhs_child_key.iter_quns(expr_graph));
 
-                    if lhs_quns.len() > 0 && rhs_quns.len() > 0 {
+                    if !lhs_quns.is_empty() && !rhs_quns.is_empty() {
                         let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
                         eqpred_legs.push((lhs_hash, lhs_child_key));
                         eqpred_legs.push((rhs_hash, rhs_child_key));

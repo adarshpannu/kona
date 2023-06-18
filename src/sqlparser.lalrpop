@@ -1,8 +1,6 @@
 use std::str::FromStr;
 use lalrpop_util::ParseError;
 
-use crate::includes::*;
-
 use crate::expr::{Expr::*, *};
 use crate::datum::*;
 use crate::ast::*;
@@ -125,7 +123,7 @@ CatalogTableOption: (String, Datum) = {
 
 CatalogTableOptionValue: Datum = {
     Integer =>? { isize::from_str(<>)
-        .map(|i| Datum::INT(i))
+        .map(Datum::INT)
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
     <str:IdentifierOrQuotedString> =>? {
@@ -137,7 +135,7 @@ CatalogTableOptionValue: Datum = {
 
 // -------------------- DESCRIBE TABLE --------------------
 pub DescribeTable: AST = {
-    "DESCRIBE" "TABLE" <name:Identifier>  => AST::DescribeTable { name: name }
+    "DESCRIBE" "TABLE" <name:Identifier>  => AST::DescribeTable { name }
 }
 
 // -------------------- SET OPTION --------------------
@@ -158,8 +156,8 @@ pub Query: AST = <cte_list:WithClause?> <main_qblock_key:SUIEQuery> => {
     //main_qblock_key.name = Some(String::from("main"));
     //main_qblock_key.qbtype = QueryBlockType::Select;
 
-    let expr_graph = replace(&mut parser_state.expr_graph, Graph::new());
-    let qblock_graph = replace(&mut parser_state.qblock_graph, Graph::new());
+    let expr_graph = std::mem::take(&mut parser_state.expr_graph);
+    let qblock_graph = std::mem::take(&mut parser_state.qblock_graph);
 
     let qgm = QGM::new(main_qblock_key, cte_list.unwrap_or(vec![]), qblock_graph, expr_graph);
     AST::QGM(qgm)
@@ -419,7 +417,7 @@ AggArg: ExprKey = {
 ScalarFunction: ExprKey = {
     <name:Identifier> "(" <args:FunctionArgs?> ")" => parser_state.expr_graph.add_node(ScalarFunction(name), args),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
-        let datatype = parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(datatype.to_string()))), None);
+        let datatype = parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(datatype))), None);
         let args = vec![arg, datatype];
         parser_state.expr_graph.add_node(ScalarFunction(String::from("CAST")), Some(args))
     }

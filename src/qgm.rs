@@ -11,21 +11,18 @@ use crate::{
 
 pub type QueryBlockGraph = Graph<QueryBlockKey, QueryBlock, ()>;
 
+#[derive(Default)]
 pub struct QGMMetadata {
     tabledescmap: HashMap<QunId, Rc<dyn TableDesc>>,
 }
 
 impl QGMMetadata {
-    pub fn new() -> QGMMetadata {
-        QGMMetadata { tabledescmap: HashMap::new() }
-    }
-
     pub fn add_tabledesc(&mut self, qunid: QunId, tabledesc: Rc<dyn TableDesc>) {
         self.tabledescmap.insert(qunid, tabledesc);
     }
 
     pub fn get_tabledesc(&self, qunid: QunId) -> Option<Rc<dyn TableDesc>> {
-        self.tabledescmap.get(&qunid).map(|td| Rc::clone(td))
+        self.tabledescmap.get(&qunid).cloned()
     }
 
     pub fn get_fieldname(&self, quncol: QunCol) -> String {
@@ -39,7 +36,6 @@ impl QGMMetadata {
     pub fn get_field(&self, quncol: QunCol) -> Option<&Field> {
         self.tabledescmap.get(&quncol.0).map(|tabledesc| &tabledesc.fields()[quncol.1])
     }
-
 }
 
 impl fmt::Debug for QGMMetadata {
@@ -64,7 +60,7 @@ impl QGM {
             cte_list,
             qblock_graph,
             expr_graph,
-            metadata: QGMMetadata::new(),
+            metadata: QGMMetadata::default(),
         }
     }
 }
@@ -292,18 +288,10 @@ impl QueryBlock {
     }
 }
 
+#[derive(Default)]
 pub struct ParserState {
     pub qblock_graph: QueryBlockGraph,
     pub expr_graph: ExprGraph,
-}
-
-impl ParserState {
-    pub fn new() -> Self {
-        ParserState {
-            qblock_graph: Graph::new(),
-            expr_graph: Graph::new(),
-        }
-    }
 }
 
 impl QGM {

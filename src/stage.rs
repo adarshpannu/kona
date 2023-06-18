@@ -23,27 +23,18 @@ pub struct Stage {
     pub pop_graph: POPGraph,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct StageContext {
     // Runtime details
     pub nchildren_completed: usize,
     pub npartitions_completed: usize,
 }
 
-impl StageContext {
-    pub fn new() -> Self {
-        StageContext {
-            nchildren_completed: 0,
-            npartitions_completed: 0,
-        }
-    }
-}
-
 /***************************************************************************************************/
 impl Stage {
     pub fn new(stage_id: usize, parent_stage_id: Option<usize>, root_lop_key: LOPKey) -> Self {
         debug!("New stage with root_lop_key: {:?}", root_lop_key);
-        let pop_graph = Graph::new();
+        let pop_graph = Graph::default();
 
         Stage {
             stage_id,
@@ -101,7 +92,7 @@ impl StageGraph {
             assert!(parent_stage_id <= self.stages.len());
 
             let parent_stage = &mut self.stages[parent_stage_id];
-            parent_stage.nchildren = parent_stage.nchildren + 1;
+            parent_stage.nchildren += 1;
         }
 
         debug!("Added new stage: {:?}", new_id);

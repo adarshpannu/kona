@@ -30,16 +30,16 @@ impl PartDesc {
 
     pub fn printable(&self, expr_graph: &ExprGraph, do_escape: bool) -> String {
         let part_type_str = match &self.part_type {
-            PartType::RAW => format!("{}", "RAW"),
+            PartType::RAW => String::from("RAW"),
             PartType::HASHEXPR(exprs) => {
                 let mut exprstr = String::from("");
                 for (ix, expr_key) in exprs.iter().enumerate() {
                     if ix > 0 {
                         exprstr.push_str(", ")
                     }
-                    exprstr.push_str(&expr_key.printable(&expr_graph, do_escape));
+                    exprstr.push_str(&expr_key.printable(expr_graph, do_escape));
                 }
-                format!("{}", exprstr)
+                exprstr.to_string()
             }
         };
         format!("p = {} ({})", self.npartitions, part_type_str)
@@ -63,7 +63,7 @@ pub trait TableDesc {
         String::from("")
     }
     fn get_part_desc(&self) -> &PartDesc;
-    fn get_column(&self, colname: &String) -> Option<(usize, &Field)>;
+    fn get_column(&self, colname: &str) -> Option<(usize, &Field)>;
     fn get_stats(&self) -> &TableStats;
 }
 
@@ -101,11 +101,11 @@ impl CSVDesc {
             .has_headers(header)
             .delimiter(separator as u8)
             .from_path(pathname)
-            .map_err(|err| stringify1(err, &pathname))?;
+            .map_err(|err| stringify1(err, pathname))?;
 
         // Infers the fields using the default inferer. The inferer is just a function that maps bytes
         // to a `DataType`.
-        let (fields, _) = read::infer_schema(&mut reader, None, true, &read::infer).map_err(|err| stringify1(err, &pathname))?;
+        let (fields, _) = read::infer_schema(&mut reader, None, true, &read::infer).map_err(|err| stringify1(err, pathname))?;
 
         let fields = fields
             .iter()
@@ -133,7 +133,7 @@ impl TableDesc for CSVDesc {
         format!("Type: CSV, {:?}", self)
     }
 
-    fn get_column(&self, colname: &String) -> Option<(usize, &Field)> {
+    fn get_column(&self, colname: &str) -> Option<(usize, &Field)> {
         self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
     }
 
@@ -154,30 +154,24 @@ impl TableDesc for CSVDesc {
     }
 }
 
+#[derive(Default)]
 pub struct Metadata {
     tables: HashMap<String, Rc<dyn TableDesc>>,
 }
 
 impl Metadata {
-    pub fn new() -> Metadata {
-        Metadata { tables: HashMap::new() }
-    }
-
     pub fn parse_columns(hm: &HashMap<String, Datum>) -> Result<Vec<Field>, String> {
         // Parse: COLUMNS = "name=STRING,age=INT,emp_dept_id=INT"
 
         let colstr = hm.get("COLUMNS");
         let colstr = match colstr {
-            Some(Datum::STR(fieldstr)) => {
-                let fieldstr = &**fieldstr;
-                fieldstr
-            }
+            Some(Datum::STR(fieldstr)) => fieldstr,
             _ => return Err(f!("Invalid value for option COLUMNS: '{colstr:?}'")),
         };
 
         let mut fields = vec![];
-        for part in colstr.split(",") {
-            let mut colname_and_type = part.split("=");
+        for part in colstr.split(',') {
+            let mut colname_and_type = part.split('=');
             let err = "Cannot parse COLUMN specification".to_string();
             let (name, datatype) = (
                 colname_and_type.next().ok_or(err.clone())?.to_string().to_uppercase(),
@@ -210,10 +204,7 @@ impl Metadata {
     fn get_header_parm(hm: &HashMap<String, Datum>) -> Result<bool, String> {
         let header = hm.get("HEADER");
         let header = match header {
-            Some(Datum::STR(header)) => {
-                let header = &*header;
-                yes_or_no(&*header).ok_or(f!("Invalid value for option HEADER: '{header}'"))?
-            }
+            Some(Datum::STR(header)) => yes_or_no(header).ok_or(f!("Invalid value for option HEADER: '{header}'"))?,
             None => true,
             _ => return Err(f!("Invalid value for option HEADER: '{header:?}'")),
         };
@@ -241,11 +232,11 @@ impl Metadata {
                 if *nrows > 0 {
                     *nrows as usize
                 } else {
-                    return Err(format!("Invalid value for option NROWS"));
+                    return Err(String::from("Invalid value for option NROWS"));
                 }
             }
             None => 1usize,
-            _ => return Err(format!("Invalid value for option NROWS")),
+            _ => return Err(String::from("Invalid value for option NROWS")),
         };
 
         let avg_row_size = match hm.get("AVG_ROW_SIZE") {
@@ -253,11 +244,11 @@ impl Metadata {
                 if *avg_row_size > 0 {
                     *avg_row_size as usize
                 } else {
-                    return Err(format!("Invalid value for option AVG_ROW_SIZE"));
+                    return Err(String::from("Invalid value for option AVG_ROW_SIZE"));
                 }
             }
             None => 1usize,
-            _ => return Err(format!("Invalid value for option AVG_ROW_SIZE")),
+            _ => return Err(String::from("Invalid value for option AVG_ROW_SIZE")),
         };
         let table_stats = TableStats { nrows, avg_row_size };
         Ok(table_stats)
@@ -269,11 +260,11 @@ impl Metadata {
                 if *npartitions > 0 {
                     *npartitions as usize
                 } else {
-                    return Err(format!("Invalid value for option PARTITIONS"));
+                    return Err(String::from("Invalid value for option PARTITIONS"));
                 }
             }
             None => 1usize,
-            _ => return Err(format!("Invalid value for option PARTITIONS")),
+            _ => return Err(String::from("Invalid value for option PARTITIONS")),
         };
 
         let part_desc = PartDesc {
@@ -341,8 +332,8 @@ impl Metadata {
         Ok(())
     }
 
-    pub fn get_tabledesc(&self, name: &String) -> Option<Rc<dyn TableDesc>> {
+    pub fn get_tabledesc(&self, name: &str) -> Option<Rc<dyn TableDesc>> {
         let val = self.tables.get(&name.to_uppercase());
-        val.map(|e| e.clone())
+        val.cloned()
     }
 }

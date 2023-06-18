@@ -36,7 +36,7 @@ pub fn enquote(s: &String) -> String {
 }
 
 pub fn remove_quotes(s: &str) -> String {
-    s.replace("\"", "")
+    s.replace('"', "")
 }
 
 pub fn stringify<E: std::fmt::Debug>(e: E) -> String {
@@ -63,7 +63,7 @@ macro_rules! fprint {
 pub(crate) use fprint;
 
 pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {
-    let dir = fs::read_dir(dirname).map_err(|err| stringify1(err, &dirname))?;
+    let dir = fs::read_dir(dirname).map_err(|err| stringify1(err, dirname))?;
     let mut pathnames = vec![];
     for entry in dir {
         let entry = entry.map_err(stringify)?;

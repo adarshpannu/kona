@@ -41,7 +41,7 @@ impl Task {
         let mut root_context = self.init_context(flow, stage, root_pop_key)?;
         loop {
             let chunk = root_context.next(flow, stage)?;
-            if chunk.len() == 0 {
+            if chunk.is_empty() {
                 break;
             }
         }
@@ -62,12 +62,12 @@ impl Task {
         };
 
         let ctxt = match &pop {
-            POP::CSV(csv) => CSVContext::new(popkey, csv, self.partition_id)?,
-            POP::RepartitionWrite(rpw) => RepartitionWriteContext::new(popkey, &rpw, child_contexts.unwrap(), self.partition_id)?,
+            POP::CSV(csv) => CSVContext::try_new(popkey, csv, self.partition_id)?,
+            POP::RepartitionWrite(rpw) => RepartitionWriteContext::try_new(popkey, rpw, child_contexts.unwrap(), self.partition_id)?,
 
             // FIXME: Since POP graphs are local to stages, repartition directories may not be unique. Use LOPKey?
-            POP::RepartitionRead(rpr) => RepartitionReadContext::new(flow.id, popkey, &rpr, self.partition_id)?,
-            POP::HashJoin(hj) => HashJoinContext::new(popkey, &hj, child_contexts.unwrap(), self.partition_id)?,
+            POP::RepartitionRead(rpr) => RepartitionReadContext::try_new(flow.id, popkey, rpr, self.partition_id)?,
+            POP::HashJoin(hj) => HashJoinContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,
             _ => unimplemented!(),
         };
         Ok(ctxt)
