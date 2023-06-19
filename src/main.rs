@@ -1,6 +1,7 @@
 // main
 
 //#![allow(warnings)]
+#![allow(clippy::too_many_arguments)]
 
 use crate::{includes::*, qgm::ParserState};
 use std::fs;

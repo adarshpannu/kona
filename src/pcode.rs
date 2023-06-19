@@ -1,5 +1,7 @@
 // pcode
 
+#![allow(clippy::borrowed_box)]
+
 use arrow2::scalar::PrimitiveScalar;
 use arrow2::scalar::{Scalar, Utf8Scalar};
 
@@ -78,8 +80,8 @@ enum Column<'a> {
 impl<'a> Column<'a> {
     fn get(&self) -> &Box<dyn Array> {
         match self {
-            Column::Ref(r) => *r,
-            Column::Owned(o) => &o,
+            Column::Ref(r) => r,
+            Column::Owned(o) => o,
         }
     }
 }
