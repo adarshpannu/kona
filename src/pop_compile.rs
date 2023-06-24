@@ -75,21 +75,21 @@ impl POP {
                 lop_graph,
                 lop_key,
                 stage_graph,
+                stage_link.unwrap(),
                 pop_children,
                 schema.clone().unwrap(),
-                stage_link.unwrap(),
                 *cpartitions,
             )?,
             LOP::Aggregation { .. } => Self::compile_aggregation(lop_graph, lop_key, stage_graph, effective_stage_id, pop_children)?,
         };
 
-        debug!("Compiled LOP = {:?} -> POP = {:?} to stage {}", lop_key, pop_key, effective_stage_id);
-        debug!("   children =  {:?}", pop_children_clone);
+        debug!("[{:?}] compiled to {:?} in stage {}", lop_key, pop_key, effective_stage_id);
+        debug!("[{:?}] children = {:?}", lop_key, pop_children_clone);
 
         // Add RepartionRead
         if let LOP::Repartition { cpartitions } = lop {
             let read_pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, stage_graph, stage_link.unwrap(), schema.unwrap(), *cpartitions)?;
-            debug!("Compiled LOP = {:?} -> POP = {:?} to stage {}", lop_key, read_pop_key, stage_id);
+            debug!("[{:?}] compiled to {:?} in stage {}", lop_key, read_pop_key, stage_id);
 
             stage_graph.set_root_pop_key(effective_stage_id, pop_key);
             stage_graph.set_parent_pop_key(effective_stage_id, read_pop_key);
@@ -113,11 +113,11 @@ impl POP {
         } else {
             return Err(String::from("Internal error: compile_scan() received a POP that isn't a TableScan"));
         };
-        debug!("Compile input_projection for lopkey {:?}: {:?}", lop_key, input_projection);
+        debug!("[{:?}] input_projection: {:?}", lop_key, input_projection);
 
         // Compile predicates
-        debug!("Compile predicates for lopkey {:?}", lop_key);
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &input_proj_map);
+        debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
@@ -154,11 +154,10 @@ impl POP {
             })
             .collect::<Vec<ColId>>();
         let cols = if !cols.is_empty() { Some(cols) } else { None };
+        debug!("[{:?}] real cols = {:?}", lop_key, cols);
 
-        debug!("Compile real cols for lopkey: {:?} = {:?}", lop_key, cols);
-
-        debug!("Compile virtcols for lopkey: {:?}", lop_key);
         let virtcols = Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), proj_map);
+        debug!("[{:?}] virt cols = {:?}", lop_key, virtcols);
 
         (cols, virtcols)
     }
@@ -225,8 +224,8 @@ impl POP {
     }
 
     pub fn compile_repartition_write(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, pop_children: Vec<POPKey>, schema: Rc<Schema>,
-        stage_link: StageLink, cpartitions: usize,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, pop_children: Vec<POPKey>,
+        schema: Rc<Schema>, cpartitions: usize,
     ) -> Result<POPKey, String> {
         let stage_id = stage_link.0;
         let (_, lopprops, children) = lop_graph.get3(lop_key);
@@ -288,25 +287,40 @@ impl POP {
     pub fn compile_join(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
-        let (_, lopprops, children) = lop_graph.get3(lop_key);
+        let (lop, lopprops, children) = lop_graph.get3(lop_key);
+        if let LOP::HashJoin { lhs_join_keys, rhs_join_keys } = lop {
+            let keyexprs = [lhs_join_keys, rhs_join_keys];
+            let keyexprs = [0, 1]
+                .iter()
+                .map(|&child_ix| {
+                    // Build projection map of child. This will be used to resolve any column references in this LOP
+                    let child_lop_key = children.unwrap()[child_ix];
+                    let child_lopprops = lop_graph.get_properties(child_lop_key);
+                    let child_proj_map: ProjectionMap = Self::compute_projection_map(&child_lopprops.cols, child_lopprops.virtcols.as_ref());
+                    Self::compile_exprs(qgm, keyexprs[child_ix], &child_proj_map).unwrap()
+                })
+                .collect::<Vec<_>>();
 
-        // Build projection map of child. This will be used to resolve any column references in this LOP
-        let child_lop_key = children.unwrap()[0];
-        let child_lopprops = lop_graph.get_properties(child_lop_key);
-        let proj_map: ProjectionMap = Self::compute_projection_map(&child_lopprops.cols, child_lopprops.virtcols.as_ref());
+            // Compile predicates
+            let proj_map: ProjectionMap = Self::compute_projection_map(&lopprops.cols, lopprops.virtcols.as_ref());
 
-        // Compile predicates
-        debug!("Compile predicates for lopkey {:?}", lop_key);
-        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &proj_map);
+            // Compile real + virt columns
+            let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &proj_map);
 
-        let props = POPProps::new(predicates, None, None, lopprops.partdesc.npartitions);
+            let predicates = Self::compile_predicates(qgm, &lopprops.preds, &proj_map);
+            debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
-        let pop_inner = pop_hashjoin::HashJoin {};
-        let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
+            let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-        let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
+            let pop_inner = pop_hashjoin::HashJoin { keyexprs };
+            let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
-        Ok(pop_key)
+            let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
+
+            Ok(pop_key)
+        } else {
+            panic!("Bad LOP")
+        }
     }
 
     pub fn compile_aggregation(
