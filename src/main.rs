@@ -1,6 +1,6 @@
 // main
 
-//#![allow(warnings)]
+#![allow(warnings)]
 #![allow(clippy::too_many_arguments)]
 
 use crate::{includes::*, qgm::ParserState};
@@ -119,13 +119,15 @@ fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "yard::pcode=info");
 
     //std::env::set_var("RUST_LOG", "yard=info,yard::pop_repartition=debug,yard::flow=debug");
-    std::env::set_var("RUST_LOG", "yard=info,yard::pop_compile=debug,yard::pop_hashjoin=debug");
+    //std::env::set_var("RUST_LOG", "yard=info,yard::pop_compile=debug,yard::pop_repartition=debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
     let input_pathname = f!("{TOPDIR}/sql/join.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
+
+    debug!(target: "my_target", "a {} event", "log");
 
     let mut env = Env::new(99, 1, input_pathname, output_dir);
 
@@ -135,6 +137,8 @@ fn main() -> Result<(), String> {
         error!("{}", errstr);
         return Err(errstr);
     }
+
+    
     Ok(())
 }
 /*

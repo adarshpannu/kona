@@ -95,15 +95,15 @@ impl POPContext for CSVContext {
 
         let mut chunk = self.next0()?;
 
-        debug!("Before preds: \n{}", chunk_to_string(&chunk));
+        debug!("Before preds: \n{}", chunk_to_string(&chunk, "Before preds"));
 
         if ! chunk.is_empty() {
             // Run predicates and virtcols, if any
             chunk = POPKey::eval_predicates(props, chunk);
-            debug!("After preds: \n{}", chunk_to_string(&chunk));
+            debug!("After preds: \n{}", chunk_to_string(&chunk, "After preds"));
 
             let projection_chunk = POPKey::eval_projection(props, &chunk);
-            debug!("Projection: \n{}", chunk_to_string(&projection_chunk));
+            debug!("Projection: \n{}", chunk_to_string(&projection_chunk, "Projection"));
             Ok(projection_chunk)
         } else {
             Ok(chunk)

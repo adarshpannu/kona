@@ -4,7 +4,7 @@ use crate::{
     flow::Flow,
     graph::POPKey,
     includes::*,
-    pop::{POPContext, POP},
+    pop::{POPContext, POP, chunk_to_tabularstring},
     pop_csv::CSVContext,
     pop_hashjoin::HashJoinContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
@@ -44,6 +44,9 @@ impl Task {
             if chunk.is_empty() {
                 break;
             }
+
+            let s = chunk_to_tabularstring(&chunk, "");
+            println!("{}", s);
         }
 
         Ok(())

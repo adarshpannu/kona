@@ -38,6 +38,15 @@ impl ProjectionMap {
     pub fn get(&self, prj: Projection) -> Option<ColId> {
         self.hashmap.get(&prj).cloned()
     }
+
+    pub fn append(mut self, other: ProjectionMap) -> Self {
+        let offset = self.hashmap.len();
+        for (prj, colid) in other.hashmap.into_iter() {
+            let colid = colid + offset;
+            self.set(prj, colid);
+        }
+        self
+    }
 }
 
 /***************************************************************************************************/
@@ -101,9 +110,39 @@ impl Write for VecWriter {
     }
 }
 
-pub fn chunk_to_string(chunk: &ChunkBox) -> String {
+pub fn chunk_to_string(chunk: &ChunkBox, header: &str) -> String {
+    let mut writer = VecWriter::new();
+    let options = write::SerializeOptions::default();
+    writer.write_fmt(format_args!("\n---------- {} ----------\n", header)).unwrap();
+    write::write_chunk(&mut writer, chunk, &options).unwrap();
+    //writer.write(b"--------------------\n").unwrap();
+    writer.into_string()
+}
+
+pub fn chunk_to_tabularstring(chunk: &ChunkBox, header: &str) -> String {
     let mut writer = VecWriter::new();
     let options = write::SerializeOptions::default();
     write::write_chunk(&mut writer, chunk, &options).unwrap();
+    let s = writer.into_string();
+
+    let mut writer = VecWriter::new();
+
+    let rows = s.split('\n').collect::<Vec<_>>();
+    for (rx, row) in rows.iter().enumerate() {
+        let cols = row.split(',').collect::<Vec<_>>();
+        if rx == 0 || rx == rows.len() - 1 {
+            let len = rows[0].split(',').collect::<Vec<_>>().len();
+            for _ in 0..len {
+                writer.write_fmt(format_args!("{:10}", "+----------")).unwrap();
+            }
+            writer.write(b"+\n").unwrap();
+        }
+        if rx < rows.len() - 1 {
+            for (cx, col) in cols.iter().enumerate() {
+                writer.write_fmt(format_args!("|{:10}", col)).unwrap();
+            }
+            writer.write(b"|\n").unwrap();
+        }
+    }
     writer.into_string()
 }

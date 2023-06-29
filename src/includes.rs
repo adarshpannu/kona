@@ -79,3 +79,17 @@ pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {
 pub type ChunkBox = Chunk<Box<dyn Array>>;
 
 pub const CHUNK_SIZE: usize = 1024;
+
+macro_rules! function_name {
+    () => {{
+        fn f() {}
+        fn type_name_of<T>(_: T) -> &'static str {
+            std::any::type_name::<T>()
+        }
+        let name = type_name_of(f);
+        &name[..name.len() - 3]
+    }}
+}
+
+pub(crate) use function_name;
+

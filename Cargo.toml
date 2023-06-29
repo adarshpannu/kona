@@ -18,7 +18,7 @@ log = "0.4.0"
 serde = {version = "1.0", features = ["derive", "rc"]}
 typed-arena = "2.0.1"
 #serde_traitobject = "0.2.7"
-arrow2 = {version = "0.17.0", features = [
+arrow2 = {version = "0.17.2", features = [
   "io_csv",
   "io_csv_read",
   "io_ipc",
@@ -37,7 +37,7 @@ chrono = "0.4"
 csv = "1.2.1"
 fstrings = "0.2.3"
 getset = "0.1.2"
-itertools = "0.10"
+itertools = "0.11.0"
 lalrpop-util = "0.20.0"
 partitions = "0.2.4"
 regex = "1"

@@ -1,7 +1,7 @@
 name,age,emp_dept_id
 john,37,1
 sarah,53,2
-sarah,53,2
+ruby,53,2
 joe,45,3
 hari,25,3
 kumar,28,3
@@ -12,5 +12,6 @@ ajay,28,4
 ramani,24,5
 adarsh,27,2
 kate,42,5
+shawn,39,5
 ramesh,22,5
 kiran,61,4

@@ -209,6 +209,7 @@ impl QGM {
         if let Ok(lop_key) = lop_key {
             // Perform any rewrites
             let lop_key = self.qrw_add_repartitioning_keys_to_projections(&mut lop_graph, lop_key);
+            let lop_key = self.qrw_pushdown_join_keys(&mut lop_graph, lop_key);
 
             let plan_pathname = format!("{}/{}", env.output_dir, "lop.dot");
             self.write_logical_plan_to_graphviz(&lop_graph, lop_key, &plan_pathname)?;
@@ -218,16 +219,16 @@ impl QGM {
         }
     }
 
-    fn append_virt_cols(lop_graph: &mut LOPGraph, lop_key: LOPKey, virtcols: Option<&Vec<VirtCol>>) {
-        let mut virtcols = virtcols.cloned();
+    fn append_virt_cols(lop_graph: &mut LOPGraph, lop_key: LOPKey, newcols: Option<&Vec<VirtCol>>) {
+        let mut newcols = newcols.cloned();
         let props = &mut lop_graph.get_mut(lop_key).properties;
 
-        match (&mut props.virtcols, &mut virtcols) {
+        match (&mut props.virtcols, &mut newcols) {
             (Some(origcols), Some(newcols)) => {
                 let newcols = newcols.iter().filter(|&x| !newcols.contains(x));
                 origcols.extend(newcols)
             }
-            (None, Some(_)) => props.virtcols = virtcols,
+            (None, Some(_)) => props.virtcols = newcols,
             _ => {}
         }
     }
@@ -246,6 +247,34 @@ impl QGM {
 
                 // Add partitioning columns to the projection of the child node
                 Self::append_virt_cols(lop_graph, child_lop_key, virtcols.as_ref());
+            }
+        }
+        root_lop_key
+    }
+
+    pub fn qrw_pushdown_join_keys(self: &QGM, lop_graph: &mut LOPGraph, root_lop_key: LOPKey) -> LOPKey {
+        let mut iter = lop_graph.iter(root_lop_key);
+        while let Some(lop_key) = iter.next(lop_graph) {
+            let lop = lop_graph.get(lop_key);
+            match &lop.value {
+                LOP::HashJoin { lhs_join_keys, rhs_join_keys } => {
+                    // Only push down projections that are NOT column references. Singleton columns are already a part of the projection.
+                    let lhs_has_columns_only = lhs_join_keys.iter().all(|e| e.is_column(&self.expr_graph));
+                    let rhs_has_columns_only = rhs_join_keys.iter().all(|e| e.is_column(&self.expr_graph));
+                    if ! (lhs_has_columns_only && rhs_has_columns_only) {
+                        let children = lop.children.clone();
+                        let (lhs_join_keys, rhs_join_keys) = (lhs_join_keys.clone(), rhs_join_keys.clone());
+                        let key_exprs = [lhs_join_keys, rhs_join_keys];
+                        for ix in [0, 1] {
+                            let child_lop_key = children.as_ref().unwrap()[ix];
+                            let virtcols = Some(&key_exprs[ix]);
+
+                            // Add partitioning columns to the Repartition projection
+                            Self::append_virt_cols(lop_graph, child_lop_key, virtcols);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         root_lop_key

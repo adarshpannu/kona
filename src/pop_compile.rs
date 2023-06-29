@@ -1,7 +1,10 @@
 // Compile
 
+use arrow2::bitmap::chunk_iter_to_vec;
+
 use crate::{
     bitset::Bitset,
+    expr::Expr,
     flow::Flow,
     graph::{ExprKey, LOPKey, POPKey},
     includes::*,
@@ -100,6 +103,8 @@ impl POP {
     }
 
     pub fn compile_scan(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId) -> Result<POPKey, String> {
+        debug!("[{:?}] begin compile_scan", lop_key);
+
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
 
         let qunid = lopprops.quns.elements()[0];
@@ -139,6 +144,8 @@ impl POP {
 
         let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
         let pop_key = pop_graph.add_node_with_props(pop, props, None);
+
+        debug!("[{:?}] end compile_scan", lop_key);
 
         Ok(pop_key)
     }
@@ -187,9 +194,10 @@ impl POP {
             proj_map.set(prj, ix);
         }
 
+        let nrealcols = cols.len();
+
         // Add virtual columns
         if let Some(virtcols) = virtcols {
-            let nrealcols = cols.len();
             for (ix, &virtcol) in virtcols.iter().enumerate() {
                 let prj = Projection::VirtCol(virtcol);
                 proj_map.set(prj, nrealcols + ix);
@@ -227,6 +235,8 @@ impl POP {
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, pop_children: Vec<POPKey>,
         schema: Rc<Schema>, cpartitions: usize,
     ) -> Result<POPKey, String> {
+        debug!("[{:?}] begin compile_repartition_write", lop_key);
+
         let stage_id = stage_link.0;
         let (_, lopprops, children) = lop_graph.get3(lop_key);
 
@@ -251,9 +261,13 @@ impl POP {
         };
         debug!("Compile pkey end");
 
+        debug!("[{:?}] compile_repartition_write: schema = {:?}", lop_key, &schema);
+
         let pop_inner = pop_repartition::RepartitionWrite::new(repart_key, schema, stage_link, cpartitions);
         let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionWrite(pop_inner), props, Some(pop_children));
+
+        debug!("[{:?}] end compile_repartition_write", lop_key);
 
         Ok(pop_key)
     }
@@ -261,6 +275,10 @@ impl POP {
     pub fn compile_repartition_read(
         lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, schema: Rc<Schema>, npartitions: usize,
     ) -> Result<POPKey, String> {
+        debug!("[{:?}] begin compile_repartition_read", lop_key);
+
+        debug!("[{:?}] compile_repartition_read: schema = {:?}", lop_key, &schema);
+
         let stage_id = stage_link.1;
         let lopprops = &lop_graph.get(lop_key).properties;
 
@@ -281,29 +299,59 @@ impl POP {
 
         let pop_key = pop_graph.add_node_with_props(POP::RepartitionRead(pop_inner), props, None);
 
+        debug!("[{:?}] end compile_repartition_read", lop_key);
+
         Ok(pop_key)
     }
 
     pub fn compile_join(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
+        debug!("[{:?}] begin compile_join", lop_key);
+
         let (lop, lopprops, children) = lop_graph.get3(lop_key);
         if let LOP::HashJoin { lhs_join_keys, rhs_join_keys } = lop {
             let keyexprs = [lhs_join_keys, rhs_join_keys];
-            let keyexprs = [0, 1]
+            let keycols = [0, 1]
                 .iter()
                 .map(|&child_ix| {
                     // Build projection map of child. This will be used to resolve any column references in this LOP
                     let child_lop_key = children.unwrap()[child_ix];
                     let child_lopprops = lop_graph.get_properties(child_lop_key);
                     let child_proj_map: ProjectionMap = Self::compute_projection_map(&child_lopprops.cols, child_lopprops.virtcols.as_ref());
-                    Self::compile_exprs(qgm, keyexprs[child_ix], &child_proj_map).unwrap()
+
+                    keyexprs[child_ix]
+                        .iter()
+                        .map(|&expr_key| {
+                            let expr = qgm.expr_graph.get_value(expr_key);
+                            let prj = match expr {
+                                Expr::Column { qunid, colid, .. } => Projection::QunCol(QunCol(*qunid, *colid)),
+                                Expr::CID(qunid, colid) => Projection::QunCol(QunCol(*qunid, *colid)),
+                                _ => Projection::VirtCol(expr_key),
+                            };
+
+                            let colid = child_proj_map.get(prj);
+                            if let Some(colid) = colid {
+                                colid
+                            } else {
+                                panic!(
+                                    "compile_join: LOP {:?}, join key {:?} not found in child LOP's projection",
+                                    lop_key,
+                                    expr_key.printable(&qgm.expr_graph, false)
+                                );
+                            }
+                        })
+                        .collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
 
-            // Compile predicates
-            let proj_map: ProjectionMap = Self::compute_projection_map(&lopprops.cols, lopprops.virtcols.as_ref());
-
+            // Compute child projection maps and consolidate them into one
+            let left_child_lop_props = lop_graph.get_properties(children.unwrap()[0]);
+            let left_child_proj_map = Self::compute_projection_map(&left_child_lop_props.cols, left_child_lop_props.virtcols.as_ref());
+            let right_child_lop_props = lop_graph.get_properties(children.unwrap()[1]);
+            let right_child_proj_map = Self::compute_projection_map(&right_child_lop_props.cols, right_child_lop_props.virtcols.as_ref());
+            let proj_map = left_child_proj_map.append(right_child_proj_map);
+            
             // Compile real + virt columns
             let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &proj_map);
 
@@ -312,11 +360,12 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let pop_inner = pop_hashjoin::HashJoin { keyexprs };
+            let pop_inner = pop_hashjoin::HashJoin { keycols };
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
             let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
 
+            debug!("[{:?}] end compile_join", lop_key);
             Ok(pop_key)
         } else {
             panic!("Bad LOP")

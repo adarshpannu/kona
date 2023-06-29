@@ -91,7 +91,7 @@ impl RepartitionWriteContext {
             if !filtered_chunk.is_empty() {
                 let writer = self.get_writer(flow_id, rpw, cpartition)?;
 
-                debug!("write_partitions {:?} {:?}", rpw.stage_link, chunk_to_string(&filtered_chunk));
+                debug!("write_partitions {:?} {}", rpw.stage_link, chunk_to_string(&filtered_chunk, "write_partitions"));
 
                 writer.write(&filtered_chunk, None).map_err(stringify)?
             }
@@ -108,6 +108,8 @@ impl POPContext for RepartitionWriteContext {
     fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
+        let props = stage.pop_graph.get_properties(pop_key);
+
         if let POP::RepartitionWrite(rpw) = pop {
             let repart_key_code = &rpw.repart_key;
 
@@ -119,19 +121,22 @@ impl POPContext for RepartitionWriteContext {
                 }
 
                 debug!(
-                    "RepartitionWriteContext {:?} partition = {}::child chunk: \n{}",
+                    "[{:?}] RepartitionWriteContext partition = {}::child chunk: \n{}",
                     self.pop_key,
                     self.partition_id,
-                    chunk_to_string(&chunk)
+                    chunk_to_string(&chunk, "child chunk")
                 );
+
+                let chunk = POPKey::eval_projection(props, &chunk);
+                debug!("[{:?}] Projection: \n{}", self.pop_key, chunk_to_string(&chunk, "Projection"));
 
                 // Compute partitioning keys
                 let repart_keys = Self::eval_repart_keys(repart_key_code, &chunk);
                 debug!(
-                    "RepartitionWriteContext {:?} partition = {}::repart_keys: \n{}",
+                    "[{:?}] RepartitionWriteContext partition = {}::repart_keys: \n{}",
                     self.pop_key,
                     self.partition_id,
-                    chunk_to_string(&repart_keys)
+                    chunk_to_string(&repart_keys, "repart_keys")
                 );
 
                 // Compute hash
@@ -140,7 +145,7 @@ impl POPContext for RepartitionWriteContext {
                 // Compute partitions
                 let part_array = Self::compute_partitions(repart_hash, rpw.cpartitions);
                 debug!(
-                    "RepartitionWriteContext {:?} partition = {}::cpartitions: \n{:?}",
+                    "[{:?}] RepartitionWriteContext partition = {}::cpartitions: \n{:?}",
                     self.pop_key, self.partition_id, part_array
                 );
 
@@ -229,14 +234,17 @@ impl RepartitionReadContext {
         let dirname = get_partition_dir(flow_id, rpw.stage_link, partition_id);
         let files = list_files(&dirname);
         let files = if let Err(errstr) = files {
-            if ! errstr.contains("kind: NotFound") {
+            if !errstr.contains("kind: NotFound") {
                 return Err(errstr);
             }
             vec![]
         } else {
             files.unwrap()
         };
-        debug!("RepartitionReadContext::new, partition = {}, files = {:?}", partition_id, &files);
+        debug!(
+            "[{:?}] RepartitionReadContext::new, partition = {}, files = {:?}",
+            pop_key, partition_id, &files
+        );
 
         let cell = RepartitionReadCell::new(files, |files| {
             let reader = files.iter().flat_map(|path| {
@@ -268,7 +276,7 @@ impl POPContext for RepartitionReadContext {
                     "RepartitionReadContext {:?} partition = {}::child chunk: \n{}",
                     self.pop_key,
                     self.partition_id,
-                    chunk_to_string(&chunk)
+                    chunk_to_string(&chunk, "child chunk")
                 );
                 return Ok(chunk);
             }

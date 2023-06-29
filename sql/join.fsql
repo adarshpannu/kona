@@ -1,16 +1,17 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 3);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 2);
 CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/dept.csv", PARTITIONS = 2);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
 
-set PARALLEL_DEGREE = 5;
+set PARALLEL_DEGREE = 1;
 
 // All engineers aged 35+ 
-SELECT EMP.name, DEPT.DEPT_ID 
+SELECT EMP.age, EMP.name, DEPT.DEPT_ID, EMP.AGE + DEPT.DEPT_ID
 from EMP, DEPT
-where EMP.EMP_DEPT_ID = DEPT.DEPT_ID 
+where EMP.EMP_DEPT_ID = DEPT.DEPT_ID
 AND EMP.age > 35
 AND DEPT.NAME = "Engineering"
+AND EMP.AGE + DEPT.DEPT_ID < 50
 ;
 
