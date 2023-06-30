@@ -39,7 +39,7 @@ impl POPContext for HashJoinContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
         if let POP::HashJoin(hj) = pop {
@@ -49,22 +49,19 @@ impl POPContext for HashJoinContext {
             }
 
             // Probe-side (left child)
-            loop {
-                let child = &mut self.children[0];
+            let child = &mut self.children[0];
 
-                let chunk = child.next(flow, stage)?;
-                if chunk.is_empty() {
-                    break;
+            while let Some(chunk) = child.next(flow, stage)? {
+                if !chunk.is_empty() {
+                    let chunk = self.process_probe_side(flow, stage, hj, chunk)?;
+                    debug!("HashJoinContext::next \n{}", chunk_to_string(&chunk, "HashJoinContext::next"));
+                    return Ok(Some(chunk));
                 }
-
-                let chunk = self.process_probe_side(flow, stage, hj, chunk);
-                return chunk;
             }
         } else {
             panic!("ugh")
         }
-
-        Ok(Chunk::new(vec![]))
+        Ok(None)
     }
 }
 
@@ -113,12 +110,10 @@ impl HashJoinContext {
 
         if let POP::HashJoin(hj) = pop {
             // Collect all build chunks
-            loop {
-                let chunk = child.next(flow, stage)?;
-                if chunk.is_empty() {
-                    break;
+            while let Some(chunk) = child.next(flow, stage)? {
+                if chunk.len() > 0 {
+                    build_chunks.push(chunk);
                 }
-                build_chunks.push(chunk);
             }
 
             let cell = HashJoinCell::new(build_chunks, |build_chunks| {
@@ -129,6 +124,7 @@ impl HashJoinContext {
                     let keys = Self::eval_cols(keycols, &chunk);
                     let hash_array = hash_chunk(&keys, &self.state);
 
+                    /*
                     debug!(
                         "HashJoinContext {:?} partition = {}::build_keys: \n{}, hash: {:?}",
                         self.pop_key,
@@ -136,6 +132,7 @@ impl HashJoinContext {
                         chunk_to_string(&keys, "build keys"),
                         &hash_array
                     );
+                    */
 
                     for (jx, &hv) in hash_array.iter().enumerate() {
                         let elems = hash_map.entry(hv).or_insert(vec![]);
@@ -159,6 +156,7 @@ impl HashJoinContext {
         let keys = Self::eval_cols(keycols, &chunk);
         let hash_array = hash_chunk(&keys, &self.state);
 
+        /*
         debug!(
             "HashJoinContext {:?} partition = {}, hash = {:?}{}{}",
             self.pop_key,
@@ -167,6 +165,7 @@ impl HashJoinContext {
             chunk_to_string(&chunk, "probe input"),
             chunk_to_string(&keys, "probe keys"),
         );
+        */
 
         // Build array indices based on hash-match
         let mut indices: Vec<(usize, (usize, usize))> = vec![];
@@ -196,8 +195,8 @@ impl HashJoinContext {
 
             // Run predicates, if any
             let chunk = POPKey::eval_predicates(props, chunk);
-            debug!("After join preds: \n{}", chunk_to_string(&chunk, "After join preds"));
-            
+            //debug!("After join preds: \n{}", chunk_to_string(&chunk, "After join preds"));
+
             let projection_chunk = POPKey::eval_projection(props, &chunk);
             debug!("hash_join_projection: \n{}", chunk_to_string(&projection_chunk, "hash_join_projection"));
             Ok(projection_chunk)
@@ -211,12 +210,14 @@ impl HashJoinContext {
         let probe_arrays = Self::take_chunk(&keys, probe_indices)?;
         let probe_chunk = Chunk::new(probe_arrays);
 
+        /*
         debug!(
             "HashJoinContext {:?} partition = {}{}",
             self.pop_key,
             self.partition_id,
             chunk_to_string(&probe_chunk, "probe_chunk"),
         );
+        */
         Ok(probe_chunk)
     }
 

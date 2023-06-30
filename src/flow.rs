@@ -8,4 +8,6 @@ pub struct Flow {
 
     #[serde(skip)]
     pub stage_graph: StageGraph,
+
+    pub schema: Schema
 }

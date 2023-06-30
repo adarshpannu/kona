@@ -5,6 +5,7 @@
 
 use crate::{includes::*, qgm::ParserState};
 use std::fs;
+use std::{process::Command, rc::Rc};
 
 #[macro_use]
 extern crate lalrpop_util;
@@ -101,10 +102,12 @@ fn run_job(env: &mut Env) -> Result<(), String> {
                 let (lop_graph, lop_key) = qgm.build_logical_plan(env)?;
 
                 if !env.settings.parse_only.unwrap_or(false) {
-                    let flow = POP::compile(env, &mut qgm, &lop_graph, lop_key).unwrap();
+                    let flow = POP::compile_flow(env, &mut qgm, &lop_graph, lop_key).unwrap();
 
                     // Build POPs
                     run_flow(env, &flow)?;
+
+                    display_output_dir(&flow);
                 }
             }
         }
@@ -127,8 +130,6 @@ fn main() -> Result<(), String> {
     let input_pathname = f!("{TOPDIR}/sql/join.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
 
-    debug!(target: "my_target", "a {} event", "log");
-
     let mut env = Env::new(99, 1, input_pathname, output_dir);
 
     let jobres = run_job(&mut env);
@@ -138,7 +139,6 @@ fn main() -> Result<(), String> {
         return Err(errstr);
     }
 
-    
     Ok(())
 }
 /*
@@ -146,8 +146,6 @@ fn main() -> Result<(), String> {
 */
 #[test]
 fn run_unit_tests() -> Result<(), String> {
-    use std::{process::Command, rc::Rc};
-
     // Initialize logger with INFO as default
     logging::init("error");
     let mut npassed = 0;
@@ -180,7 +178,7 @@ fn run_unit_tests() -> Result<(), String> {
 
         let mut mismatch = false;
         for (tag, buf) in vec![("out", output.stdout), ("err", output.stderr)].iter() {
-            if ! buf.is_empty() {
+            if !buf.is_empty() {
                 mismatch = true;
                 let s = String::from_utf8_lossy(buf);
                 println!("{}:\n{}", tag, s);
@@ -193,4 +191,14 @@ fn run_unit_tests() -> Result<(), String> {
 
     println!("---------- Completed: {}/{} subtests passed", npassed, ntotal);
     Ok(())
+}
+
+fn display_output_dir(flow: &Flow) {
+    println!("---------- output ----------");
+    let output_dir = get_output_dir(flow.id);
+    let files = list_files(&output_dir).unwrap();
+    for file_path in files.iter() {
+        let contents = fs::read_to_string(file_path).expect("Should have been able to read the file");
+        println!("{}", contents);
+    }
 }

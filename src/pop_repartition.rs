@@ -85,13 +85,19 @@ impl RepartitionWriteContext {
     }
 
     fn write_partitions(&mut self, flow_id: usize, rpw: &RepartitionWrite, chunk: ChunkBox, part_array: PrimitiveArray<u64>) -> Result<(), String> {
+        let partition_id = self.partition_id;
+
         for cpartition in 0..rpw.cpartitions {
             // Filter chunk to only grab this partition
             let filtered_chunk = Self::filter_partition(&chunk, &part_array, cpartition)?;
             if !filtered_chunk.is_empty() {
                 let writer = self.get_writer(flow_id, rpw, cpartition)?;
 
-                debug!("write_partitions {:?} {}", rpw.stage_link, chunk_to_string(&filtered_chunk, "write_partitions"));
+                let headerstr = format!(
+                    "RepartitionWriteContext Stage {} -> {}, Partition {}, Consumer {}",
+                    rpw.stage_link.0, rpw.stage_link.1, partition_id, cpartition
+                );
+                debug!("{}", chunk_to_string(&filtered_chunk, &headerstr));
 
                 writer.write(&filtered_chunk, None).map_err(stringify)?
             }
@@ -105,7 +111,7 @@ impl POPContext for RepartitionWriteContext {
         self
     }
 
-    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
         let props = stage.pop_graph.get_properties(pop_key);
@@ -115,49 +121,35 @@ impl POPContext for RepartitionWriteContext {
 
             loop {
                 let child = &mut self.children[0];
-                let chunk = child.next(flow, stage)?;
-                if chunk.is_empty() {
+                if let Some(chunk) = child.next(flow, stage)? {
+                    let chunk = POPKey::eval_projection(props, &chunk);
+
+                    // Compute partitioning keys
+                    let repart_keys = Self::eval_repart_keys(repart_key_code, &chunk);
+
+                    // Compute hash
+                    let repart_hash = Self::hash_chunk(repart_keys)?;
+
+                    // Compute partitions
+                    let part_array = Self::compute_partitions(repart_hash, rpw.cpartitions);
+                    /*
+                    debug!(
+                        "[{:?}] RepartitionWriteContext partition = {}::cpartitions: \n{:?}",
+                        self.pop_key, self.partition_id, part_array
+                    );
+                    */
+
+                    // Write partitions
+                    self.write_partitions(flow.id, rpw, chunk, part_array)?; // FIXME
+                } else {
                     break;
                 }
-
-                debug!(
-                    "[{:?}] RepartitionWriteContext partition = {}::child chunk: \n{}",
-                    self.pop_key,
-                    self.partition_id,
-                    chunk_to_string(&chunk, "child chunk")
-                );
-
-                let chunk = POPKey::eval_projection(props, &chunk);
-                debug!("[{:?}] Projection: \n{}", self.pop_key, chunk_to_string(&chunk, "Projection"));
-
-                // Compute partitioning keys
-                let repart_keys = Self::eval_repart_keys(repart_key_code, &chunk);
-                debug!(
-                    "[{:?}] RepartitionWriteContext partition = {}::repart_keys: \n{}",
-                    self.pop_key,
-                    self.partition_id,
-                    chunk_to_string(&repart_keys, "repart_keys")
-                );
-
-                // Compute hash
-                let repart_hash = Self::hash_chunk(repart_keys)?;
-
-                // Compute partitions
-                let part_array = Self::compute_partitions(repart_hash, rpw.cpartitions);
-                debug!(
-                    "[{:?}] RepartitionWriteContext partition = {}::cpartitions: \n{:?}",
-                    self.pop_key, self.partition_id, part_array
-                );
-
-                // Write partitions
-                self.write_partitions(flow.id, rpw, chunk, part_array)?; // FIXME
             }
             self.finish_writers(rpw)?;
         } else {
             panic!("ugh")
         }
-
-        Ok(Chunk::new(vec![]))
+        Ok(None)
     }
 }
 
@@ -248,6 +240,8 @@ impl RepartitionReadContext {
 
         let cell = RepartitionReadCell::new(files, |files| {
             let reader = files.iter().flat_map(|path| {
+                debug!("RepartitionReadContext: reading file {}", &path);
+
                 let mut reader = File::open(path).unwrap();
                 let metadata = read_file_metadata(&mut reader).unwrap();
                 FileReader::new(reader, metadata, None, None).map(|e| e.unwrap())
@@ -265,30 +259,25 @@ impl POPContext for RepartitionReadContext {
         self
     }
 
-    fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
 
         if let POP::RepartitionRead(_) = pop {
             let chunk = self.cell.next();
             if let Some(chunk) = chunk {
-                debug!(
-                    "RepartitionReadContext {:?} partition = {}::child chunk: \n{}",
-                    self.pop_key,
-                    self.partition_id,
-                    chunk_to_string(&chunk, "child chunk")
+                let headerstr = format!(
+                    "RepartitionReadContext::next Stage = {}, {:?}, Partition = {}",
+                    stage.stage_id, pop_key, self.partition_id
                 );
-                return Ok(chunk);
+                debug!("{}", chunk_to_string(&chunk, &headerstr));
+                return Ok(Some(chunk));
             }
         } else {
             panic!("ugh")
         }
-        Ok(Chunk::new(vec![]))
+        Ok(None)
     }
-}
-
-fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId) -> String {
-    format!("{}/flow-{}/pipeline-{}-{}/consumer-{}", TEMPDIR, flow_id, stage_link.0, stage_link.1, pid)
 }
 
 pub fn list_files(dirname: &String) -> Result<Vec<String>, String> {

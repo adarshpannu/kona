@@ -2,6 +2,7 @@
 pub use std::fs;
 
 pub use crate::env::Env;
+use crate::stage::StageLink;
 pub use arrow2::{
     array::{Array, BooleanArray, PrimitiveArray},
     chunk::Chunk,
@@ -93,3 +94,11 @@ macro_rules! function_name {
 
 pub(crate) use function_name;
 
+
+pub fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId) -> String {
+    format!("{}/flow-{}/pipeline-{}-{}/consumer-{}", TEMPDIR, flow_id, stage_link.0, stage_link.1, pid)
+}
+
+pub fn get_output_dir(flow_id: usize) -> String {
+    format!("{}/flow-{}/output", TEMPDIR, flow_id)
+}

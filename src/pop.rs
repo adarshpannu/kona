@@ -82,7 +82,7 @@ pub enum POP {
 /***************************************************************************************************/
 pub trait POPContext {
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String>;
+    fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String>;
 }
 
 struct VecWriter {

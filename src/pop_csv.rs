@@ -1,6 +1,6 @@
 // csv
 
-use crate::{graph::POPKey, includes::*, pop::chunk_to_string, pop::POPContext, stage::Stage, flow::Flow};
+use crate::{flow::Flow, graph::POPKey, includes::*, pop::chunk_to_string, pop::POPContext, stage::Stage};
 use arrow2::io::csv::{
     read,
     read::{ByteRecord, Reader, ReaderBuilder},
@@ -19,6 +19,7 @@ pub struct CSVContext {
     projection: Vec<ColId>,
     reader: Reader<fs::File>,
     rows: Vec<ByteRecord>,
+    partition_id: PartitionId,
     partition: TextFilePartition,
 }
 
@@ -48,6 +49,7 @@ impl CSVContext {
             projection: csv.input_projection.clone(),
             reader,
             rows,
+            partition_id,
             partition,
         };
 
@@ -76,7 +78,7 @@ impl CSVContext {
         Ok(row_number)
     }
 
-    fn next0(&mut self) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next0(&mut self) -> Result<ChunkBox, String> {
         let rows_read = self.read_rows().map_err(stringify)?;
 
         let rows = &self.rows[..rows_read];
@@ -89,24 +91,25 @@ impl POPContext for CSVContext {
         self
     }
 
-    fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Chunk<Box<dyn Array>>, String> {
+    fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
 
         let mut chunk = self.next0()?;
 
-        debug!("Before preds: \n{}", chunk_to_string(&chunk, "Before preds"));
+        //debug!("Before preds: \n{}", chunk_to_string(&chunk, "Before preds"));
 
-        if ! chunk.is_empty() {
+        if !chunk.is_empty() {
             // Run predicates and virtcols, if any
             chunk = POPKey::eval_predicates(props, chunk);
-            debug!("After preds: \n{}", chunk_to_string(&chunk, "After preds"));
+            //debug!("After preds: \n{}", chunk_to_string(&chunk, "After preds"));
 
             let projection_chunk = POPKey::eval_projection(props, &chunk);
-            debug!("Projection: \n{}", chunk_to_string(&projection_chunk, "Projection"));
-            Ok(projection_chunk)
+            let headerstr = format!("CSVContext::next Stage = {}, {:?}, Partition = {}", stage.stage_id, pop_key, self.partition_id);
+            debug!("{}", chunk_to_string(&projection_chunk, &headerstr));
+            Ok(Some(projection_chunk))
         } else {
-            Ok(chunk)
+            Ok(None)
         }
     }
 }
@@ -163,6 +166,12 @@ impl CSV {
             splits.push(TextFilePartition(begin, end));
             debug!("   partition-{} offsets = [{}, {})", splits.len(), begin, end);
             begin = end;
+        }
+
+        // Kludge: We may not be able to split a CSV into the requisite # of pieces.
+        // If that happens, fabricate zero-sized partitions.
+        for _ in 0..(nsplits - splits.len() as u64) {
+            splits.push(TextFilePartition(0, 0));
         }
         Ok(splits)
     }

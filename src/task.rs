@@ -4,12 +4,14 @@ use crate::{
     flow::Flow,
     graph::POPKey,
     includes::*,
-    pop::{POPContext, POP, chunk_to_tabularstring},
+    pop::{chunk_to_tabularstring, POPContext, POP},
     pop_csv::CSVContext,
     pop_hashjoin::HashJoinContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
     stage::Stage,
 };
+use arrow2::io::csv::write;
+use std::fs::File;
 
 /***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
@@ -30,6 +32,14 @@ impl Task {
     }
 
     pub fn run(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
+        let options = write::SerializeOptions::default();
+
+        let mut writer = None;
+
+        if stage.stage_id == 0 {
+            let dirname = get_output_dir(flow.id);
+            std::fs::create_dir_all(&dirname).map_err(stringify)?;
+        }
         /*
         debug!(
             "Running task: stage = {:?}, partition = {}/{}",
@@ -39,16 +49,26 @@ impl Task {
         let root_pop_key = stage.root_pop_key.unwrap();
 
         let mut root_context = self.init_context(flow, stage, root_pop_key)?;
-        loop {
-            let chunk = root_context.next(flow, stage)?;
-            if chunk.is_empty() {
-                break;
+        while let chunk = root_context.next(flow, stage)? {
+            if let Some(chunk) = chunk {
+                if stage.stage_id == 0 {
+                    if writer.is_none() {
+                        // Tasks in top-level stages write their outputs to disk
+                        let dirname = get_output_dir(flow.id);
+                        std::fs::create_dir_all(&dirname).map_err(stringify)?;
+                        let path = format!("{}/partition-{}.csv", dirname, self.partition_id);
+                        let localwriter = std::fs::File::create(path).map_err(stringify)?;
+                        writer = Some(localwriter);
+                    }
+
+                    if let Some(writer) = writer.as_mut() {
+                        write::write_chunk(writer, &chunk, &options);
+                    }
+                }
+            } else {
+                break
             }
-
-            let s = chunk_to_tabularstring(&chunk, "");
-            println!("{}", s);
         }
-
         Ok(())
     }
 

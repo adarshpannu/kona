@@ -21,7 +21,7 @@ use crate::{
 use std::rc::Rc;
 
 impl POP {
-    pub fn compile(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
+    pub fn compile_flow(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
         // Build physical plan
         let mut stage_graph = StageGraph::default();
 
@@ -35,8 +35,12 @@ impl POP {
         let plan_pathname = format!("{}/{}", env.output_dir, "pop.dot");
         QGM::write_physical_plan_to_graphviz(qgm, &stage_graph, &plan_pathname)?;
 
+        // Get schema
+        let schema = lop_key.get_schema(qgm, lop_graph);
+
         // Build flow (POPs + Stages)
-        let flow = Flow { id: env.id, stage_graph };
+        let flow = Flow { id: env.id, stage_graph, schema };
+
         Ok(flow)
     }
 

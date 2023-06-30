@@ -1,5 +1,5 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 2);
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/dept.csv", PARTITIONS = 2);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 1);
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/dept.csv", PARTITIONS = 1);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;
@@ -12,6 +12,5 @@ from EMP, DEPT
 where EMP.EMP_DEPT_ID = DEPT.DEPT_ID
 AND EMP.age > 35
 AND DEPT.NAME = "Engineering"
-AND EMP.AGE + DEPT.DEPT_ID < 50
 ;
 
