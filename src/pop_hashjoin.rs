@@ -12,7 +12,7 @@ use crate::{
 };
 use ahash::RandomState;
 use arrow2::{
-    array::{MutableBooleanArray, MutablePrimitiveArray, Utf8Array},
+    array::{MutableBooleanArray, MutablePrimitiveArray, MutableUtf8Array, Utf8Array},
     compute::take,
 };
 use self_cell::self_cell;
@@ -146,7 +146,7 @@ impl HashJoinContext {
         Ok(())
     }
 
-    fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hj: &HashJoin, chunk: Chunk<Box<dyn Array>>) -> Result<ChunkBox, String> {
+    fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hj: &HashJoin, chunk: ChunkBox) -> Result<ChunkBox, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
 
@@ -239,6 +239,23 @@ impl HashJoinContext {
             match array.data_type().to_physical_type() {
                 PhysicalType::Primitive(PrimitiveType::Int64) => {
                     let mut mutarr = MutablePrimitiveArray::<i64>::new();
+
+                    let it = indices.iter().map(|&(_, (chunk_ix, ix))| {
+                        let chunk = &cell.borrow_owner()[chunk_ix];
+                        let array = &chunk.columns()[colid];
+                        let primarr = array.as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
+                        primarr.get(ix)
+                    });
+                    // Set size_hint. See https://github.com/shimunn/size_hint
+                    
+                    mutarr.extend_trusted_len(it);
+
+                    let primarr = PrimitiveArray::<i64>::from(mutarr);
+                    let primarr: Box<dyn Array> = Box::new(primarr);
+                    new_arrays.push(primarr);
+
+                    /*
+                    let mut mutarr = MutablePrimitiveArray::<i64>::new();
                     for &(_, (chunk_ix, ix)) in indices.iter() {
                         let chunk = &cell.borrow_owner()[chunk_ix];
                         let array = &chunk.columns()[colid];
@@ -248,8 +265,25 @@ impl HashJoinContext {
                     let primarr = PrimitiveArray::<i64>::from(mutarr);
                     let primarr: Box<dyn Array> = Box::new(primarr);
                     new_arrays.push(primarr)
+                    */
                 }
-                t => panic!("Hash not implemented for type: {:?}", t),
+
+            
+                PhysicalType::Utf8 => {
+                    let it = indices.iter().map(|&(_, (chunk_ix, ix))| {
+                        let chunk = &cell.borrow_owner()[chunk_ix];
+                        let array = &chunk.columns()[colid];
+                        let primarr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
+                        primarr.get(ix)
+                    });
+                    // Set size_hint. See https://github.com/shimunn/size_hint
+                    
+                    let primarr = Utf8Array::<i32>::from_trusted_len_iter(it);
+                    let primarr: Box<dyn Array> = Box::new(primarr);
+                    new_arrays.push(primarr);
+                },
+
+                t => panic!("contruct_build_chunk_from_indices() not yet implemented for type: {:?}", t),
             }
         }
 

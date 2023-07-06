@@ -119,9 +119,8 @@ impl POPContext for RepartitionWriteContext {
         if let POP::RepartitionWrite(rpw) = pop {
             let repart_key_code = &rpw.repart_key;
 
-            loop {
-                let child = &mut self.children[0];
-                if let Some(chunk) = child.next(flow, stage)? {
+            while let Some(chunk) = self.children[0].next(flow, stage)? {
+                if !chunk.is_empty() {
                     let chunk = POPKey::eval_projection(props, &chunk);
 
                     // Compute partitioning keys
@@ -140,9 +139,7 @@ impl POPContext for RepartitionWriteContext {
                     */
 
                     // Write partitions
-                    self.write_partitions(flow.id, rpw, chunk, part_array)?; // FIXME
-                } else {
-                    break;
+                    self.write_partitions(flow.id, rpw, chunk, part_array)?;
                 }
             }
             self.finish_writers(rpw)?;
@@ -215,7 +212,7 @@ self_cell!(
 );
 
 impl RepartitionReadCell {
-    fn next(&mut self) -> Option<Chunk<Box<dyn Array>>> {
+    fn next(&mut self) -> Option<ChunkBox> {
         self.with_dependent_mut(|_, dependent| dependent.next())
     }
 }
