@@ -36,7 +36,7 @@ pub enum PInstruction {
 }
 
 impl ExprKey {
-    pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, proj_map: &ProjectionMap) {
+    pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, proj_map: &mut ProjectionMap) {
         let prj = Projection::VirtCol(*self);
         let colid = proj_map.get(prj);
         let inst = if let Some(colid) = colid {
@@ -44,15 +44,17 @@ impl ExprKey {
         } else {
             let (expr, _, children) = expr_graph.get3(*self);
 
-            // Post-order traversal (i.e. children before parents)
-            if let Some(children) = children {
-                for &child_expr_key in children {
-                    child_expr_key.compile(expr_graph, pcode, proj_map)
+            // Post-order traversal (i.e. children before parents except when compiling aggs)
+            if !matches!(expr, Expr::AggFunction(..)) {
+                if let Some(children) = children {
+                    for &child_expr_key in children {
+                        child_expr_key.compile(expr_graph, pcode, proj_map)
+                    }
                 }
             }
 
             match expr {
-                Expr::CID(colid, ..) => PInstruction::Column(*colid),
+                Expr::CID(qunid, colid) => PInstruction::Column(*colid),
                 Expr::Literal(value) => PInstruction::Literal(value.clone()),
                 Expr::Column { qunid, colid, .. } => {
                     let prj = Projection::QunCol(QunCol(*qunid, *colid));
@@ -63,6 +65,15 @@ impl ExprKey {
                 Expr::RelExpr(op) => PInstruction::RelExpr(*op),
                 Expr::LogExpr(op) => PInstruction::LogExpr(*op),
                 Expr::NegatedExpr => PInstruction::NegatedExpr,
+                Expr::AggFunction(agg_type, _) => {
+                    let child_expr = expr_graph.get_value(children.unwrap()[0]);
+                    if let Expr::CID(qunid, colid) = child_expr {
+                        let array_id = proj_map.set_agg(*agg_type, *colid);
+                        PInstruction::Column(array_id)
+                    } else {
+                        panic!("Malformed agg expression")
+                    }
+                }
                 _ => panic!("Expression not compilable yet: {:?}", expr),
             }
         };
@@ -106,6 +117,7 @@ impl PCode {
                 PInstruction::Literal(datum) => stack.push(PCodeStack::Datum(datum.clone())),
                 PInstruction::BinaryExpr(op) => {
                     let (rhs, lhs) = (stack.pop().unwrap(), stack.pop().unwrap());
+
                     match (lhs, op, rhs) {
                         (PCodeStack::Column(lhs), arithop, PCodeStack::Column(rhs)) => {
                             let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
@@ -127,7 +139,9 @@ impl PCode {
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
-                        _ => todo!(),
+                        _ => {
+                            panic!("Not implemented: {:?}", inst)
+                        }
                     }
                 }
                 PInstruction::RelExpr(op) => {

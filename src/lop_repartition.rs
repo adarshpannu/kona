@@ -10,23 +10,16 @@ use crate::{
 };
 
 impl QGM {
-    pub fn repartition_if_needed(self: &QGM, lop_graph: &mut LOPGraph, lop_key: LOPKey, expected_partitioning: &Vec<ExprKey>, eqclass: &ExprEqClass) -> LOPKey {
-        let props = &lop_graph.get(lop_key).properties;
-        let empty_vec = vec![];
-        let actual_partitioning = if let PartType::HASHEXPR(keys) = &props.partdesc.part_type {
-            keys
-        } else {
-            &empty_vec
-        };
+    pub fn repartition_if_needed(self: &QGM, lop_graph: &mut LOPGraph, lop_key: LOPKey, expected_partitioning: &PartDesc, eqclass: &ExprEqClass) -> LOPKey {
+        let props = lop_graph.get_properties(lop_key);
+        let actual_partitioning = &props.partdesc;
 
-        if Self::compare_part_keys(&self.expr_graph, expected_partitioning, actual_partitioning, eqclass) {
+        if Self::compare_part_descs(&self.expr_graph, expected_partitioning, actual_partitioning, eqclass) {
             lop_key
         } else {
-            let partdesc = PartDesc {
-                npartitions: 4,
-                part_type: PartType::HASHEXPR(expected_partitioning.clone()),
-            };
-            let cpartitions = props.partdesc.npartitions;
+            let mut partdesc = expected_partitioning.clone();
+            let cpartitions = partdesc.npartitions;
+            partdesc.npartitions = actual_partitioning.npartitions;
 
             let props = LOPProps {
                 quns: props.quns.clone(),

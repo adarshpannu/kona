@@ -1,15 +1,16 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = ",", PARTITIONS = 3);
 
 DESCRIBE TABLE emp;
 
-set PARSE_ONLY = "true";
+--set PARSE_ONLY = "true";
+set PARALLEL_DEGREE = 5;
 
-select sum(age + 10)*99 / count(age + 50), emp_dept_id + 55, avg(distinct age), emp_dept_id + 55
+select sum(age + 10)*99 / count(age + 50), count(age + 50), emp_dept_id + 55, avg(distinct age), emp_dept_id * 2
 from emp E
 where 
     age > 50 
 and emp_dept_id < 99
-group by emp_dept_id + 55
+group by emp_dept_id + 55, emp_dept_id * 2
 having sum(age) > 100 and emp_dept_id + 55 > 10
 ;
 

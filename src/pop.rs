@@ -1,6 +1,7 @@
 // pop: Physical operators
 
 use crate::{
+    expr::AggType,
     flow::Flow,
     graph::{ExprKey, Graph, POPKey},
     includes::*,
@@ -18,16 +19,25 @@ use std::io::{self, Write};
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
 /***************************************************************************************************/
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Agg {
+    agg_type: AggType,
+    colid: ColId,
+}
+
+/***************************************************************************************************/
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Projection {
     QunCol(QunCol),
     VirtCol(ExprKey),
+    AggCol(Agg), // SUM($3.2) == Agg(`SUM`, 2)
 }
 
 /***************************************************************************************************/
 #[derive(Debug, Default)]
 pub struct ProjectionMap {
-    pub hashmap: HashMap<Projection, ColId>,
+    pub hashmap: HashMap<Projection, ColId>, // Projection -> ColId
 }
 
 impl ProjectionMap {
@@ -46,6 +56,13 @@ impl ProjectionMap {
             self.set(prj, colid);
         }
         self
+    }
+
+    pub fn set_agg(&mut self, agg_type: AggType, colid: ColId) -> ColId {
+        let prj = Projection::AggCol(Agg { agg_type, colid });
+        let next_colid = self.hashmap.len();
+        let retval = self.hashmap.entry(prj).or_insert(next_colid);
+        *retval
     }
 }
 

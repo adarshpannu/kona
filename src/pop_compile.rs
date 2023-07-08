@@ -4,20 +4,21 @@ use arrow2::bitmap::chunk_iter_to_vec;
 
 use crate::{
     bitset::Bitset,
-    expr::Expr,
+    expr::{AggType, Expr},
     flow::Flow,
     graph::{ExprKey, LOPKey, POPKey},
     includes::*,
     lop::{LOPGraph, LOPProps, VirtCol, LOP},
     metadata::{PartType, TableType},
     pcode::PCode,
-    pop::{POPProps, Projection, ProjectionMap, POP},
+    pop::{Agg, POPProps, Projection, ProjectionMap, POP},
     pop_aggregation,
     pop_csv::CSV,
     pop_hashjoin, pop_repartition,
     qgm::QGM,
     stage::{StageGraph, StageLink},
 };
+use std::collections::HashMap;
 use std::rc::Rc;
 
 impl POP {
@@ -39,7 +40,11 @@ impl POP {
         let schema = lop_key.get_schema(qgm, lop_graph);
 
         // Build flow (POPs + Stages)
-        let flow = Flow { id: env.id, stage_graph, schema };
+        let flow = Flow {
+            id: env.id,
+            stage_graph,
+            schema,
+        };
 
         Ok(flow)
     }
@@ -87,7 +92,7 @@ impl POP {
                 schema.clone().unwrap(),
                 *cpartitions,
             )?,
-            LOP::Aggregation { .. } => Self::compile_aggregation(lop_graph, lop_key, stage_graph, effective_stage_id, pop_children)?,
+            LOP::Aggregation { .. } => Self::compile_aggregation(qgm, lop_graph, lop_key, stage_graph, effective_stage_id, pop_children)?,
         };
 
         debug!("[{:?}] compiled to {:?} in stage {}", lop_key, pop_key, effective_stage_id);
@@ -115,7 +120,7 @@ impl POP {
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
 
         // Build input map
-        let (input_projection, input_proj_map) = if let LOP::TableScan { input_projection } = lop {
+        let (mut input_projection, mut input_proj_map) = if let LOP::TableScan { input_projection } = lop {
             let proj_map: ProjectionMap = Self::compute_projection_map(input_projection, None);
             let input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
             (input_projection, proj_map)
@@ -125,7 +130,7 @@ impl POP {
         debug!("[{:?}] input_projection: {:?}", lop_key, input_projection);
 
         // Compile predicates
-        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &input_proj_map);
+        let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut input_proj_map);
         debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
         let pop = match tbldesc.get_type() {
@@ -143,7 +148,7 @@ impl POP {
         };
 
         // Compile real + virt columns
-        let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &input_proj_map);
+        let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut input_proj_map);
         let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
         let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
@@ -154,7 +159,7 @@ impl POP {
         Ok(pop_key)
     }
 
-    pub fn compile_projection(qgm: &QGM, lop_key: LOPKey, lopprops: &LOPProps, proj_map: &ProjectionMap) -> (Option<Vec<ColId>>, Option<Vec<PCode>>) {
+    pub fn compile_projection(qgm: &QGM, lop_key: LOPKey, lopprops: &LOPProps, proj_map: &mut ProjectionMap) -> (Option<Vec<ColId>>, Option<Vec<PCode>>) {
         let cols = lopprops
             .cols
             .elements()
@@ -173,11 +178,12 @@ impl POP {
         (cols, virtcols)
     }
 
-    pub fn compile_virtcols(qgm: &QGM, virtcols: Option<&Vec<VirtCol>>, proj_map: &ProjectionMap) -> Option<Vec<PCode>> {
+    pub fn compile_virtcols(qgm: &QGM, virtcols: Option<&Vec<VirtCol>>, proj_map: &mut ProjectionMap) -> Option<Vec<PCode>> {
         if let Some(virtcols) = virtcols {
             let pcodevec = virtcols
                 .iter()
                 .map(|expr_key| {
+                    debug!("Compile virtcol: {:?}", expr_key.printable(&qgm.expr_graph, false));
                     let mut pcode = PCode::default();
                     expr_key.compile(&qgm.expr_graph, &mut pcode, proj_map);
                     pcode
@@ -210,7 +216,7 @@ impl POP {
         proj_map
     }
 
-    pub fn compile_predicates(qgm: &QGM, preds: &Bitset<ExprKey>, proj_map: &ProjectionMap) -> Option<Vec<PCode>> {
+    pub fn compile_predicates(qgm: &QGM, preds: &Bitset<ExprKey>, proj_map: &mut ProjectionMap) -> Option<Vec<PCode>> {
         if !preds.is_empty() {
             let exprs = preds.elements();
             Self::compile_exprs(qgm, &exprs, proj_map)
@@ -219,7 +225,7 @@ impl POP {
         }
     }
 
-    pub fn compile_exprs(qgm: &QGM, exprs: &Vec<ExprKey>, proj_map: &ProjectionMap) -> Option<Vec<PCode>> {
+    pub fn compile_exprs(qgm: &QGM, exprs: &Vec<ExprKey>, proj_map: &mut ProjectionMap) -> Option<Vec<PCode>> {
         let mut pcodevec = vec![];
         if !exprs.is_empty() {
             for expr_key in exprs.iter() {
@@ -251,15 +257,15 @@ impl POP {
         // Build projection map of child. This will be used to resolve any column references in this LOP
         let child_lop_key = children.unwrap()[0];
         let child_lopprops = lop_graph.get_properties(child_lop_key);
-        let proj_map: ProjectionMap = Self::compute_projection_map(&child_lopprops.cols, child_lopprops.virtcols.as_ref());
+        let mut proj_map: ProjectionMap = Self::compute_projection_map(&child_lopprops.cols, child_lopprops.virtcols.as_ref());
 
         // Compile real + virt columns
-        let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &proj_map);
+        let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut proj_map);
         let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
         let repart_key = if let PartType::HASHEXPR(partkey) = &lopprops.partdesc.part_type {
             debug!("Compile pkey start");
-            Self::compile_exprs(qgm, partkey, &proj_map).unwrap()
+            Self::compile_exprs(qgm, partkey, &mut proj_map).unwrap()
         } else {
             panic!("Invalid partitioning type")
         };
@@ -354,12 +360,12 @@ impl POP {
             let left_child_proj_map = Self::compute_projection_map(&left_child_lop_props.cols, left_child_lop_props.virtcols.as_ref());
             let right_child_lop_props = lop_graph.get_properties(children.unwrap()[1]);
             let right_child_proj_map = Self::compute_projection_map(&right_child_lop_props.cols, right_child_lop_props.virtcols.as_ref());
-            let proj_map = left_child_proj_map.append(right_child_proj_map);
-            
-            // Compile real + virt columns
-            let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &proj_map);
+            let mut proj_map = left_child_proj_map.append(right_child_proj_map);
 
-            let predicates = Self::compile_predicates(qgm, &lopprops.preds, &proj_map);
+            // Compile real + virt columns
+            let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut proj_map);
+
+            let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut proj_map);
             debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
@@ -377,25 +383,54 @@ impl POP {
     }
 
     pub fn compile_aggregation(
-        lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
-        let lopprops = &lop_graph.get(lop_key).properties;
-        let _proj_map: ProjectionMap = Self::compute_projection_map(&lopprops.cols, lopprops.virtcols.as_ref());
+        debug!("[{:?}] begin compile_aggregation", lop_key);
 
-        // Compile predicates
-        debug!("Compile predicate for lopkey: {:?}", lop_key);
-        let predicates = None; // todo Self::compile_predicates(qgm, &lopprops.preds, &proj_map);
+        let (lop, lopprops, children) = lop_graph.get3(lop_key);
+        if let LOP::Aggregation { group_by_len } = lop {
+            let qunid = lopprops.quns.elements()[0];
+            let mut proj_map = Self::compute_initial_agg_projection_map(qunid, *group_by_len);
 
-        // Compile virtcols
-        debug!("Compile virtcols for lopkey: {:?}", lop_key);
-        let virtcols = None; // todo Self::compile_virtcols(qgm, lopprops.virtcols.as_ref(), &proj_map);
+            // Compile real + virt columns
+            let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut proj_map);
+            assert!(cols.is_none());
 
-        let props = POPProps::new(predicates, None, virtcols, lopprops.partdesc.npartitions);
+            let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut proj_map);
+            debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
-        let pop_inner = pop_aggregation::Aggregation {};
-        let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
-        let pop_key = pop_graph.add_node_with_props(POP::Aggregation(pop_inner), props, Some(pop_children));
+            let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-        Ok(pop_key)
+            let aggs = Self::build_agg_list(&proj_map);
+            debug!("aggs = {:?}", &aggs);
+
+            let pop_inner = pop_aggregation::Aggregation { aggs };
+            let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
+            let pop_key = pop_graph.add_node_with_props(POP::Aggregation(pop_inner), props, Some(pop_children));
+
+            debug!("[{:?}] end compile_aggregation", lop_key);
+
+            Ok(pop_key)
+        } else {
+            panic!("Bad LOP")
+        }
+    }
+
+    pub fn compute_initial_agg_projection_map(qunid: QunId, by_len: usize) -> ProjectionMap {
+        let mut proj_map = ProjectionMap::default();
+        for colid in 0..by_len {
+            proj_map.set(Projection::QunCol(QunCol(qunid, colid)), colid);
+        }
+        proj_map
+    }
+
+    pub fn build_agg_list(projmap: &ProjectionMap) -> Vec<(Agg, ColId)> {
+        let mut aggs = projmap
+            .hashmap
+            .iter()
+            .filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None })
+            .collect::<Vec<_>>();
+        aggs.sort_by_key(|(_, colid)| *colid);
+        aggs
     }
 }

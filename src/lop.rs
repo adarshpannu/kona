@@ -261,7 +261,7 @@ impl QGM {
                     // Only push down projections that are NOT column references. Singleton columns are already a part of the projection.
                     let lhs_has_columns_only = lhs_join_keys.iter().all(|e| e.is_column(&self.expr_graph));
                     let rhs_has_columns_only = rhs_join_keys.iter().all(|e| e.is_column(&self.expr_graph));
-                    if ! (lhs_has_columns_only && rhs_has_columns_only) {
+                    if !(lhs_has_columns_only && rhs_has_columns_only) {
                         let children = lop.children.clone();
                         let (lhs_join_keys, rhs_join_keys) = (lhs_join_keys.clone(), rhs_join_keys.clone());
                         let key_exprs = [lhs_join_keys, rhs_join_keys];
@@ -281,7 +281,7 @@ impl QGM {
     }
 
     pub fn build_qblock_logical_plan(
-        self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph, expected_partitioning: Option<Vec<ExprKey>>,
+        self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph, expected_partitioning: Option<&PartDesc>,
     ) -> Result<LOPKey, String> {
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
@@ -409,7 +409,7 @@ impl QGM {
 
         if worklist.len() == 1 {
             let mut root_lop_key = worklist[0];
-            if let Some(expected_partitioning) = &expected_partitioning {
+            if let Some(expected_partitioning) = expected_partitioning {
                 root_lop_key = self.repartition_if_needed(lop_graph, root_lop_key, expected_partitioning, &eqclass);
             }
 
@@ -571,19 +571,23 @@ impl QGM {
                 let child_qblock_key = qun.get_qblock().unwrap();
                 let child_qblock = &self.qblock_graph.get(child_qblock_key).value;
                 let group_by_len = qblock.group_by.as_ref().unwrap().len();
-                let expected_partitioning = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
+                let expected_partitioning_expr = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
 
                 // child == subplan that we'll be aggregating.
-                for e in expected_partitioning.iter() {
+                for e in expected_partitioning_expr.iter() {
                     debug!("expected: {:?}", e.printable(&self.expr_graph, false))
                 }
 
-                let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(expected_partitioning))?;
+                let expected_partitioning = PartDesc {
+                    npartitions: env.settings.parallel_degree.unwrap_or(1),
+                    part_type: PartType::HASHEXPR(expected_partitioning_expr),
+                };
+
+                let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(&expected_partitioning))?;
 
                 let children = Some(vec![child_lop_key]);
 
-                let partdesc = lop_graph.get(child_lop_key).properties.partdesc.clone();
-                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
+                let props = LOPProps::new(quns, output_quncols, preds, expected_partitioning, None);
                 lop_graph.add_node_with_props(LOP::Aggregation { group_by_len }, props, children)
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
