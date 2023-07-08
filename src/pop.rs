@@ -6,9 +6,8 @@ use crate::{
     graph::{ExprKey, Graph, POPKey},
     includes::*,
     pcode::PCode,
-    pop_aggregation::Aggregation,
     pop_csv::CSV,
-    pop_hashjoin::HashJoin,
+    pop_hashmatch::HashMatch,
     pop_repartition::{RepartitionRead, RepartitionWrite},
     stage::Stage,
 };
@@ -90,10 +89,9 @@ impl POPProps {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum POP {
     CSV(CSV),
-    HashJoin(HashJoin),
+    HashMatch(HashMatch),
     RepartitionWrite(RepartitionWrite),
     RepartitionRead(RepartitionRead),
-    Aggregation(Aggregation),
 }
 
 /***************************************************************************************************/

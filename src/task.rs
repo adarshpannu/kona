@@ -6,7 +6,7 @@ use crate::{
     includes::*,
     pop::{chunk_to_tabularstring, POPContext, POP},
     pop_csv::CSVContext,
-    pop_hashjoin::HashJoinContext,
+    pop_hashmatch::HashMatchContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
     stage::Stage,
 };
@@ -90,7 +90,7 @@ impl Task {
 
             // FIXME: Since POP graphs are local to stages, repartition directories may not be unique. Use LOPKey?
             POP::RepartitionRead(rpr) => RepartitionReadContext::try_new(flow.id, popkey, rpr, self.partition_id)?,
-            POP::HashJoin(hj) => HashJoinContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,
+            POP::HashMatch(hj) => HashMatchContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,
             _ => unimplemented!(),
         };
         Ok(ctxt)

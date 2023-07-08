@@ -12,9 +12,8 @@ use crate::{
     metadata::{PartType, TableType},
     pcode::PCode,
     pop::{Agg, POPProps, Projection, ProjectionMap, POP},
-    pop_aggregation,
     pop_csv::CSV,
-    pop_hashjoin, pop_repartition,
+    pop_hashmatch::{self, HashMatchSubtype}, pop_repartition,
     qgm::QGM,
     stage::{StageGraph, StageLink},
 };
@@ -370,10 +369,10 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let pop_inner = pop_hashjoin::HashJoin { keycols };
+            let pop_inner = pop_hashmatch::HashMatch { keycols, subtype: HashMatchSubtype::Join };
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
-            let pop_key = pop_graph.add_node_with_props(POP::HashJoin(pop_inner), props, Some(pop_children));
+            let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
 
             debug!("[{:?}] end compile_join", lop_key);
             Ok(pop_key)
@@ -404,9 +403,10 @@ impl POP {
             let aggs = Self::build_agg_list(&proj_map);
             debug!("aggs = {:?}", &aggs);
 
-            let pop_inner = pop_aggregation::Aggregation { aggs };
+            let pop_inner = pop_hashmatch::HashMatch { keycols: vec![], subtype: HashMatchSubtype::Aggregation(aggs) };
+
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
-            let pop_key = pop_graph.add_node_with_props(POP::Aggregation(pop_inner), props, Some(pop_children));
+            let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
 
             debug!("[{:?}] end compile_aggregation", lop_key);
 

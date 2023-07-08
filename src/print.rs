@@ -199,9 +199,9 @@ impl Stage {
                     .replace('}', ")");
                 (String::from("CSV"), extrastr)
             }
-            POP::HashJoin { .. } => {
+            POP::HashMatch { .. } => {
                 let extrastr = String::new();
-                (String::from("HashJoin"), extrastr)
+                (String::from("HashMatch"), extrastr)
             }
             POP::RepartitionWrite(rpw) => {
                 let extrastr = format!("c = {}", rpw.cpartitions());
@@ -210,10 +210,6 @@ impl Stage {
             POP::RepartitionRead(_) => {
                 let extrastr = String::new();
                 (String::from("RepartitionRead"), extrastr)
-            }
-            POP::Aggregation(_) => {
-                let extrastr = String::new();
-                (String::from("Aggregation"), extrastr)
             }
         };
 

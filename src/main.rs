@@ -35,10 +35,9 @@ pub mod qst;
 pub mod flow;
 pub mod pcode;
 pub mod pop;
-pub mod pop_aggregation;
 pub mod pop_compile;
 pub mod pop_csv;
-pub mod pop_hashjoin;
+pub mod pop_hashmatch;
 pub mod pop_repartition;
 pub mod pop_run;
 
@@ -127,7 +126,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     logging::init("debug");
 
-    let input_pathname = f!("{TOPDIR}/sql/groupby.fsql");
+    let input_pathname = f!("{TOPDIR}/sql/join.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
 
     let mut env = Env::new(99, 1, input_pathname, output_dir);

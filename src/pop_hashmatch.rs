@@ -7,7 +7,7 @@ use crate::{
     graph::POPKey,
     includes::*,
     pcode::PCode,
-    pop::{chunk_to_string, POPContext, POP},
+    pop::{chunk_to_string, POPContext, POP, Agg},
     stage::Stage,
 };
 use ahash::RandomState;
@@ -17,24 +17,31 @@ use arrow2::{
 };
 use self_cell::self_cell;
 
-/***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
-pub struct HashJoin {
-    pub keycols: Vec<Vec<ColId>>,
+pub enum HashMatchSubtype {
+    Join,
+    Aggregation(Vec<(Agg, ColId)>)
 }
 
-impl HashJoin {}
+/***************************************************************************************************/
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HashMatch {
+    pub keycols: Vec<Vec<ColId>>,
+    pub subtype: HashMatchSubtype
+}
+
+impl HashMatch {}
 
 /***************************************************************************************************/
-pub struct HashJoinContext {
+pub struct HashMatchContext {
     pop_key: POPKey,
     children: Vec<Box<dyn POPContext>>,
     partition_id: PartitionId,
     state: RandomState,
-    pub cell: Option<HashJoinCell>,
+    pub cell: Option<HashMatchCell>,
 }
 
-impl POPContext for HashJoinContext {
+impl POPContext for HashMatchContext {
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -42,7 +49,7 @@ impl POPContext for HashJoinContext {
     fn next(&mut self, flow: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
-        if let POP::HashJoin(hj) = pop {
+        if let POP::HashMatch(hj) = pop {
             // Build side (right child)
             if self.cell.is_none() {
                 self.process_build_side(flow, stage)?;
@@ -54,7 +61,7 @@ impl POPContext for HashJoinContext {
             while let Some(chunk) = child.next(flow, stage)? {
                 if !chunk.is_empty() {
                     let chunk = self.process_probe_side(flow, stage, hj, chunk)?;
-                    debug!("HashJoinContext::next \n{}", chunk_to_string(&chunk, "HashJoinContext::next"));
+                    debug!("HashMatchContext::next \n{}", chunk_to_string(&chunk, "HashMatchContext::next"));
                     return Ok(Some(chunk));
                 }
             }
@@ -65,24 +72,24 @@ impl POPContext for HashJoinContext {
     }
 }
 
-type HashJoinHashMap = HashMap<u64, Vec<(usize, usize)>>;
+type HashMatchHashMap = HashMap<u64, Vec<(usize, usize)>>;  // Hash-of-keys -> (Chunk #, Row #) 
 
-type BoxHashJoinHashMap<'a> = Box<HashMap<u64, Vec<(usize, usize)>>>;
+type BoxHashMatchHashMap<'a> = Box<HashMap<u64, Vec<(usize, usize)>>>;
 
 self_cell!(
-    pub struct HashJoinCell {
+    pub struct HashMatchCell {
         owner: Vec<ChunkBox>,
 
         #[covariant]
-        dependent: BoxHashJoinHashMap,
+        dependent: BoxHashMatchHashMap,
     }
 );
 
-impl HashJoinContext {
-    pub fn try_new(pop_key: POPKey, _: &HashJoin, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+impl HashMatchContext {
+    pub fn try_new(pop_key: POPKey, _: &HashMatch, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let state = RandomState::with_seeds(97, 31, 45, 21);
 
-        Ok(Box::new(HashJoinContext {
+        Ok(Box::new(HashMatchContext {
             pop_key,
             children,
             partition_id,
@@ -108,7 +115,7 @@ impl HashJoinContext {
         let mut build_chunks: Vec<ChunkBox> = vec![];
         let child = &mut self.children[1];
 
-        if let POP::HashJoin(hj) = pop {
+        if let POP::HashMatch(hj) = pop {
             // Collect all build chunks
             while let Some(chunk) = child.next(flow, stage)? {
                 if chunk.len() > 0 {
@@ -116,8 +123,8 @@ impl HashJoinContext {
                 }
             }
 
-            let cell = HashJoinCell::new(build_chunks, |build_chunks| {
-                let mut hash_map: HashJoinHashMap = HashMap::new(); // secondary-hash -> (vec-index, chunk-index>)
+            let cell = HashMatchCell::new(build_chunks, |build_chunks| {
+                let mut hash_map: HashMatchHashMap = HashMap::new(); // secondary-hash -> (vec-index, chunk-index>)
 
                 for (ix, chunk) in build_chunks.iter().enumerate() {
                     let keycols = &hj.keycols[1];
@@ -126,7 +133,7 @@ impl HashJoinContext {
 
                     /*
                     debug!(
-                        "HashJoinContext {:?} partition = {}::build_keys: \n{}, hash: {:?}",
+                        "HashMatchContext {:?} partition = {}::build_keys: \n{}, hash: {:?}",
                         self.pop_key,
                         self.partition_id,
                         chunk_to_string(&keys, "build keys"),
@@ -146,7 +153,7 @@ impl HashJoinContext {
         Ok(())
     }
 
-    fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hj: &HashJoin, chunk: ChunkBox) -> Result<ChunkBox, String> {
+    fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hj: &HashMatch, chunk: ChunkBox) -> Result<ChunkBox, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
 
@@ -158,7 +165,7 @@ impl HashJoinContext {
 
         /*
         debug!(
-            "HashJoinContext {:?} partition = {}, hash = {:?}{}{}",
+            "HashMatchContext {:?} partition = {}, hash = {:?}{}{}",
             self.pop_key,
             self.partition_id,
             &hash_array,
@@ -212,7 +219,7 @@ impl HashJoinContext {
 
         /*
         debug!(
-            "HashJoinContext {:?} partition = {}{}",
+            "HashMatchContext {:?} partition = {}{}",
             self.pop_key,
             self.partition_id,
             chunk_to_string(&probe_chunk, "probe_chunk"),
@@ -290,7 +297,7 @@ impl HashJoinContext {
         let build_chunk = Chunk::new(new_arrays);
 
         debug!(
-            "HashJoinContext {:?} partition = {}{}",
+            "HashMatchContext {:?} partition = {}{}",
             self.pop_key,
             self.partition_id,
             chunk_to_string(&build_chunk, "build_chunk"),
