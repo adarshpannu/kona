@@ -1,7 +1,6 @@
-// pop_hashjoin
+// pop_hashmatch
 
 use std::collections::HashMap;
-
 use ahash::RandomState;
 use arrow2::{
     array::{MutableArray, MutableBooleanArray, MutablePrimitiveArray, MutableUtf8Array, Utf8Array},
@@ -9,7 +8,6 @@ use arrow2::{
     datatypes::PhysicalType,
     types::PrimitiveType,
 };
-
 use crate::{
     flow::Flow,
     graph::POPKey,
@@ -68,7 +66,7 @@ impl HashMatchSplit {
         HashMatchSplit { id, mut_arrays: vec![], arrays: vec![], hash_map: HashMap::new() }
     }
 
-    pub fn insert(&mut self, build_chunk: &ChunkBox, hash_array: &[u64], splid_ids: &[SplitId]) {
+    pub fn insert(&mut self, build_chunk: &ChunkBox, hash_array: &[u64], split_ids: &[SplitId]) {
         if self.mut_arrays.is_empty() {
             self.alloc_build_arrays(build_chunk);
         }
@@ -77,13 +75,13 @@ impl HashMatchSplit {
         for (from_array, to_array) in build_chunk.arrays().iter().zip(self.mut_arrays.iter_mut()) {
             match from_array.data_type().to_physical_type() {
                 PhysicalType::Primitive(PrimitiveType::Int64) => {
-                    copy_to_build_array!(PrimitiveArray<i64>, from_array, MutablePrimitiveArray<i64>, to_array, splid_ids, cur_split_id, hash_array, &mut self.hash_map)
+                    copy_to_build_array!(PrimitiveArray<i64>, from_array, MutablePrimitiveArray<i64>, to_array, split_ids, cur_split_id, hash_array, &mut self.hash_map)
                 }
                 PhysicalType::Boolean => {
-                    copy_to_build_array!(BooleanArray, from_array, MutableBooleanArray, to_array, splid_ids, cur_split_id, hash_array, &mut self.hash_map)
+                    copy_to_build_array!(BooleanArray, from_array, MutableBooleanArray, to_array, split_ids, cur_split_id, hash_array, &mut self.hash_map)
                 }
                 PhysicalType::Utf8 => {
-                    copy_to_build_array!(Utf8Array<i32>, from_array, MutableUtf8Array<i32>, to_array, splid_ids, cur_split_id, hash_array, &mut self.hash_map)
+                    copy_to_build_array!(Utf8Array<i32>, from_array, MutableUtf8Array<i32>, to_array, split_ids, cur_split_id, hash_array, &mut self.hash_map)
                 }
                 _ => todo!(),
             }
@@ -186,10 +184,10 @@ impl HashMatchContext {
                 // Compute split # for each row
                 let keycols = &hm.keycols[1];
                 let keys = Self::eval_cols(keycols, &chunk);
-                let (hash_array, splid_ids) = hash_chunk(&keys, &self.state);
+                let (hash_array, split_ids) = hash_chunk(&keys, &self.state);
 
                 for split in self.splits.iter_mut() {
-                    split.insert(&chunk, &hash_array, &splid_ids);
+                    split.insert(&chunk, &hash_array, &split_ids);
                 }
             }
         }
@@ -210,7 +208,7 @@ impl HashMatchContext {
 
         // Hash input keys
         let keys = Self::eval_cols(keycols, &chunk);
-        let (hash_array, splid_ids) = hash_chunk(&keys, &self.state);
+        let (hash_array, split_ids) = hash_chunk(&keys, &self.state);
 
         debug!(
             "HashMatchContext {:?} partition = {}, hash = {:?}{}{}",
@@ -224,7 +222,7 @@ impl HashMatchContext {
         // Build array indices based on hash-match
         // Chunk-RowId -> SplitId + RowId
         let mut indices: Vec<(RowId, (SplitId, RowId))> = vec![];
-        for (build_rid, (hash_key, &splid_id)) in hash_array.iter().zip(splid_ids.iter()).enumerate() {
+        for (build_rid, (hash_key, &splid_id)) in hash_array.iter().zip(split_ids.iter()).enumerate() {
             let split = &self.splits[splid_id];
             let rids = split.hash_map.get(hash_key);
             if let Some(matches) = rids {
@@ -336,6 +334,6 @@ fn hash_chunk(chunk: &ChunkBox, state: &RandomState) -> (Vec<HashValue>, Vec<Spl
             t => panic!("Hash not implemented for type: {:?}", t),
         }
     }
-    let splid_ids = hash_array.iter().map(|&e| e as usize % NSPLITS).collect::<Vec<_>>();
-    (hash_array, splid_ids)
+    let split_ids = hash_array.iter().map(|&e| e as usize % NSPLITS).collect::<Vec<_>>();
+    (hash_array, split_ids)
 }
