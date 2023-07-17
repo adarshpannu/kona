@@ -6,6 +6,11 @@
 #[cfg(test)]
 use std::{fs, process::Command, rc::Rc};
 
+use ast::AST;
+use flow::Flow;
+use pop::POP;
+use qgm::QGM;
+
 use crate::{includes::*, qgm::ParserState};
 
 #[macro_use]
@@ -49,11 +54,6 @@ pub mod stage;
 pub mod task;
 
 pub mod print;
-
-use ast::AST;
-use flow::Flow;
-use pop::POP;
-use qgm::QGM;
 
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
@@ -198,6 +198,8 @@ fn display_output_dir(flow: &Flow) {
     let files = list_files(&output_dir).unwrap();
     for file_path in files.iter() {
         let contents = fs::read_to_string(file_path).expect("Should have been able to read the file");
-        println!("{}", contents);
+        print!("{}", contents);
     }
+    println!("----------------------------");
+    println!("");
 }

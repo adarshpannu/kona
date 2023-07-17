@@ -1,13 +1,15 @@
 // pop_hashmatch
 
 use std::collections::HashMap;
+
 use ahash::RandomState;
 use arrow2::{
     array::{MutableArray, MutableBooleanArray, MutablePrimitiveArray, MutableUtf8Array, Utf8Array},
-    compute::take,
+    compute::{filter::filter_chunk, take},
     datatypes::PhysicalType,
     types::PrimitiveType,
 };
+
 use crate::{
     flow::Flow,
     graph::POPKey,
@@ -33,7 +35,8 @@ pub struct HashMatch {
 }
 
 type HashValue = u64;
-type RowId = usize;
+type BuildRowId = usize;
+type ProbeRowId = usize;
 type SplitId = usize;
 
 /***************************************************************************************************/
@@ -41,7 +44,7 @@ struct HashMatchSplit {
     id: SplitId,
     mut_arrays: Vec<Box<dyn MutableArray>>,
     arrays: Vec<Box<dyn Array>>,
-    hash_map: HashMap<HashValue, Vec<RowId>>, // Hash-of-keys -> {Row-Id}*
+    hash_map: HashMap<HashValue, Vec<BuildRowId>>, // Hash-of-keys -> {Row-Id}*
 }
 
 macro_rules! copy_to_build_array {
@@ -49,14 +52,16 @@ macro_rules! copy_to_build_array {
         let primarr = $from_array.as_any().downcast_ref::<$from_array_typ>().unwrap();
         let mutarr = $to_array.as_mut_any().downcast_mut::<$to_array_typ>().unwrap();
         let hash_map = $hash_map;
-        $split_ids.iter().enumerate().filter(|(_, &splid_id)| splid_id == $cur_split_id).for_each(|(rid, _)| {
+        let mutarr_height = mutarr.len();
+
+        $split_ids.iter().enumerate().filter(|(_, &split_id)| split_id == $cur_split_id).for_each(|(rid, _)| {
             let value = primarr.get(rid);
-            debug!("copy_to_build_array: inserted {:?} into split {}", value, $cur_split_id);
             mutarr.push(value);
+            debug!("copy_to_build_array: inserted {:?} into split {}", value, $cur_split_id);
 
             let hash_value = $hash_array[rid];
             let rids = hash_map.entry(hash_value).or_insert(vec![]);
-            rids.push(rid)
+            rids.push(rid + mutarr_height)
         });
     }};
 }
@@ -168,8 +173,7 @@ impl HashMatchContext {
     }
 
     fn process_build_side(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
-        let pop_key = self.pop_key;
-        let pop = stage.pop_graph.get_value(pop_key);
+        let pop = stage.pop_graph.get_value(self.pop_key);
         let child = &mut self.children[1];
 
         // Initialize splits
@@ -201,9 +205,7 @@ impl HashMatchContext {
 
     #[allow(unused_variables)]
     fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch, chunk: ChunkBox) -> Result<ChunkBox, String> {
-        let pop_key = self.pop_key;
-        let props = stage.pop_graph.get_properties(pop_key);
-
+        let props = stage.pop_graph.get_properties(self.pop_key);
         let keycols = &hash_match.keycols[0];
 
         // Hash input keys
@@ -219,30 +221,24 @@ impl HashMatchContext {
             chunk_to_string(&keys, "probe keys"),
         );
 
-        // Build array indices based on hash-match
-        // Chunk-RowId -> SplitId + RowId
-        let mut indices: Vec<(RowId, (SplitId, RowId))> = vec![];
-        for (build_rid, (hash_key, &splid_id)) in hash_array.iter().zip(split_ids.iter()).enumerate() {
-            let split = &self.splits[splid_id];
-            let rids = split.hash_map.get(hash_key);
-            if let Some(matches) = rids {
-                debug!("FOUND!");
-                for &rid_in_split in matches.iter() {
-                    indices.push((build_rid, (splid_id, rid_in_split)))
+        // Build rid-list based on hash-match: Probe-RowId -> SplitId + BuildRowId
+        let mut rids: Vec<(ProbeRowId, (SplitId, BuildRowId))> = vec![];
+        for (probe_rid, (hash_key, &split_id)) in hash_array.iter().zip(split_ids.iter()).enumerate() {
+            let split = &self.splits[split_id];
+            let build_rid = split.hash_map.get(hash_key);
+            if let Some(matches) = build_rid {
+                for &build_rid in matches.iter() {
+                    debug!("process_probe_side: probe_rid = {}, build_rid = {}", probe_rid, build_rid);
+                    rids.push((probe_rid, (split_id, build_rid)))
                 }
             }
         }
 
-        // Build chunk to join keys
-        if !indices.is_empty() {
-            let probe_chunk = self.contruct_probe_chunk_from_indices(&indices, &chunk)?;
-            let build_chunk = self.contruct_build_chunk_from_indices(&indices)?;
+        if !rids.is_empty() {
+            let probe_chunk = self.contruct_probe_chunk(&rids, &chunk)?;
+            let build_chunk = self.contruct_build_chunk(&rids)?;
 
-            let mut probe_arrays = probe_chunk.into_arrays();
-            let mut build_arrays = build_chunk.into_arrays();
-            probe_arrays.append(&mut build_arrays);
-
-            let chunk = Chunk::new(probe_arrays);
+            let chunk = Self::contruct_joined_chunk(hash_match, build_chunk, probe_chunk)?;
 
             // Run predicates, if any
             let chunk = POPKey::eval_predicates(props, chunk);
@@ -256,9 +252,38 @@ impl HashMatchContext {
         }
     }
 
-    fn contruct_probe_chunk_from_indices(&mut self, indices: &Vec<(RowId, (SplitId, RowId))>, keys: &ChunkBox) -> Result<ChunkBox, String> {
-        let probe_indices: PrimitiveArray<u64> = indices.iter().map(|e| Some(e.0 as u64)).collect();
-        let probe_arrays = Self::take_chunk(keys, probe_indices)?;
+    fn contruct_joined_chunk(hash_match: &HashMatch, build_chunk: ChunkBox, probe_chunk: ChunkBox) -> Result<ChunkBox, String> {
+        // So far, we've only matched build/probe based on hash-values. Make sure the actual keys match.
+        assert!(build_chunk.len() == probe_chunk.len());
+
+        debug!("contruct_joined_chunk: {} {}", chunk_to_string(&build_chunk, "build_chunk"), chunk_to_string(&probe_chunk, "probe_chunk"),);
+
+        let chunk_height = build_chunk.len();
+        let build_cols = &hash_match.keycols[1];
+        let probe_cols = &hash_match.keycols[0];
+
+        let mut build_arrays = build_chunk.into_arrays();
+        let mut probe_arrays = probe_chunk.into_arrays();
+
+        let build_keys = build_arrays.iter().enumerate().filter_map(|(ix, array)| if build_cols.contains(&ix) { Some(&**array) } else { None }).collect::<Vec<_>>();
+        let probe_keys = probe_arrays.iter().enumerate().filter_map(|(ix, array)| if probe_cols.contains(&ix) { Some(&**array) } else { None }).collect::<Vec<_>>();
+
+        // Compare key columns
+        let mut filter = BooleanArray::from(vec![Some(true); chunk_height]);
+        for (&build_keycol, &probe_keycol) in build_keys.iter().zip(probe_keys.iter()) {
+            let filter2 = comparison::eq(build_keycol, probe_keycol);
+            filter = boolean::and(&filter, &filter2);
+        }
+
+        // Join and filter final chunk
+        probe_arrays.append(&mut build_arrays);
+        let chunk = Chunk::new(probe_arrays);
+        filter_chunk(&chunk, &filter).map_err(stringify)
+    }
+
+    fn contruct_probe_chunk(&mut self, rids: &Vec<(ProbeRowId, (SplitId, BuildRowId))>, keys: &ChunkBox) -> Result<ChunkBox, String> {
+        let probe_rids: PrimitiveArray<u64> = rids.iter().map(|e| Some(e.0 as u64)).collect();
+        let probe_arrays = Self::take_chunk(keys, probe_rids)?;
         let probe_chunk = Chunk::new(probe_arrays);
 
         /*
@@ -272,13 +297,13 @@ impl HashMatchContext {
         Ok(probe_chunk)
     }
 
-    fn contruct_build_chunk_from_indices(&mut self, indices: &[(RowId, (SplitId, RowId))]) -> Result<ChunkBox, String> {
+    fn contruct_build_chunk(&mut self, rids: &[(ProbeRowId, (SplitId, BuildRowId))]) -> Result<ChunkBox, String> {
         if self.splits.is_empty() {
             return Ok(Chunk::new(vec![]));
         }
 
-        let first_splid_id = indices[0].1 .0;
-        let first_split = &self.splits[first_splid_id];
+        let first_split_id = rids[0].1 .0;
+        let first_split = &self.splits[first_split_id];
         let types = first_split.arrays.iter().map(|a| a.data_type().to_physical_type()).collect::<Vec<_>>();
 
         let build_arrays = types
@@ -286,7 +311,7 @@ impl HashMatchContext {
             .enumerate()
             .map(|(colid, typ)| match typ {
                 PhysicalType::Primitive(PrimitiveType::Int64) => {
-                    let iter = indices.iter().map(|&(_, (split_id, rid_in_split))| {
+                    let iter = rids.iter().map(|&(_, (split_id, rid_in_split))| {
                         let split = &self.splits[split_id];
                         let array = &split.arrays[colid];
                         let primarr = array.as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
@@ -296,7 +321,7 @@ impl HashMatchContext {
                     let primarr: Box<dyn Array> = Box::new(primarr);
                     primarr
                 }
-                t => panic!("contruct_build_chunk_from_indices() not yet implemented for type: {:?}", t),
+                t => panic!("contruct_build_chunk_from_rids() not yet implemented for type: {:?}", t),
             })
             .collect();
 
@@ -307,8 +332,8 @@ impl HashMatchContext {
         Ok(build_chunk)
     }
 
-    fn take_chunk(chunk: &ChunkBox, indices: PrimitiveArray<u64>) -> Result<Vec<Box<dyn Array>>, String> {
-        chunk.arrays().iter().map(|array| Ok(take::take(&**array, &indices).map_err(stringify)?)).collect::<Result<Vec<_>, String>>()
+    fn take_chunk(chunk: &ChunkBox, rids: PrimitiveArray<u64>) -> Result<Vec<Box<dyn Array>>, String> {
+        chunk.arrays().iter().map(|array| Ok(take::take(&**array, &rids).map_err(stringify)?)).collect::<Result<Vec<_>, String>>()
     }
 }
 
@@ -318,6 +343,7 @@ macro_rules! hash_array {
         for (ix, elem) in array_inner.values_iter().enumerate() {
             let hv = $state.hash_one(elem);
             $hash_array[ix] += hv;
+            $hash_array[ix] = 999;
         }
     }};
 }

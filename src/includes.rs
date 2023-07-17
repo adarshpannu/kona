@@ -11,8 +11,7 @@ pub use arrow2::{
 pub use log::{debug, error, info, warn};
 pub use serde::{Deserialize, Serialize};
 
-pub use crate::env::Env;
-use crate::stage::StageLink;
+pub use crate::{env::Env, stage::StageLink};
 
 pub const TOPDIR: &str = "/Users/adarshrp/Projects/yard";
 pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
