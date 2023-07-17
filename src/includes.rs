@@ -1,8 +1,6 @@
 // includes.rs
-pub use std::fs;
+pub use std::{any::Any, fs, mem::replace};
 
-pub use crate::env::Env;
-use crate::stage::StageLink;
 pub use arrow2::{
     array::{Array, BooleanArray, PrimitiveArray},
     chunk::Chunk,
@@ -12,8 +10,9 @@ pub use arrow2::{
 };
 pub use log::{debug, error, info, warn};
 pub use serde::{Deserialize, Serialize};
-pub use std::any::Any;
-pub use std::mem::replace;
+
+pub use crate::env::Env;
+use crate::stage::StageLink;
 
 pub const TOPDIR: &str = "/Users/adarshrp/Projects/yard";
 pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
@@ -89,11 +88,10 @@ macro_rules! function_name {
         }
         let name = type_name_of(f);
         &name[..name.len() - 3]
-    }}
+    }};
 }
 
 pub(crate) use function_name;
-
 
 pub fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId) -> String {
     format!("{}/flow-{}/pipeline-{}-{}/consumer-{}", TEMPDIR, flow_id, stage_link.0, stage_link.1, pid)

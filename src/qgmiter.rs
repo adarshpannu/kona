@@ -18,7 +18,7 @@ pub struct QueryBlockIter<'a> {
 impl<'a> Iterator for QueryBlockIter<'a> {
     type Item = QueryBlockKey;
     fn next(&mut self) -> Option<Self::Item> {
-        if ! self.queue.is_empty() {
+        if !self.queue.is_empty() {
             let qbkey = self.queue.pop().unwrap();
             let qblocknode = &self.qblock_graph.get(qbkey).value;
             /*

@@ -15,7 +15,7 @@ use crate::{
 pub struct Stage {
     pub stage_id: StageId,
     pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
-    pub parent_pop_key: Option<POPKey>, // POPKey that 'reads' this stage
+    pub parent_pop_key: Option<POPKey>,   // POPKey that 'reads' this stage
     pub root_lop_key: LOPKey,
     pub root_pop_key: Option<POPKey>,
     pub nchildren: usize, // # of stages this stage depends on
@@ -123,7 +123,5 @@ impl StageGraph {
     }
 }
 
-
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct StageLink(pub StageId, pub StageId); // (from, to)
-

@@ -18,7 +18,7 @@ log = "0.4.0"
 serde = {version = "1.0", features = ["derive", "rc"]}
 typed-arena = "2.0.1"
 #serde_traitobject = "0.2.7"
-arrow2 = {version = "0.17.2", features = [
+arrow2 = {version = "0.17.3", features = [
   "io_csv",
   "io_csv_read",
   "io_ipc",

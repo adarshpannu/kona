@@ -1,14 +1,22 @@
 // csv
 
-use crate::{flow::Flow, graph::POPKey, includes::*, pop::chunk_to_string, pop::POPContext, stage::Stage};
+use std::{
+    fmt, fs,
+    io::{prelude::*, BufReader, SeekFrom},
+};
+
 use arrow2::io::csv::{
     read,
     read::{ByteRecord, Reader, ReaderBuilder},
 };
 use csv::Position;
-use std::{
-    fmt, fs,
-    io::{prelude::*, BufReader, SeekFrom},
+
+use crate::{
+    flow::Flow,
+    graph::POPKey,
+    includes::*,
+    pop::{chunk_to_string, POPContext},
+    stage::Stage,
 };
 
 /***************************************************************************************************/

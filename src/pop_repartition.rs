@@ -1,17 +1,25 @@
 // pop_repartition
 
-use crate::flow::Flow;
-use crate::stage::{Stage, StageLink};
-use crate::{graph::POPKey, includes::*, pcode::PCode, pop::chunk_to_string, pop::POPContext, pop::POP};
-use arrow2::compute::arithmetics::ArrayRem;
-use arrow2::compute::filter::filter_chunk;
-use arrow2::compute::hash::hash;
-use arrow2::io::ipc::read::{read_file_metadata, FileReader};
-use arrow2::io::ipc::write::{FileWriter, WriteOptions};
+use std::{fs::File, rc::Rc};
+
+use arrow2::{
+    compute::{arithmetics::ArrayRem, filter::filter_chunk, hash::hash},
+    io::ipc::{
+        read::{read_file_metadata, FileReader},
+        write::{FileWriter, WriteOptions},
+    },
+};
 use getset::Getters;
 use self_cell::self_cell;
-use std::fs::File;
-use std::rc::Rc;
+
+use crate::{
+    flow::Flow,
+    graph::POPKey,
+    includes::*,
+    pcode::PCode,
+    pop::{chunk_to_string, POPContext, POP},
+    stage::{Stage, StageLink},
+};
 
 /***************************************************************************************************/
 pub struct RepartitionWriteContext {

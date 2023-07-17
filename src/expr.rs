@@ -2,14 +2,15 @@
 
 use std::fmt;
 
+use getset::{Getters, Setters};
+use regex::Regex;
+use Expr::*;
+
 use crate::{
     datum::Datum,
     graph::{ExprKey, Graph, QueryBlockKey},
     includes::*,
 };
-use getset::{Getters, Setters};
-use regex::Regex;
-use Expr::*;
 
 pub type ExprGraph = Graph<ExprKey, Expr, ExprProp>;
 
@@ -154,7 +155,9 @@ impl Expr {
             ExistsExpr => String::from("EXISTS"),
             LogExpr(op) => format!("{:?}", op),
             Subquery(_) => String::from("(subquery)"),
-            AggFunction(aggtype, ..) => format!("{:?}", aggtype),
+            AggFunction(aggtype, ..) => {
+                format!("{:?}", aggtype)
+            }
             ScalarFunction(name) => format!("{}()", name),
         }
     }
@@ -229,7 +232,9 @@ impl ExprKey {
                     qunid.hash(&mut state);
                     colid.hash(&mut state);
                 }
-                Expr::Subquery(_) => panic!("Cannot hash subqueries"),
+                Expr::Subquery(_) => {
+                    panic!("Cannot hash subqueries")
+                }
                 _ => expr.hash(&mut state),
             }
         }

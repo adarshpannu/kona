@@ -29,8 +29,7 @@ impl<K, V, P> Node<K, V, P> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<K, V, P>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     pub sm: SlotMap<K, Node<K, V, P>>,
     next_id: usize,
 }
@@ -157,16 +156,14 @@ where
 
 pub struct GraphIterator<K>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     queue: Vec<K>,
     stop_depth_traversal: Option<Box<dyn Fn(K) -> bool>>, // If true, don't explore children of a given node
 }
 
 pub struct TrueGraphIterator<'a, K, V, P>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     graph_iter: GraphIterator<K>,
     graph: &'a Graph<K, V, P>,
 }

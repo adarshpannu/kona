@@ -1,5 +1,12 @@
 // pop: Physical operators
 
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
+
+use arrow2::io::csv::write;
+
 use crate::{
     expr::AggType,
     flow::Flow,
@@ -11,9 +18,6 @@ use crate::{
     pop_repartition::{RepartitionRead, RepartitionWrite},
     stage::Stage,
 };
-use arrow2::io::csv::write;
-use std::collections::HashMap;
-use std::io::{self, Write};
 
 pub type POPGraph = Graph<POPKey, POP, POPProps>;
 

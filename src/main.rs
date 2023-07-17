@@ -3,9 +3,9 @@
 #![allow(warnings)]
 #![allow(clippy::too_many_arguments)]
 
+use std::{fs, process::Command, rc::Rc};
+
 use crate::{includes::*, qgm::ParserState};
-use std::fs;
-use std::{process::Command, rc::Rc};
 
 #[macro_use]
 extern crate lalrpop_util;

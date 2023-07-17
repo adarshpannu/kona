@@ -2,8 +2,7 @@
 
 #![allow(clippy::borrowed_box)]
 
-use arrow2::scalar::PrimitiveScalar;
-use arrow2::scalar::{Scalar, Utf8Scalar};
+use arrow2::scalar::{PrimitiveScalar, Scalar, Utf8Scalar};
 
 use crate::{
     datum::Datum,

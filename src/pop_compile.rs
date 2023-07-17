@@ -1,5 +1,7 @@
 // Compile
 
+use std::{collections::HashMap, rc::Rc};
+
 use arrow2::bitmap::chunk_iter_to_vec;
 
 use crate::{
@@ -13,12 +15,11 @@ use crate::{
     pcode::PCode,
     pop::{Agg, POPProps, Projection, ProjectionMap, POP},
     pop_csv::CSV,
-    pop_hashmatch::{self, HashMatchSubtype}, pop_repartition,
+    pop_hashmatch::{self, HashMatchSubtype},
+    pop_repartition,
     qgm::QGM,
     stage::{StageGraph, StageLink},
 };
-use std::collections::HashMap;
-use std::rc::Rc;
 
 impl POP {
     pub fn compile_flow(env: &Env, qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey) -> Result<Flow, String> {
@@ -369,7 +370,10 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let pop_inner = pop_hashmatch::HashMatch { keycols, subtype: HashMatchSubtype::Join };
+            let pop_inner = pop_hashmatch::HashMatch {
+                keycols,
+                subtype: HashMatchSubtype::Join,
+            };
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
@@ -403,7 +407,10 @@ impl POP {
             let aggs = Self::build_agg_list(&proj_map);
             debug!("aggs = {:?}", &aggs);
 
-            let pop_inner = pop_hashmatch::HashMatch { keycols: vec![], subtype: HashMatchSubtype::Aggregation(aggs) };
+            let pop_inner = pop_hashmatch::HashMatch {
+                keycols: vec![],
+                subtype: HashMatchSubtype::Aggregation(aggs),
+            };
 
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));

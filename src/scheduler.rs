@@ -121,7 +121,7 @@ impl Scheduler {
         let dirname: &str = &format!("{}/flow-{}/", TEMPDIR, flow_id);
 
         // Add some protection against inadvertant deletion
-        if ! dirname.contains("tmp") {
+        if !dirname.contains("tmp") {
             let errstr = f!("init_flow(): Temporary directory {TEMPDIR} doesn't have substring 'tmp'.");
             Err(errstr)
         } else {

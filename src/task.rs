@@ -1,5 +1,9 @@
 // task
 
+use std::fs::File;
+
+use arrow2::io::csv::write;
+
 use crate::{
     flow::Flow,
     graph::POPKey,
@@ -10,8 +14,6 @@ use crate::{
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
     stage::Stage,
 };
-use arrow2::io::csv::write;
-use std::fs::File;
 
 /***************************************************************************************************/
 #[derive(Serialize, Deserialize)]
@@ -66,7 +68,7 @@ impl Task {
                     }
                 }
             } else {
-                break
+                break;
             }
         }
         Ok(())
