@@ -58,12 +58,7 @@ impl QGM {
         let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
-        let _cmd = Command::new("dot")
-            .arg("-Tjpg")
-            .arg(oflag)
-            .arg(pathname)
-            .status()
-            .expect("failed to execute process");
+        let _cmd = Command::new("dot").arg("-Tjpg").arg(oflag).arg(pathname).status().expect("failed to execute process");
 
         Ok(())
     }
@@ -162,12 +157,7 @@ impl QGM {
         let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
-        let _cmd = Command::new("dot")
-            .arg("-Tjpg")
-            .arg(oflag)
-            .arg(pathname)
-            .status()
-            .expect("failed to execute process");
+        let _cmd = Command::new("dot").arg("-Tjpg").arg(oflag).arg(pathname).status().expect("failed to execute process");
 
         Ok(())
     }
@@ -194,9 +184,7 @@ impl Stage {
                 let pathname = csv.pathname.split('/').last().unwrap_or(&csv.pathname);
                 //let mut projection = csv.projection.clone();
                 //projection.sort_by(|a, b| a.cmp(b));
-                let extrastr = format!("file: {}, input_projection: {:?}", pathname, &csv.input_projection)
-                    .replace('{', "(")
-                    .replace('}', ")");
+                let extrastr = format!("file: {}, input_projection: {:?}", pathname, &csv.input_projection).replace('{', "(").replace('}', ")");
                 (String::from("CSV"), extrastr)
             }
             POP::HashMatch { .. } => {
@@ -214,11 +202,7 @@ impl Stage {
         };
 
         let label = label.replace(['"', '{', '}'], "");
-        let colstr = if let Some(cols) = &props.cols {
-            format!("{:?}", cols).replace('{', "(").replace('}', ")")
-        } else {
-            String::new()
-        };
+        let colstr = if let Some(cols) = &props.cols { format!("{:?}", cols).replace('{', "(").replace('}', ")") } else { String::new() };
 
         fprint!(
             file,
@@ -260,12 +244,7 @@ impl QueryBlock {
 
         // Write quns
         for qun in self.quns.iter().rev() {
-            fprint!(
-                file,
-                "    \"{}\"[label=\"{}\", fillcolor=black, fontcolor=white, style=filled]\n",
-                qun.name(),
-                qun.display()
-            );
+            fprint!(file, "    \"{}\"[label=\"{}\", fillcolor=black, fontcolor=white, style=filled]\n", qun.name(), qun.display());
         }
 
         // Write pred_list

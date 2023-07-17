@@ -74,12 +74,7 @@ impl Scheduler {
                             task.run(&flow, &stage).unwrap();
 
                             // The following send may not succeed if the scheduler is gone
-                            t2s_channel_tx_clone
-                                .send(SchedulerMessage::TaskCompleted {
-                                    stage_id: stage.stage_id,
-                                    partition_id: task.partition_id,
-                                })
-                                .unwrap_or_default()
+                            t2s_channel_tx_clone.send(SchedulerMessage::TaskCompleted { stage_id: stage.stage_id, partition_id: task.partition_id }).unwrap_or_default()
                         }
                         SchedulerMessage::TaskCompleted { .. } => {
                             panic!("Invalid message")
@@ -95,24 +90,14 @@ impl Scheduler {
 
             //tx_channel.send(WorkerMessage::ShutdownWorker).unwrap();
         }
-        Scheduler {
-            threads: Some(threads),
-            s2t_channels_sx,
-            t2s_channel_rx,
-        }
+        Scheduler { threads: Some(threads), s2t_channels_sx, t2s_channel_rx }
     }
 
     pub fn runnable<'a>(stages: &'a [Stage], stage_status: &[StageContext]) -> Vec<&'a Stage> {
         let v = stages
             .iter()
             .zip(stage_status.iter())
-            .filter_map(|(stage, ss)| {
-                if stage.nchildren == ss.nchildren_completed && ss.npartitions_completed == 0 {
-                    Some(stage)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(stage, ss)| if stage.nchildren == ss.nchildren_completed && ss.npartitions_completed == 0 { Some(stage) } else { None })
             .collect();
         v
     }

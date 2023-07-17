@@ -25,14 +25,14 @@ pub enum HashMatchSubtype {
     Aggregation(Vec<(Agg, ColId)>),
 }
 
+const NSPLITS: usize = 10;
+
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashMatch {
     pub keycols: Vec<Vec<ColId>>,
     pub subtype: HashMatchSubtype,
 }
-
-impl HashMatch {}
 
 type HashValue = u64;
 type RowId = usize;
@@ -51,82 +51,46 @@ macro_rules! copy_to_build_array {
         let primarr = $from_array.as_any().downcast_ref::<$from_array_typ>().unwrap();
         let mutarr = $to_array.as_mut_any().downcast_mut::<$to_array_typ>().unwrap();
         let hash_map = $hash_map;
-        $split_ids
-            .iter()
-            .enumerate()
-            .filter(|(_, &splid_id)| splid_id == $cur_split_id)
-            .for_each(|(rid, _)| {
-                let value = primarr.get(rid);
-                debug!("copy_to_build_array: inserted {:?} into split {}", value, $cur_split_id);
-                mutarr.push(value);
+        $split_ids.iter().enumerate().filter(|(_, &splid_id)| splid_id == $cur_split_id).for_each(|(rid, _)| {
+            let value = primarr.get(rid);
+            debug!("copy_to_build_array: inserted {:?} into split {}", value, $cur_split_id);
+            mutarr.push(value);
 
-                let hash_value = $hash_array[rid];
-                let rids = hash_map.entry(hash_value).or_insert(vec![]);
-                rids.push(rid)
-            });
+            let hash_value = $hash_array[rid];
+            let rids = hash_map.entry(hash_value).or_insert(vec![]);
+            rids.push(rid)
+        });
     }};
 }
 
 impl HashMatchSplit {
     fn new(id: SplitId) -> Self {
-        HashMatchSplit {
-            id,
-            mut_arrays: vec![],
-            arrays: vec![],
-            hash_map: HashMap::new(),
-        }
+        HashMatchSplit { id, mut_arrays: vec![], arrays: vec![], hash_map: HashMap::new() }
     }
 
     pub fn insert(&mut self, build_chunk: &ChunkBox, hash_array: &[u64], splid_ids: &[SplitId]) {
         if self.mut_arrays.is_empty() {
-            self.alloc_arrays(build_chunk);
+            self.alloc_build_arrays(build_chunk);
         }
 
         let cur_split_id = self.id;
         for (from_array, to_array) in build_chunk.arrays().iter().zip(self.mut_arrays.iter_mut()) {
             match from_array.data_type().to_physical_type() {
                 PhysicalType::Primitive(PrimitiveType::Int64) => {
-                    copy_to_build_array!(
-                        PrimitiveArray<i64>,
-                        from_array,
-                        MutablePrimitiveArray<i64>,
-                        to_array,
-                        splid_ids,
-                        cur_split_id,
-                        hash_array,
-                        &mut self.hash_map
-                    )
+                    copy_to_build_array!(PrimitiveArray<i64>, from_array, MutablePrimitiveArray<i64>, to_array, splid_ids, cur_split_id, hash_array, &mut self.hash_map)
                 }
                 PhysicalType::Boolean => {
-                    copy_to_build_array!(
-                        BooleanArray,
-                        from_array,
-                        MutableBooleanArray,
-                        to_array,
-                        splid_ids,
-                        cur_split_id,
-                        hash_array,
-                        &mut self.hash_map
-                    )
+                    copy_to_build_array!(BooleanArray, from_array, MutableBooleanArray, to_array, splid_ids, cur_split_id, hash_array, &mut self.hash_map)
                 }
                 PhysicalType::Utf8 => {
-                    copy_to_build_array!(
-                        Utf8Array<i32>,
-                        from_array,
-                        MutableUtf8Array<i32>,
-                        to_array,
-                        splid_ids,
-                        cur_split_id,
-                        hash_array,
-                        &mut self.hash_map
-                    )
+                    copy_to_build_array!(Utf8Array<i32>, from_array, MutableUtf8Array<i32>, to_array, splid_ids, cur_split_id, hash_array, &mut self.hash_map)
                 }
                 _ => todo!(),
             }
         }
     }
 
-    fn alloc_arrays(&mut self, chunk: &ChunkBox) {
+    fn alloc_build_arrays(&mut self, chunk: &ChunkBox) {
         let arrays: Vec<Box<dyn MutableArray>> = chunk
             .arrays()
             .iter()
@@ -142,38 +106,11 @@ impl HashMatchSplit {
         self.mut_arrays = arrays;
     }
 
-    fn convert_mut_arrays_to_arrays(&mut self) {
-        let mut_arrays = std::mem::replace(&mut self.mut_arrays, vec![]);
-
-        self.arrays = mut_arrays
-            .into_iter()
-            .map(|mut_array| {
-                let array: Box<dyn Array> = match mut_array.data_type().to_physical_type() {
-                    PhysicalType::Primitive(PrimitiveType::Int64) => {
-                        let mut_array = mut_array.as_any().downcast_ref::<MutablePrimitiveArray<i64>>().unwrap().clone();
-                        let array = PrimitiveArray::<i64>::from(mut_array);
-                        Box::new(array)
-                    }
-                    PhysicalType::Boolean => {
-                        let mut_array = mut_array.as_any().downcast_ref::<MutableBooleanArray>().unwrap().clone();
-                        let array = BooleanArray::from(mut_array);
-                        Box::new(array)
-                    }
-                    PhysicalType::Utf8 => {
-                        let mut_array = mut_array.as_any().downcast_ref::<MutableUtf8Array<i32>>().unwrap().clone();
-                        let it = mut_array.into_iter();
-                        let array = Utf8Array::<i32>::from_trusted_len_iter(it);
-                        Box::new(array)
-                    }
-                    _ => panic!("alloc_arrays(), todo: {:?}", mut_array.data_type().to_physical_type()),
-                };
-                array
-            })
-            .collect();
+    fn demut_build_arrays(&mut self) {
+        let mut_arrays = std::mem::take(&mut self.mut_arrays);
+        self.arrays = mut_arrays.into_iter().map(|mut mut_array| mut_array.as_box()).collect();
     }
 }
-
-const NSPLITS: usize = 10;
 
 /***************************************************************************************************/
 pub struct HashMatchContext {
@@ -219,13 +156,7 @@ impl HashMatchContext {
     pub fn try_new(pop_key: POPKey, _: &HashMatch, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let state = RandomState::with_seeds(97, 31, 45, 21);
 
-        Ok(Box::new(HashMatchContext {
-            pop_key,
-            children,
-            partition_id,
-            state,
-            splits: vec![],
-        }))
+        Ok(Box::new(HashMatchContext { pop_key, children, partition_id, state, splits: vec![] }))
     }
 
     fn eval_keys(pcode: &[PCode], input: &ChunkBox) -> ChunkBox {
@@ -234,8 +165,7 @@ impl HashMatchContext {
     }
 
     fn eval_cols(cols: &[ColId], input: &ChunkBox) -> ChunkBox {
-        let arrays = input.arrays();
-        let arrays = cols.iter().map(|&colid| arrays[colid].clone()).collect();
+        let arrays = cols.iter().map(|&colid| input.arrays()[colid].clone()).collect();
         Chunk::new(arrays)
     }
 
@@ -258,16 +188,14 @@ impl HashMatchContext {
                 let keys = Self::eval_cols(keycols, &chunk);
                 let (hash_array, splid_ids) = hash_chunk(&keys, &self.state);
 
-                for splid_id in 0..NSPLITS {
-                    let split = &mut self.splits[splid_id];
+                for split in self.splits.iter_mut() {
                     split.insert(&chunk, &hash_array, &splid_ids);
                 }
             }
         }
 
-        for split_id in 0..NSPLITS {
-            let split = &mut self.splits[split_id];
-            split.convert_mut_arrays_to_arrays();
+        for split in self.splits.iter_mut() {
+            split.demut_build_arrays();
         }
 
         Ok(())
@@ -308,7 +236,7 @@ impl HashMatchContext {
         }
 
         // Build chunk to join keys
-        if indices.len() > 0 {
+        if !indices.is_empty() {
             let probe_chunk = self.contruct_probe_chunk_from_indices(&indices, &chunk)?;
             let build_chunk = self.contruct_build_chunk_from_indices(&indices)?;
 
@@ -332,7 +260,7 @@ impl HashMatchContext {
 
     fn contruct_probe_chunk_from_indices(&mut self, indices: &Vec<(RowId, (SplitId, RowId))>, keys: &ChunkBox) -> Result<ChunkBox, String> {
         let probe_indices: PrimitiveArray<u64> = indices.iter().map(|e| Some(e.0 as u64)).collect();
-        let probe_arrays = Self::take_chunk(&keys, probe_indices)?;
+        let probe_arrays = Self::take_chunk(keys, probe_indices)?;
         let probe_chunk = Chunk::new(probe_arrays);
 
         /*
@@ -346,8 +274,8 @@ impl HashMatchContext {
         Ok(probe_chunk)
     }
 
-    fn contruct_build_chunk_from_indices(&mut self, indices: &Vec<(RowId, (SplitId, RowId))>) -> Result<ChunkBox, String> {
-        if self.splits.len() == 0 {
+    fn contruct_build_chunk_from_indices(&mut self, indices: &[(RowId, (SplitId, RowId))]) -> Result<ChunkBox, String> {
+        if self.splits.is_empty() {
             return Ok(Chunk::new(vec![]));
         }
 
@@ -376,22 +304,13 @@ impl HashMatchContext {
 
         let build_chunk = Chunk::new(build_arrays);
 
-        debug!(
-            "HashMatchContext {:?} partition = {}{}",
-            self.pop_key,
-            self.partition_id,
-            chunk_to_string(&build_chunk, "build_chunk"),
-        );
+        debug!("HashMatchContext {:?} partition = {}{}", self.pop_key, self.partition_id, chunk_to_string(&build_chunk, "build_chunk"),);
 
         Ok(build_chunk)
     }
 
     fn take_chunk(chunk: &ChunkBox, indices: PrimitiveArray<u64>) -> Result<Vec<Box<dyn Array>>, String> {
-        chunk
-            .arrays()
-            .iter()
-            .map(|array| Ok(take::take(&**array, &indices).map_err(stringify)?))
-            .collect::<Result<Vec<_>, String>>()
+        chunk.arrays().iter().map(|array| Ok(take::take(&**array, &indices).map_err(stringify)?)).collect::<Result<Vec<_>, String>>()
     }
 }
 
@@ -409,7 +328,7 @@ fn hash_chunk(chunk: &ChunkBox, state: &RandomState) -> (Vec<HashValue>, Vec<Spl
     // Initialize hash array
     let mut hash_array = vec![0; chunk.len()];
 
-    for array in chunk.columns() {
+    for array in chunk.arrays() {
         match array.data_type().to_physical_type() {
             PhysicalType::Boolean => hash_array!(BooleanArray, array, state, &mut hash_array),
             PhysicalType::Primitive(PrimitiveType::Int64) => hash_array!(PrimitiveArray<i64>, array, state, &mut hash_array),

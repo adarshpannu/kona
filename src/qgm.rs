@@ -55,13 +55,7 @@ pub struct QGM {
 
 impl QGM {
     pub fn new(main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph) -> QGM {
-        QGM {
-            main_qblock_key: main_qblock,
-            cte_list,
-            qblock_graph,
-            expr_graph,
-            metadata: QGMMetadata::default(),
-        }
+        QGM { main_qblock_key: main_qblock, cte_list, qblock_graph, expr_graph, metadata: QGMMetadata::default() }
     }
 }
 
@@ -131,22 +125,13 @@ pub struct Quantifier {
 
 impl fmt::Debug for Quantifier {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Quantifier")
-            .field("id", &self.id)
-            .field("name", &self.get_basename())
-            .field("alias", &self.get_alias())
-            .finish()
+        fmt.debug_struct("Quantifier").field("id", &self.id).field("name", &self.get_basename()).field("alias", &self.get_alias()).finish()
     }
 }
 
 impl Quantifier {
     pub fn new(id: QunId, source: QuantifierSource, alias: Option<String>) -> Self {
-        Quantifier {
-            id,
-            source,
-            alias,
-            tabledesc: None,
-        }
+        Quantifier { id, source, alias, tabledesc: None }
     }
 
     pub fn new_base(id: QunId, name: String, alias: Option<String>) -> Self {
@@ -173,12 +158,7 @@ impl Quantifier {
     }
 
     pub fn display(&self) -> String {
-        format!(
-            "QUN_{} {}/{}",
-            self.id,
-            self.get_basename().unwrap_or(&"".to_string()),
-            self.get_alias().unwrap_or(&"".to_string()),
-        )
+        format!("QUN_{} {}/{}", self.id, self.get_basename().unwrap_or(&"".to_string()), self.get_alias().unwrap_or(&"".to_string()),)
     }
 
     pub fn name(&self) -> String {
@@ -236,22 +216,9 @@ pub struct QueryBlock {
 impl QueryBlock {
     pub fn new(
         id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Option<Vec<ExprKey>>,
-        group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>, order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty,
-        top_n: Option<usize>,
+        group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>, order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty, top_n: Option<usize>,
     ) -> Self {
-        QueryBlock {
-            id,
-            name,
-            qbtype,
-            select_list,
-            quns,
-            pred_list,
-            group_by,
-            having_clause,
-            order_by,
-            distinct,
-            top_n,
-        }
+        QueryBlock { id, name, qbtype, select_list, quns, pred_list, group_by, having_clause, order_by, distinct, top_n }
     }
 
     pub fn new0(id: QBId, qbtype: QueryBlockType) -> Self {
@@ -335,12 +302,7 @@ impl QGM {
         let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
-        let _cmd = Command::new("dot")
-            .arg("-Tjpg")
-            .arg(oflag)
-            .arg(pathname)
-            .status()
-            .expect("failed to execute process");
+        let _cmd = Command::new("dot").arg("-Tjpg").arg(oflag).arg(pathname).status().expect("failed to execute process");
 
         if open_jpg {
             let _cmd = Command::new("open").arg(opathname).status().expect("failed to execute process");

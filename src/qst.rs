@@ -21,9 +21,7 @@ impl QGM {
 }
 
 impl QueryBlock {
-    pub fn resolve(
-        qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata,
-    ) -> Result<(), String> {
+    pub fn resolve(qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata) -> Result<(), String> {
         let qblock = &mut qblock_graph.get_mut(qbkey).value;
 
         // Resolve nested query blocks first
@@ -106,10 +104,7 @@ impl QueryBlock {
         let having_clause = replace(&mut outer_qb.having_clause, None);
 
         // Construct inner select-list by first adding GROUP-BY clause expressions
-        let mut inner_select_list = group_by
-            .iter()
-            .map(|&expr_key| NamedExpr::new(None, expr_key, expr_graph))
-            .collect::<Vec<NamedExpr>>();
+        let mut inner_select_list = group_by.iter().map(|&expr_key| NamedExpr::new(None, expr_key, expr_graph)).collect::<Vec<NamedExpr>>();
 
         // Augment inner select-list by extracting parameters from `agg(parameter)` expressions
         for ne in outer_qb.select_list.iter_mut() {
@@ -143,11 +138,7 @@ impl QueryBlock {
             None,
         );
 
-        let group_by = group_by
-            .iter()
-            .enumerate()
-            .map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
-            .collect::<Vec<_>>();
+        let group_by = group_by.iter().enumerate().map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None)).collect::<Vec<_>>();
 
         let outer_qun = Quantifier::new_qblock(agg_qun_id, inner_qb_key, None);
         outer_qb.name = None;
@@ -217,10 +208,7 @@ impl QueryBlock {
             *expr_key = new_child_key;
         } else if let Column { colname, .. } = &node.value {
             // User error: Unaggregated expression in select-list not in group-by clause
-            return Err(format!(
-                "Column {} is referenced in select-list/having-clause but it is not specified in the GROUP-BY list",
-                colname
-            ));
+            return Err(format!("Column {} is referenced in select-list/having-clause but it is not specified in the GROUP-BY list", colname));
         } else if let Some(mut children) = node.children.clone() {
             let mut children2 = vec![];
             for child_key in children.iter_mut() {
@@ -255,10 +243,7 @@ impl QueryBlock {
                 if retval.is_none() {
                     retval = Some((QunCol(qun.id, colid), field.data_type.clone()));
                 } else {
-                    return Err(format!(
-                        "Column {} found in multiple tables. Use tablename prefix to disambiguate.",
-                        enquote(colname)
-                    ));
+                    return Err(format!("Column {} found in multiple tables. Use tablename prefix to disambiguate.", enquote(colname)));
                 }
             }
 
@@ -271,11 +256,7 @@ impl QueryBlock {
         if let Some(retval) = retval {
             Ok((retval.0, retval.1, colid))
         } else {
-            let colstr = if let Some(prefix) = prefix {
-                format!("{}.{}", prefix, colname)
-            } else {
-                colname.to_string()
-            };
+            let colstr = if let Some(prefix) = prefix { format!("{}.{}", prefix, colname) } else { colname.to_string() };
             Err(format!("Column {} not found in any table.", colstr))
         }
     }
@@ -322,12 +303,7 @@ impl QueryBlock {
                     return Err("Binary operands must be numeric types".to_string());
                 }
             }
-            Column {
-                prefix,
-                colname,
-                ref mut qunid,
-                ref mut colid,
-            } => {
+            Column { prefix, colname, ref mut qunid, ref mut colid } => {
                 let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
                 *colid = quncol.1;

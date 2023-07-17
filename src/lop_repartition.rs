@@ -21,20 +21,14 @@ impl QGM {
             let cpartitions = partdesc.npartitions;
             partdesc.npartitions = actual_partitioning.npartitions;
 
-            let props = LOPProps {
-                quns: props.quns.clone(),
-                cols: props.cols.clone(),
-                preds: props.preds.clone_metadata(),
-                partdesc,
-                virtcols: None,
-            };
+            let props = LOPProps { quns: props.quns.clone(), cols: props.cols.clone(), preds: props.preds.clone_metadata(), partdesc, virtcols: None };
             lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![lop_key]))
         }
     }
 
     pub fn repartition_join_legs(
-        self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey,
-        equi_join_preds: &[(ExprKey, PredicateAlignment)], eqclass: &ExprEqClass,
+        self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, equi_join_preds: &[(ExprKey, PredicateAlignment)],
+        eqclass: &ExprEqClass,
     ) -> (LOPKey, LOPKey, Vec<ExprKey>, Vec<ExprKey>, usize) {
         let lhs_props = &lop_graph.get(lhs_plan_key).properties;
         let rhs_props = &lop_graph.get(rhs_plan_key).properties;
@@ -45,23 +39,11 @@ impl QGM {
 
         let lhs_repart_props = lhs_partdesc.map(|partdesc| {
             let virtcols = None;
-            LOPProps {
-                quns: lhs_props.quns.clone(),
-                cols: lhs_props.cols.clone(),
-                preds: lhs_props.preds.clone_metadata(),
-                partdesc,
-                virtcols,
-            }
+            LOPProps { quns: lhs_props.quns.clone(), cols: lhs_props.cols.clone(), preds: lhs_props.preds.clone_metadata(), partdesc, virtcols }
         });
         let rhs_repart_props = rhs_partdesc.map(|partdesc| {
             let virtcols = None;
-            LOPProps {
-                quns: rhs_props.quns.clone(),
-                cols: rhs_props.cols.clone(),
-                preds: rhs_props.preds.clone_metadata(),
-                partdesc,
-                virtcols,
-            }
+            LOPProps { quns: rhs_props.quns.clone(), cols: rhs_props.cols.clone(), preds: rhs_props.preds.clone_metadata(), partdesc, virtcols }
         });
 
         //let (lhs_partitions, rhs_partitions) = (npartitions, npartitions);
@@ -125,16 +107,8 @@ impl QGM {
         let lhs_props = lop_graph.get_properties(lhs_plan_key);
         let rhs_props = lop_graph.get_properties(rhs_plan_key);
         let empty_vec = vec![];
-        let lhs_actual_keys = if let PartType::HASHEXPR(keys) = &lhs_props.partdesc.part_type {
-            keys
-        } else {
-            &empty_vec
-        };
-        let rhs_actual_keys = if let PartType::HASHEXPR(keys) = &rhs_props.partdesc.part_type {
-            keys
-        } else {
-            &empty_vec
-        };
+        let lhs_actual_keys = if let PartType::HASHEXPR(keys) = &lhs_props.partdesc.part_type { keys } else { &empty_vec };
+        let rhs_actual_keys = if let PartType::HASHEXPR(keys) = &rhs_props.partdesc.part_type { keys } else { &empty_vec };
 
         // Compute expected partitioning keys
         let (lhs_join_keys, rhs_join_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
@@ -143,19 +117,13 @@ impl QGM {
         let lhs_partdesc = if Self::compare_part_keys(expr_graph, &lhs_join_keys, lhs_actual_keys, eqclass) {
             None
         } else {
-            Some(PartDesc {
-                npartitions: lhs_props.partdesc.npartitions,
-                part_type: PartType::HASHEXPR(lhs_join_keys.clone()),
-            })
+            Some(PartDesc { npartitions: lhs_props.partdesc.npartitions, part_type: PartType::HASHEXPR(lhs_join_keys.clone()) })
         };
 
         let rhs_partdesc = if Self::compare_part_keys(expr_graph, &rhs_join_keys, rhs_actual_keys, eqclass) {
             None
         } else {
-            Some(PartDesc {
-                npartitions: rhs_props.partdesc.npartitions,
-                part_type: PartType::HASHEXPR(rhs_join_keys.clone()),
-            })
+            Some(PartDesc { npartitions: rhs_props.partdesc.npartitions, part_type: PartType::HASHEXPR(rhs_join_keys.clone()) })
         };
 
         let npartitions = env.settings.parallel_degree.unwrap_or(1);
@@ -169,15 +137,9 @@ impl QGM {
         let (lhs_join_keys, rhs_join_keys) = Self::compute_join_partitioning_keys(expr_graph, join_preds);
         let npartitions = env.settings.parallel_degree.unwrap_or(1);
 
-        let lhs_part_desc = PartDesc {
-            npartitions,
-            part_type: PartType::HASHEXPR(lhs_join_keys.clone()),
-        };
+        let lhs_part_desc = PartDesc { npartitions, part_type: PartType::HASHEXPR(lhs_join_keys.clone()) };
 
-        let rhs_part_desc = PartDesc {
-            npartitions,
-            part_type: PartType::HASHEXPR(rhs_join_keys.clone()),
-        };
+        let rhs_part_desc = PartDesc { npartitions, part_type: PartType::HASHEXPR(rhs_join_keys.clone()) };
 
         (lhs_part_desc, rhs_part_desc, lhs_join_keys, rhs_join_keys)
     }

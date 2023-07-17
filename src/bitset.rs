@@ -100,12 +100,7 @@ where
     T: Hash + PartialEq + Eq + Copy,
 {
     fn default() -> Self {
-        Bitset {
-            bitmap: Bitmap::new(),
-            dict: Rc::new(RefCell::new(HashMap::new())),
-            rev_dict: Rc::new(RefCell::new(HashMap::new())),
-            next_id: Rc::new(RefCell::new(0)),
-        }
+        Bitset { bitmap: Bitmap::new(), dict: Rc::new(RefCell::new(HashMap::new())), rev_dict: Rc::new(RefCell::new(HashMap::new())), next_id: Rc::new(RefCell::new(0)) }
     }
 }
 
@@ -114,12 +109,7 @@ where
     T: Hash + PartialEq + Eq + Copy,
 {
     fn clone(&self) -> Bitset<T> {
-        Bitset {
-            bitmap: self.bitmap,
-            dict: Rc::clone(&self.dict),
-            rev_dict: Rc::clone(&self.rev_dict),
-            next_id: Rc::clone(&self.next_id),
-        }
+        Bitset { bitmap: self.bitmap, dict: Rc::clone(&self.dict), rev_dict: Rc::clone(&self.rev_dict), next_id: Rc::clone(&self.next_id) }
     }
 }
 

@@ -84,13 +84,7 @@ pub struct LOPProps {
 
 impl LOPProps {
     fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, virtcols: Option<Vec<VirtCol>>) -> Self {
-        LOPProps {
-            quns,
-            cols,
-            preds,
-            partdesc,
-            virtcols,
-        }
+        LOPProps { quns, cols, preds, partdesc, virtcols }
     }
 }
 
@@ -132,11 +126,7 @@ impl APSContext {
             all_preds.set(expr_key);
         }
 
-        APSContext {
-            all_quncols,
-            all_quns,
-            all_preds,
-        }
+        APSContext { all_quncols, all_quns, all_preds }
     }
 }
 
@@ -162,11 +152,7 @@ pub struct ExprEqClass {
 
 impl Default for ExprEqClass {
     fn default() -> Self {
-        ExprEqClass {
-            next_id: 0,
-            expr_id_map: BiMap::new(),
-            disjoint_sets: PartitionVec::with_capacity(64),
-        }
+        ExprEqClass { next_id: 0, expr_id_map: BiMap::new(), disjoint_sets: PartitionVec::with_capacity(64) }
     }
 }
 
@@ -385,11 +371,8 @@ impl QGM {
 
                         let props = LOPProps::new(quns, cols, preds, partdesc, None);
 
-                        let join_lop_key = lop_graph.add_node_with_props(
-                            LOP::HashJoin { lhs_join_keys, rhs_join_keys },
-                            props,
-                            Some(vec![new_lhs_plan_key, new_rhs_plan_key]),
-                        );
+                        let join_lop_key =
+                            lop_graph.add_node_with_props(LOP::HashJoin { lhs_join_keys, rhs_join_keys }, props, Some(vec![new_lhs_plan_key, new_rhs_plan_key]));
 
                         join_status = Some((lhs_plan_key, rhs_plan_key, join_lop_key));
 
@@ -443,11 +426,7 @@ impl QGM {
 
     fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
         let mut select_list_quncol = aps_context.all_quncols.clone_metadata();
-        qblock
-            .select_list
-            .iter()
-            .flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph))
-            .for_each(|quncol| select_list_quncol.set(quncol));
+        qblock.select_list.iter().flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph)).for_each(|quncol| select_list_quncol.set(quncol));
         select_list_quncol
     }
 
@@ -519,14 +498,10 @@ impl QGM {
     }
 
     pub fn build_unary_plans(
-        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap,
-        select_list_quncol: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
+        self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap, select_list_quncol: &Bitset<QunCol>,
+        worklist: &mut Vec<LOPKey>,
     ) -> Result<(), String> {
-        let APSContext {
-            all_quncols,
-            all_quns,
-            all_preds,
-        } = aps_context;
+        let APSContext { all_quncols, all_quns, all_preds } = aps_context;
 
         // Build unary POPs first
         for qun in qblock.quns.iter() {
@@ -536,12 +511,7 @@ impl QGM {
 
             // Set input cols: find all column references for this qun
             let mut input_quncols = all_quncols.clone_metadata();
-            aps_context
-                .all_quncols
-                .elements()
-                .iter()
-                .filter(|&quncol| quncol.0 == qun.id)
-                .for_each(|&quncol| input_quncols.set(quncol));
+            aps_context.all_quncols.elements().iter().filter(|&quncol| quncol.0 == qun.id).for_each(|&quncol| input_quncols.set(quncol));
 
             // Set output cols + preds
             let mut unbound_quncols = select_list_quncol.clone();
@@ -578,10 +548,7 @@ impl QGM {
                     debug!("expected: {:?}", e.printable(&self.expr_graph, false))
                 }
 
-                let expected_partitioning = PartDesc {
-                    npartitions: env.settings.parallel_degree.unwrap_or(1),
-                    part_type: PartType::HASHEXPR(expected_partitioning_expr),
-                };
+                let expected_partitioning = PartDesc { npartitions: env.settings.parallel_degree.unwrap_or(1), part_type: PartType::HASHEXPR(expected_partitioning_expr) };
 
                 let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(&expected_partitioning))?;
 
@@ -599,13 +566,7 @@ impl QGM {
 
                 let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
 
-                lop_graph.add_node_with_props(
-                    LOP::TableScan {
-                        input_projection: input_quncols,
-                    },
-                    props,
-                    None,
-                )
+                lop_graph.add_node_with_props(LOP::TableScan { input_projection: input_quncols }, props, None)
             };
             //debug!("Build TableScan: key={:?} {:?} id={}", lopkey, qun.display(), qun.id);
             worklist.push(lopkey);

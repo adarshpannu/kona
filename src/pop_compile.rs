@@ -38,11 +38,7 @@ impl POP {
         let schema = lop_key.get_schema(qgm, lop_graph);
 
         // Build flow (POPs + Stages)
-        let flow = Flow {
-            id: env.id,
-            stage_graph,
-            schema,
-        };
+        let flow = Flow { id: env.id, stage_graph, schema };
 
         Ok(flow)
     }
@@ -69,27 +65,16 @@ impl POP {
         }
 
         // Get schema to write+read repartitioning files to disk (arrow2)
-        let schema = if matches!(lop, LOP::Repartition { .. }) {
-            Some(Rc::new(lop_key.get_schema(qgm, lop_graph)))
-        } else {
-            None
-        };
+        let schema = if matches!(lop, LOP::Repartition { .. }) { Some(Rc::new(lop_key.get_schema(qgm, lop_graph))) } else { None };
 
         let pop_children_clone = pop_children.clone();
 
         let pop_key: POPKey = match lop {
             LOP::TableScan { .. } => Self::compile_scan(qgm, lop_graph, lop_key, stage_graph, effective_stage_id)?,
             LOP::HashJoin { .. } => Self::compile_join(qgm, lop_graph, lop_key, stage_graph, effective_stage_id, pop_children)?,
-            LOP::Repartition { cpartitions } => Self::compile_repartition_write(
-                qgm,
-                lop_graph,
-                lop_key,
-                stage_graph,
-                stage_link.unwrap(),
-                pop_children,
-                schema.clone().unwrap(),
-                *cpartitions,
-            )?,
+            LOP::Repartition { cpartitions } => {
+                Self::compile_repartition_write(qgm, lop_graph, lop_key, stage_graph, stage_link.unwrap(), pop_children, schema.clone().unwrap(), *cpartitions)?
+            }
             LOP::Aggregation { .. } => Self::compile_aggregation(qgm, lop_graph, lop_key, stage_graph, effective_stage_id, pop_children)?,
         };
 
@@ -133,14 +118,8 @@ impl POP {
 
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
-                let inner = CSV::new(
-                    tbldesc.pathname().clone(),
-                    tbldesc.fields().clone(),
-                    tbldesc.header(),
-                    tbldesc.separator(),
-                    lopprops.partdesc.npartitions,
-                    input_projection,
-                );
+                let inner =
+                    CSV::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), tbldesc.header(), tbldesc.separator(), lopprops.partdesc.npartitions, input_projection);
                 POP::CSV(inner)
             }
         };
@@ -240,8 +219,8 @@ impl POP {
     }
 
     pub fn compile_repartition_write(
-        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, pop_children: Vec<POPKey>,
-        schema: Rc<Schema>, cpartitions: usize,
+        qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, pop_children: Vec<POPKey>, schema: Rc<Schema>,
+        cpartitions: usize,
     ) -> Result<POPKey, String> {
         debug!("[{:?}] begin compile_repartition_write", lop_key);
 
@@ -342,11 +321,7 @@ impl POP {
                             if let Some(colid) = colid {
                                 colid
                             } else {
-                                panic!(
-                                    "compile_join: LOP {:?}, join key {:?} not found in child LOP's projection",
-                                    lop_key,
-                                    expr_key.printable(&qgm.expr_graph, false)
-                                );
+                                panic!("compile_join: LOP {:?}, join key {:?} not found in child LOP's projection", lop_key, expr_key.printable(&qgm.expr_graph, false));
                             }
                         })
                         .collect::<Vec<_>>()
@@ -368,10 +343,7 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let pop_inner = pop_hashmatch::HashMatch {
-                keycols,
-                subtype: HashMatchSubtype::Join,
-            };
+            let pop_inner = pop_hashmatch::HashMatch { keycols, subtype: HashMatchSubtype::Join };
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
@@ -405,10 +377,7 @@ impl POP {
             let aggs = Self::build_agg_list(&proj_map);
             debug!("aggs = {:?}", &aggs);
 
-            let pop_inner = pop_hashmatch::HashMatch {
-                keycols: vec![],
-                subtype: HashMatchSubtype::Aggregation(aggs),
-            };
+            let pop_inner = pop_hashmatch::HashMatch { keycols: vec![], subtype: HashMatchSubtype::Aggregation(aggs) };
 
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
@@ -430,11 +399,7 @@ impl POP {
     }
 
     pub fn build_agg_list(projmap: &ProjectionMap) -> Vec<(Agg, ColId)> {
-        let mut aggs = projmap
-            .hashmap
-            .iter()
-            .filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None })
-            .collect::<Vec<_>>();
+        let mut aggs = projmap.hashmap.iter().filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None }).collect::<Vec<_>>();
         aggs.sort_by_key(|(_, colid)| *colid);
         aggs
     }

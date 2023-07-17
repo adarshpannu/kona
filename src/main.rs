@@ -163,8 +163,7 @@ fn run_unit_tests() -> Result<(), String> {
 
         ntotal = ntotal + 1;
         let mut env = Env::new(id, 1, input_pathname, output_dir.clone());
-        env.set_option("PARSE_ONLY".to_string(), datum::Datum::STR(Rc::new("true".to_string())))
-            .unwrap();
+        env.set_option("PARSE_ONLY".to_string(), datum::Datum::STR(Rc::new("true".to_string()))).unwrap();
 
         let jobres = run_job(&mut env);
         if let Err(errstr) = jobres {

@@ -20,7 +20,7 @@ impl POPKey {
 
     pub fn eval_projection(props: &POPProps, input: &ChunkBox) -> ChunkBox {
         let mut output = vec![];
-        let arrays = input.columns();
+        let arrays = input.arrays();
 
         if let Some(colids) = props.cols.as_ref() {
             for &colid in colids.iter() {

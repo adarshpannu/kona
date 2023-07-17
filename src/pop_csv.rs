@@ -36,11 +36,8 @@ impl CSVContext {
         let has_headers = if partition_id == 0 { csv.header } else { false };
         let partition = csv.partitions[partition_id];
 
-        let mut reader = ReaderBuilder::new()
-            .has_headers(has_headers)
-            .delimiter(csv.separator as u8)
-            .from_path(&csv.pathname)
-            .map_err(|err| stringify1(err, &csv.pathname))?;
+        let mut reader =
+            ReaderBuilder::new().has_headers(has_headers).delimiter(csv.separator as u8).from_path(&csv.pathname).map_err(|err| stringify1(err, &csv.pathname))?;
 
         // Position iterator to beginning of partition
         if partition_id > 0 {
@@ -51,15 +48,7 @@ impl CSVContext {
 
         let rows = vec![ByteRecord::default(); CHUNK_SIZE];
 
-        let csvctx = CSVContext {
-            pop_key,
-            fields: csv.fields.clone(),
-            projection: csv.input_projection.clone(),
-            reader,
-            rows,
-            partition_id,
-            partition,
-        };
+        let csvctx = CSVContext { pop_key, fields: csv.fields.clone(), projection: csv.input_projection.clone(), reader, rows, partition_id, partition };
 
         Ok(Box::new(csvctx))
     }
@@ -70,10 +59,7 @@ impl CSVContext {
 
         let mut row_number = 0;
         for row in rows.iter_mut() {
-            let has_more = reader
-                .read_byte_record(row)
-                .map_err(|e| (format!(" at line {}", row_number), Box::new(e)))
-                .map_err(stringify)?;
+            let has_more = reader.read_byte_record(row).map_err(|e| (format!(" at line {}", row_number), Box::new(e))).map_err(stringify)?;
             let pos = reader.position();
             if pos.byte() > self.partition.1 {
                 break;
@@ -137,14 +123,7 @@ impl CSV {
     pub fn new(pathname: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, input_projection: Vec<ColId>) -> CSV {
         let partitions = Self::compute_partitions(&pathname, npartitions as u64).unwrap();
 
-        CSV {
-            pathname,
-            fields,
-            header,
-            separator,
-            partitions,
-            input_projection,
-        }
+        CSV { pathname, fields, header, separator, partitions, input_projection }
     }
 
     fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {

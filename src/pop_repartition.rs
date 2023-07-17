@@ -30,17 +30,10 @@ pub struct RepartitionWriteContext {
 }
 
 impl RepartitionWriteContext {
-    pub fn try_new(
-        pop_key: POPKey, rpw: &RepartitionWrite, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId,
-    ) -> Result<Box<dyn POPContext>, String> {
+    pub fn try_new(pop_key: POPKey, rpw: &RepartitionWrite, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let writers = (0..rpw.cpartitions).map(|_| None).collect();
 
-        Ok(Box::new(RepartitionWriteContext {
-            pop_key,
-            children,
-            partition_id,
-            writers,
-        }))
+        Ok(Box::new(RepartitionWriteContext { pop_key, children, partition_id, writers }))
     }
 
     fn eval_repart_keys(repart_code: &[PCode], input: &ChunkBox) -> ChunkBox {
@@ -50,8 +43,8 @@ impl RepartitionWriteContext {
 
     fn hash_chunk(chunk: ChunkBox) -> Result<PrimitiveArray<u64>, String> {
         // FIXME: We hash the first column only. Need to include all columns.
-        let last_ix = chunk.columns().len() - 1;
-        let arr0 = &chunk.columns()[last_ix];
+        let last_ix = chunk.arrays().len() - 1;
+        let arr0 = &chunk.arrays()[last_ix];
         hash(&**arr0).map_err(stringify)
     }
 
@@ -101,10 +94,7 @@ impl RepartitionWriteContext {
             if !filtered_chunk.is_empty() {
                 let writer = self.get_writer(flow_id, rpw, cpartition)?;
 
-                let headerstr = format!(
-                    "RepartitionWriteContext Stage {} -> {}, Partition {}, Consumer {}",
-                    rpw.stage_link.0, rpw.stage_link.1, partition_id, cpartition
-                );
+                let headerstr = format!("RepartitionWriteContext Stage {} -> {}, Partition {}, Consumer {}", rpw.stage_link.0, rpw.stage_link.1, partition_id, cpartition);
                 debug!("{}", chunk_to_string(&filtered_chunk, &headerstr));
 
                 writer.write(&filtered_chunk, None).map_err(stringify)?
@@ -176,12 +166,7 @@ pub struct RepartitionWrite {
 
 impl RepartitionWrite {
     pub fn new(repart_key: Vec<PCode>, schema: Rc<Schema>, stage_link: StageLink, cpartitions: PartitionId) -> Self {
-        RepartitionWrite {
-            repart_key,
-            schema,
-            stage_link,
-            cpartitions,
-        }
+        RepartitionWrite { repart_key, schema, stage_link, cpartitions }
     }
 }
 
@@ -238,10 +223,7 @@ impl RepartitionReadContext {
         } else {
             files.unwrap()
         };
-        debug!(
-            "[{:?}] RepartitionReadContext::new, partition = {}, files = {:?}",
-            pop_key, partition_id, &files
-        );
+        debug!("[{:?}] RepartitionReadContext::new, partition = {}, files = {:?}", pop_key, partition_id, &files);
 
         let cell = RepartitionReadCell::new(files, |files| {
             let reader = files.iter().flat_map(|path| {
@@ -271,10 +253,7 @@ impl POPContext for RepartitionReadContext {
         if let POP::RepartitionRead(_) = pop {
             let chunk = self.cell.next();
             if let Some(chunk) = chunk {
-                let headerstr = format!(
-                    "RepartitionReadContext::next Stage = {}, {:?}, Partition = {}",
-                    stage.stage_id, pop_key, self.partition_id
-                );
+                let headerstr = format!("RepartitionReadContext::next Stage = {}, {:?}, Partition = {}", stage.stage_id, pop_key, self.partition_id);
                 debug!("{}", chunk_to_string(&chunk, &headerstr));
                 return Ok(Some(chunk));
             }
