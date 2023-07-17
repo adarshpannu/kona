@@ -138,6 +138,7 @@ pub fn chunk_to_string(chunk: &ChunkBox, header: &str) -> String {
     writer.into_string()
 }
 
+#[allow(unused_variables)]
 pub fn chunk_to_tabularstring(chunk: &ChunkBox, header: &str) -> String {
     let mut writer = VecWriter::new();
     let options = write::SerializeOptions::default();
@@ -157,7 +158,7 @@ pub fn chunk_to_tabularstring(chunk: &ChunkBox, header: &str) -> String {
             writer.write(b"+\n").unwrap();
         }
         if rx < rows.len() - 1 {
-            for (cx, col) in cols.iter().enumerate() {
+            for col in cols.iter() {
                 writer.write_fmt(format_args!("|{:10}", col)).unwrap();
             }
             writer.write(b"|\n").unwrap();

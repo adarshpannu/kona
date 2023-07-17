@@ -1,12 +1,10 @@
 // Compile
 
-use std::{collections::HashMap, rc::Rc};
-
-use arrow2::bitmap::chunk_iter_to_vec;
+use std::rc::Rc;
 
 use crate::{
     bitset::Bitset,
-    expr::{AggType, Expr},
+    expr::Expr,
     flow::Flow,
     graph::{ExprKey, LOPKey, POPKey},
     includes::*,
@@ -120,7 +118,7 @@ impl POP {
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
 
         // Build input map
-        let (mut input_projection, mut input_proj_map) = if let LOP::TableScan { input_projection } = lop {
+        let (input_projection, mut input_proj_map) = if let LOP::TableScan { input_projection } = lop {
             let proj_map: ProjectionMap = Self::compute_projection_map(input_projection, None);
             let input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
             (input_projection, proj_map)
@@ -390,7 +388,7 @@ impl POP {
     ) -> Result<POPKey, String> {
         debug!("[{:?}] begin compile_aggregation", lop_key);
 
-        let (lop, lopprops, children) = lop_graph.get3(lop_key);
+        let (lop, lopprops, _) = lop_graph.get3(lop_key);
         if let LOP::Aggregation { group_by_len } = lop {
             let qunid = lopprops.quns.elements()[0];
             let mut proj_map = Self::compute_initial_agg_projection_map(qunid, *group_by_len);

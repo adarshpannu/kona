@@ -53,7 +53,7 @@ impl ExprKey {
             }
 
             match expr {
-                Expr::CID(qunid, colid) => PInstruction::Column(*colid),
+                Expr::CID(_, colid) => PInstruction::Column(*colid),
                 Expr::Literal(value) => PInstruction::Literal(value.clone()),
                 Expr::Column { qunid, colid, .. } => {
                     let prj = Projection::QunCol(QunCol(*qunid, *colid));
@@ -66,7 +66,7 @@ impl ExprKey {
                 Expr::NegatedExpr => PInstruction::NegatedExpr,
                 Expr::AggFunction(agg_type, _) => {
                     let child_expr = expr_graph.get_value(children.unwrap()[0]);
-                    if let Expr::CID(qunid, colid) = child_expr {
+                    if let Expr::CID(_, colid) = child_expr {
                         let array_id = proj_map.set_agg(*agg_type, *colid);
                         PInstruction::Column(array_id)
                     } else {

@@ -1,8 +1,9 @@
 // main
 
-#![allow(warnings)]
+//#![allow(warnings)]
 #![allow(clippy::too_many_arguments)]
 
+#[cfg(test)]
 use std::{fs, process::Command, rc::Rc};
 
 use crate::{includes::*, qgm::ParserState};

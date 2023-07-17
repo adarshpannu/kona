@@ -47,14 +47,14 @@ struct HashMatchSplit {
 }
 
 macro_rules! copy_to_build_array {
-    ($from_array_typ:ty, $from_array:expr, $to_array_typ:ty, $to_array:expr, $splid_ids:expr, $cur_split_id:expr, $hash_array:expr, $hash_map:expr) => {{
+    ($from_array_typ:ty, $from_array:expr, $to_array_typ:ty, $to_array:expr, $split_ids:expr, $cur_split_id:expr, $hash_array:expr, $hash_map:expr) => {{
         let primarr = $from_array.as_any().downcast_ref::<$from_array_typ>().unwrap();
         let mutarr = $to_array.as_mut_any().downcast_mut::<$to_array_typ>().unwrap();
         let hash_map = $hash_map;
-        $splid_ids
+        $split_ids
             .iter()
             .enumerate()
-            .filter(|(rid, &splid_id)| splid_id == $cur_split_id)
+            .filter(|(_, &splid_id)| splid_id == $cur_split_id)
             .for_each(|(rid, _)| {
                 let value = primarr.get(rid);
                 debug!("copy_to_build_array: inserted {:?} into split {}", value, $cur_split_id);
@@ -125,8 +125,6 @@ impl HashMatchSplit {
             }
         }
     }
-
-    pub fn probe(&self, chunk: &ChunkBox, hash_array: &[u64]) {}
 
     fn alloc_arrays(&mut self, chunk: &ChunkBox) {
         let arrays: Vec<Box<dyn MutableArray>> = chunk
@@ -275,6 +273,7 @@ impl HashMatchContext {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch, chunk: ChunkBox) -> Result<ChunkBox, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
@@ -348,9 +347,6 @@ impl HashMatchContext {
     }
 
     fn contruct_build_chunk_from_indices(&mut self, indices: &Vec<(RowId, (SplitId, RowId))>) -> Result<ChunkBox, String> {
-        use arrow2::{datatypes::PhysicalType, types::PrimitiveType};
-
-        let build_rids: PrimitiveArray<u64> = indices.iter().map(|e| Some(e.0 as u64)).collect();
         if self.splits.len() == 0 {
             return Ok(Chunk::new(vec![]));
         }
@@ -391,11 +387,10 @@ impl HashMatchContext {
     }
 
     fn take_chunk(chunk: &ChunkBox, indices: PrimitiveArray<u64>) -> Result<Vec<Box<dyn Array>>, String> {
-        use arrow2::compute::take::take;
         chunk
             .arrays()
             .iter()
-            .map(|array| Ok(take(&**array, &indices).map_err(stringify)?))
+            .map(|array| Ok(take::take(&**array, &indices).map_err(stringify)?))
             .collect::<Result<Vec<_>, String>>()
     }
 }

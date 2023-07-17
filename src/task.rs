@@ -8,7 +8,7 @@ use crate::{
     flow::Flow,
     graph::POPKey,
     includes::*,
-    pop::{chunk_to_tabularstring, POPContext, POP},
+    pop::{POPContext, POP},
     pop_csv::CSVContext,
     pop_hashmatch::HashMatchContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
@@ -51,7 +51,8 @@ impl Task {
         let root_pop_key = stage.root_pop_key.unwrap();
 
         let mut root_context = self.init_context(flow, stage, root_pop_key)?;
-        while let chunk = root_context.next(flow, stage)? {
+        loop {
+            let chunk = root_context.next(flow, stage)?;
             if let Some(chunk) = chunk {
                 if stage.stage_id == 0 {
                     if writer.is_none() {
@@ -59,12 +60,12 @@ impl Task {
                         let dirname = get_output_dir(flow.id);
                         std::fs::create_dir_all(&dirname).map_err(stringify)?;
                         let path = format!("{}/partition-{}.csv", dirname, self.partition_id);
-                        let localwriter = std::fs::File::create(path).map_err(stringify)?;
+                        let localwriter = File::create(path).map_err(stringify)?;
                         writer = Some(localwriter);
                     }
 
                     if let Some(writer) = writer.as_mut() {
-                        write::write_chunk(writer, &chunk, &options);
+                        write::write_chunk(writer, &chunk, &options).map_err(stringify)?;
                     }
                 }
             } else {
@@ -89,11 +90,8 @@ impl Task {
         let ctxt = match &pop {
             POP::CSV(csv) => CSVContext::try_new(popkey, csv, self.partition_id)?,
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::try_new(popkey, rpw, child_contexts.unwrap(), self.partition_id)?,
-
-            // FIXME: Since POP graphs are local to stages, repartition directories may not be unique. Use LOPKey?
             POP::RepartitionRead(rpr) => RepartitionReadContext::try_new(flow.id, popkey, rpr, self.partition_id)?,
             POP::HashMatch(hj) => HashMatchContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,
-            _ => unimplemented!(),
         };
         Ok(ctxt)
     }

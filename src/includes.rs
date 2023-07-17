@@ -80,6 +80,7 @@ pub type ChunkBox = Chunk<Box<dyn Array>>;
 
 pub const CHUNK_SIZE: usize = 1024;
 
+#[allow(unused_macros)]
 macro_rules! function_name {
     () => {{
         fn f() {}
@@ -91,6 +92,7 @@ macro_rules! function_name {
     }};
 }
 
+#[allow(unused_imports)]
 pub(crate) use function_name;
 
 pub fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId) -> String {
