@@ -37,6 +37,8 @@ type HashValue = u64;
 type BuildRowId = usize;
 type ProbeRowId = usize;
 type SplitId = usize;
+type MatchRIDPair = (ProbeRowId, (SplitId, BuildRowId));
+type MatchRIDList = Vec<MatchRIDPair>;
 
 /***************************************************************************************************/
 struct HashMatchSplit {
@@ -44,6 +46,12 @@ struct HashMatchSplit {
     mut_arrays: Vec<Box<dyn MutableArray>>,
     arrays: Vec<Box<dyn Array>>,
     hash_map: HashMap<HashValue, Vec<BuildRowId>>, // Hash-of-keys -> {Row-Id}*
+}
+
+impl HashMatchSplit {
+    fn new(id: SplitId) -> Self {
+        HashMatchSplit { id, mut_arrays: vec![], arrays: vec![], hash_map: HashMap::new() }
+    }
 }
 
 macro_rules! copy_to_build_array {
@@ -65,53 +73,18 @@ macro_rules! copy_to_build_array {
     }};
 }
 
-impl HashMatchSplit {
-    fn new(id: SplitId) -> Self {
-        HashMatchSplit { id, mut_arrays: vec![], arrays: vec![], hash_map: HashMap::new() }
-    }
-
-    pub fn insert(&mut self, build_chunk: &ChunkBox, hash_array: &[u64], split_ids: &[SplitId]) {
-        if self.mut_arrays.is_empty() {
-            self.alloc_build_arrays(build_chunk);
-        }
-
-        let cur_split_id = self.id;
-        for (from_array, to_array) in build_chunk.arrays().iter().zip(self.mut_arrays.iter_mut()) {
-            match from_array.data_type().to_physical_type() {
-                PhysicalType::Primitive(PrimitiveType::Int64) => {
-                    copy_to_build_array!(PrimitiveArray<i64>, from_array, MutablePrimitiveArray<i64>, to_array, split_ids, cur_split_id, hash_array, &mut self.hash_map)
-                }
-                PhysicalType::Boolean => {
-                    copy_to_build_array!(BooleanArray, from_array, MutableBooleanArray, to_array, split_ids, cur_split_id, hash_array, &mut self.hash_map)
-                }
-                PhysicalType::Utf8 => {
-                    copy_to_build_array!(Utf8Array<i32>, from_array, MutableUtf8Array<i32>, to_array, split_ids, cur_split_id, hash_array, &mut self.hash_map)
-                }
-                _ => todo!(),
-            }
-        }
-    }
-
-    fn alloc_build_arrays(&mut self, chunk: &ChunkBox) {
-        let arrays: Vec<Box<dyn MutableArray>> = chunk
-            .arrays()
-            .iter()
-            .map(|array| {
-                let mut_array: Box<dyn MutableArray> = match array.data_type().to_physical_type() {
-                    PhysicalType::Primitive(PrimitiveType::Int64) => Box::new(MutablePrimitiveArray::<i64>::new()),
-                    PhysicalType::Utf8 => Box::new(MutableUtf8Array::<i32>::new()),
-                    _ => panic!("alloc_arrays(), todo: {:?}", array.data_type().to_physical_type()),
-                };
-                mut_array
-            })
-            .collect();
-        self.mut_arrays = arrays;
-    }
-
-    fn demut_build_arrays(&mut self) {
-        let mut_arrays = std::mem::take(&mut self.mut_arrays);
-        self.arrays = mut_arrays.into_iter().map(|mut mut_array| mut_array.as_box()).collect();
-    }
+macro_rules! copy_from_build_array {
+    ($from_array_typ:ty, $self:expr, $rids:expr, $colid:expr) => {{
+        let iter = $rids.iter().map(|&(_, (split_id, build_rid))| {
+            let split = &$self.splits[split_id];
+            let array = &split.arrays[$colid];
+            let primarr = array.as_any().downcast_ref::<$from_array_typ>().unwrap();
+            primarr.get(build_rid)
+        });
+        let arr = <$from_array_typ>::from_trusted_len_iter(iter);
+        let arr: Box<dyn Array> = Box::new(arr);
+        arr
+    }};
 }
 
 /***************************************************************************************************/
@@ -180,16 +153,60 @@ impl HashMatchContext {
                 let (hash_array, split_ids) = hash_chunk(&keys, &self.state);
 
                 for split in self.splits.iter_mut() {
-                    split.insert(&chunk, &hash_array, &split_ids);
+                    Self::insert(split, &chunk, &hash_array, &split_ids);
                 }
             }
         }
 
         for split in self.splits.iter_mut() {
-            split.demut_build_arrays();
+            Self::demut_build_arrays(split);
         }
 
         Ok(())
+    }
+
+    fn insert(split: &mut HashMatchSplit, build_chunk: &ChunkBox, hash_array: &[u64], split_ids: &[SplitId]) {
+        if split.mut_arrays.is_empty() {
+            Self::alloc_build_arrays(split, build_chunk);
+        }
+
+        let cur_split_id = split.id;
+        for (from_array, to_array) in build_chunk.arrays().iter().zip(split.mut_arrays.iter_mut()) {
+            match from_array.data_type().to_physical_type() {
+                PhysicalType::Primitive(PrimitiveType::Int64) => {
+                    copy_to_build_array!(PrimitiveArray<i64>, from_array, MutablePrimitiveArray<i64>, to_array, split_ids, cur_split_id, hash_array, &mut split.hash_map)
+                }
+                PhysicalType::Utf8 => {
+                    copy_to_build_array!(Utf8Array<i32>, from_array, MutableUtf8Array<i32>, to_array, split_ids, cur_split_id, hash_array, &mut split.hash_map)
+                }
+                PhysicalType::Boolean => {
+                    copy_to_build_array!(BooleanArray, from_array, MutableBooleanArray, to_array, split_ids, cur_split_id, hash_array, &mut split.hash_map)
+                }
+                typ => panic!("insert(), todo: {:?}", typ),
+            }
+        }
+    }
+
+    fn alloc_build_arrays(split: &mut HashMatchSplit, chunk: &ChunkBox) {
+        let arrays: Vec<Box<dyn MutableArray>> = chunk
+            .arrays()
+            .iter()
+            .map(|array| {
+                let mut_array: Box<dyn MutableArray> = match array.data_type().to_physical_type() {
+                    PhysicalType::Primitive(PrimitiveType::Int64) => Box::new(MutablePrimitiveArray::<i64>::new()),
+                    PhysicalType::Utf8 => Box::new(MutableUtf8Array::<i32>::new()),
+                    PhysicalType::Boolean => Box::new(MutableBooleanArray::new()),
+                    typ => panic!("alloc_build_arrays(), todo: {:?}", typ),
+                };
+                mut_array
+            })
+            .collect();
+        split.mut_arrays = arrays;
+    }
+
+    fn demut_build_arrays(split: &mut HashMatchSplit) {
+        let mut_arrays = std::mem::take(&mut split.mut_arrays);
+        split.arrays = mut_arrays.into_iter().map(|mut mut_array| mut_array.as_box()).collect();
     }
 
     #[allow(unused_variables)]
@@ -213,8 +230,8 @@ impl HashMatchContext {
         let rids = self.find_matches(hash_array, split_ids);
 
         if !rids.is_empty() {
-            let probe_chunk = self.contruct_probe_chunk(&rids, &chunk)?;
-            let build_chunk = self.contruct_build_chunk(&rids)?;
+            let probe_chunk = self.contruct_probe_output(&rids, &chunk)?;
+            let build_chunk = self.contruct_build_output(&rids)?;
 
             let chunk = Self::contruct_joined_chunk(hash_match, build_chunk, probe_chunk)?;
 
@@ -230,7 +247,7 @@ impl HashMatchContext {
         }
     }
 
-    fn find_matches(&mut self, hash_array: Vec<u64>, split_ids: Vec<usize>) -> Vec<(ProbeRowId, (SplitId, BuildRowId))> {
+    fn find_matches(&mut self, hash_array: Vec<u64>, split_ids: Vec<SplitId>) -> MatchRIDList {
         // Build rid-list based on hash-match: Probe-RowId -> SplitId + BuildRowId
         let mut rid_matches = vec![];
         for (probe_rid, (hash_key, &split_id)) in hash_array.iter().zip(split_ids.iter()).enumerate() {
@@ -246,7 +263,7 @@ impl HashMatchContext {
         rid_matches
     }
 
-    fn contruct_build_chunk(&mut self, rids: &[(ProbeRowId, (SplitId, BuildRowId))]) -> Result<ChunkBox, String> {
+    fn contruct_build_output(&mut self, rids: &[MatchRIDPair]) -> Result<ChunkBox, String> {
         if self.splits.is_empty() {
             return Ok(Chunk::new(vec![]));
         }
@@ -259,18 +276,10 @@ impl HashMatchContext {
             .into_iter()
             .enumerate()
             .map(|(colid, typ)| match typ {
-                PhysicalType::Primitive(PrimitiveType::Int64) => {
-                    let iter = rids.iter().map(|&(_, (split_id, rid_in_split))| {
-                        let split = &self.splits[split_id];
-                        let array = &split.arrays[colid];
-                        let primarr = array.as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
-                        primarr.get(rid_in_split)
-                    });
-                    let primarr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
-                    let primarr: Box<dyn Array> = Box::new(primarr);
-                    primarr
-                }
-                t => panic!("contruct_build_chunk_from_rids() not yet implemented for type: {:?}", t),
+                PhysicalType::Primitive(PrimitiveType::Int64) => copy_from_build_array!(PrimitiveArray<i64>, self, rids, colid),
+                PhysicalType::Utf8 => copy_from_build_array!(Utf8Array<i32>, self, rids, colid),
+                PhysicalType::Boolean => copy_from_build_array!(BooleanArray, self, rids, colid),
+                typ => panic!("contruct_build_output(), todo: {:?}", typ),
             })
             .collect();
 
@@ -281,7 +290,20 @@ impl HashMatchContext {
         Ok(build_chunk)
     }
 
-    fn contruct_probe_chunk(&mut self, rids: &Vec<(ProbeRowId, (SplitId, BuildRowId))>, keys: &ChunkBox) -> Result<ChunkBox, String> {
+    #[allow(dead_code)]
+    fn copy_from_build_arrays0(&mut self, rids: &[(usize, (usize, usize))], colid: usize) -> Box<dyn Array> {
+        let iter = rids.iter().map(|&(_, (split_id, build_rid))| {
+            let split = &self.splits[split_id];
+            let array = &split.arrays[colid];
+            let primarr = array.as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
+            primarr.get(build_rid)
+        });
+        let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
+        let arr: Box<dyn Array> = Box::new(arr);
+        arr
+    }
+
+    fn contruct_probe_output(&mut self, rids: &MatchRIDList, keys: &ChunkBox) -> Result<ChunkBox, String> {
         let probe_rids: PrimitiveArray<u64> = rids.iter().map(|e| Some(e.0 as u64)).collect();
         let probe_arrays = Self::take_chunk(keys, probe_rids)?;
         let probe_chunk = Chunk::new(probe_arrays);
@@ -348,9 +370,9 @@ fn hash_chunk(chunk: &ChunkBox, state: &RandomState) -> (Vec<HashValue>, Vec<Spl
 
     for array in chunk.arrays() {
         match array.data_type().to_physical_type() {
-            PhysicalType::Boolean => hash_array!(BooleanArray, array, state, &mut hash_array),
             PhysicalType::Primitive(PrimitiveType::Int64) => hash_array!(PrimitiveArray<i64>, array, state, &mut hash_array),
             PhysicalType::Utf8 => hash_array!(Utf8Array<i32>, array, state, &mut hash_array),
+            PhysicalType::Boolean => hash_array!(BooleanArray, array, state, &mut hash_array),
             t => panic!("Hash not implemented for type: {:?}", t),
         }
     }
