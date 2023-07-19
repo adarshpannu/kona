@@ -361,14 +361,17 @@ impl POP {
         debug!("[{:?}] begin compile_aggregation", lop_key);
 
         let (lop, lopprops, _) = lop_graph.get3(lop_key);
-        if let LOP::Aggregation { group_by_len } = lop {
-            let qunid = lopprops.quns.elements()[0];
-            let mut proj_map = Self::compute_initial_agg_projection_map(qunid, *group_by_len);
+        if let LOP::Aggregation { key_len } = lop {
 
-            // Compile real + virt columns
+            let qunid = lopprops.quns.elements()[0];
+
+            // Populate projection-map with key columns
+            let mut proj_map = Self::compute_initial_agg_projection_map(qunid, *key_len);
+
+            // Compile real + virt columns + predicates. As aggregate expressions (e.g. SUM(col) are visited, they are added to the projection map
+            // at column offsets beyond the # of key columns.
             let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut proj_map);
             assert!(cols.is_none());
-
             let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut proj_map);
             debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
@@ -390,9 +393,9 @@ impl POP {
         }
     }
 
-    pub fn compute_initial_agg_projection_map(qunid: QunId, by_len: usize) -> ProjectionMap {
+    pub fn compute_initial_agg_projection_map(qunid: QunId, key_len: usize) -> ProjectionMap {
         let mut proj_map = ProjectionMap::default();
-        for colid in 0..by_len {
+        for colid in 0..key_len {
             proj_map.set(Projection::QunCol(QunCol(qunid, colid)), colid);
         }
         proj_map

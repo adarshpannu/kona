@@ -67,7 +67,7 @@ pub enum LOP {
     TableScan { input_projection: Bitset<QunCol> },
     HashJoin { lhs_join_keys: Vec<ExprKey>, rhs_join_keys: Vec<ExprKey> },
     Repartition { cpartitions: usize },
-    Aggregation { group_by_len: usize },
+    Aggregation { key_len: usize },
 }
 
 /***************************************************************************************************/
@@ -540,8 +540,8 @@ impl QGM {
             let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
                 let child_qblock_key = qun.get_qblock().unwrap();
                 let child_qblock = &self.qblock_graph.get(child_qblock_key).value;
-                let group_by_len = qblock.group_by.as_ref().unwrap().len();
-                let expected_partitioning_expr = child_qblock.select_list.iter().take(group_by_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
+                let key_len = qblock.group_by.as_ref().unwrap().len();
+                let expected_partitioning_expr = child_qblock.select_list.iter().take(key_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
 
                 // child == subplan that we'll be aggregating.
                 for e in expected_partitioning_expr.iter() {
@@ -555,7 +555,7 @@ impl QGM {
                 let children = Some(vec![child_lop_key]);
 
                 let props = LOPProps::new(quns, output_quncols, preds, expected_partitioning, None);
-                lop_graph.add_node_with_props(LOP::Aggregation { group_by_len }, props, children)
+                lop_graph.add_node_with_props(LOP::Aggregation { key_len }, props, children)
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
                     tabledesc.get_part_desc().npartitions

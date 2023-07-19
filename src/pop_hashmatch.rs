@@ -21,7 +21,7 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 pub enum HashMatchSubtype {
     Join,
-    Aggregation(Vec<(Agg, ColId)>),
+    Aggregation(Vec<(Agg, ColId)>), // Map each agg -> column offset in build array
 }
 
 const NSPLITS: usize = 10;
@@ -29,7 +29,7 @@ const NSPLITS: usize = 10;
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashMatch {
-    pub keycols: Vec<Vec<ColId>>,
+    pub keycols: Vec<Vec<ColId>>, // Maintain a list of key columns for each child. len() == 0 for aggs, == 2 for joins
     pub subtype: HashMatchSubtype,
 }
 
@@ -37,7 +37,7 @@ type HashValue = u64;
 type BuildRowId = usize;
 type ProbeRowId = usize;
 type SplitId = usize;
-type MatchRIDPair = (ProbeRowId, (SplitId, BuildRowId));
+type MatchRIDPair = (ProbeRowId, Option<(SplitId, BuildRowId)>);
 type MatchRIDList = Vec<MatchRIDPair>;
 
 /***************************************************************************************************/
@@ -75,11 +75,15 @@ macro_rules! copy_to_build_array {
 
 macro_rules! copy_from_build_array {
     ($from_array_typ:ty, $self:expr, $rids:expr, $colid:expr) => {{
-        let iter = $rids.iter().map(|&(_, (split_id, build_rid))| {
-            let split = &$self.splits[split_id];
-            let array = &split.arrays[$colid];
-            let primarr = array.as_any().downcast_ref::<$from_array_typ>().unwrap();
-            primarr.get(build_rid)
+        let iter = $rids.iter().map(|&(_, build_rid)| {
+            if let Some((split_id, build_rid)) = build_rid {
+                let split = &$self.splits[split_id];
+                let array = &split.arrays[$colid];
+                let primarr = array.as_any().downcast_ref::<$from_array_typ>().unwrap();
+                primarr.get(build_rid)
+            } else {
+                panic!("copy_from_build_array() was passed rid-list with no build rids.")
+            }
         });
         let arr = <$from_array_typ>::from_trusted_len_iter(iter);
         let arr: Box<dyn Array> = Box::new(arr);
@@ -105,25 +109,14 @@ impl POPContext for HashMatchContext {
         let pop_key = self.pop_key;
         let pop = stage.pop_graph.get_value(pop_key);
         if let POP::HashMatch(hash_match) = pop {
-            // Build side (right child)
-            if self.splits.is_empty() {
-                self.process_build_side(flow, stage)?;
-            }
-
-            // Probe-side (left child)
-            let child = &mut self.children[0];
-
-            while let Some(chunk) = child.next(flow, stage)? {
-                if !chunk.is_empty() {
-                    let chunk = self.process_probe_side(flow, stage, hash_match, chunk)?;
-                    debug!("HashMatchContext::next \n{}", chunk_to_string(&chunk, "HashMatchContext::next"));
-                    return Ok(Some(chunk));
-                }
-            }
+            let ret_chunk = match &hash_match.subtype {
+                HashMatchSubtype::Join => self.next_join(flow, stage, hash_match),
+                HashMatchSubtype::Aggregation(_aggcols) => self.next_agg(flow, stage, hash_match),
+            };
+            return ret_chunk;
         } else {
-            panic!("ugh")
+            panic!("ugh");
         }
-        Ok(None)
     }
 }
 
@@ -134,7 +127,30 @@ impl HashMatchContext {
         Ok(Box::new(HashMatchContext { pop_key, children, partition_id, state, splits: vec![] }))
     }
 
-    fn process_build_side(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
+    #[allow(unused_variables)]
+    fn next_agg(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch) -> Result<Option<ChunkBox>, String> {
+        Ok(None)
+    }
+
+    fn next_join(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch) -> Result<Option<ChunkBox>, String> {
+        // Build hash-tables
+        if self.splits.is_empty() {
+            self.process_join_build_input(flow, stage)?;
+        }
+
+        // Probe
+        let child = &mut self.children[0];
+        while let Some(chunk) = child.next(flow, stage)? {
+            if !chunk.is_empty() {
+                let chunk = self.process_join_probe_input(flow, stage, hash_match, chunk)?;
+                debug!("HashMatchContext::next \n{}", chunk_to_string(&chunk, "HashMatchContext::next"));
+                return Ok(Some(chunk));
+            }
+        }
+        Ok(None)
+    }
+
+    fn process_join_build_input(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
         let pop = stage.pop_graph.get_value(self.pop_key);
         let child = &mut self.children[1];
 
@@ -147,7 +163,7 @@ impl HashMatchContext {
         if let POP::HashMatch(hm) = pop {
             // Collect all build chunks
             while let Some(chunk) = child.next(flow, stage)? {
-                // Compute split # for each row
+                // Compute hash + split-# for each row in the chunk
                 let keycols = &hm.keycols[1];
                 let keys = eval_cols(keycols, &chunk);
                 let (hash_array, split_ids) = hash_chunk(&keys, &self.state);
@@ -210,7 +226,7 @@ impl HashMatchContext {
     }
 
     #[allow(unused_variables)]
-    fn process_probe_side(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch, chunk: ChunkBox) -> Result<ChunkBox, String> {
+    fn process_join_probe_input(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch, chunk: ChunkBox) -> Result<ChunkBox, String> {
         let props = stage.pop_graph.get_properties(self.pop_key);
         let keycols = &hash_match.keycols[0];
 
@@ -256,7 +272,7 @@ impl HashMatchContext {
             if let Some(matches) = build_rid {
                 for &build_rid in matches.iter() {
                     debug!("process_probe_side: probe_rid = {}, build_rid = {}", probe_rid, build_rid);
-                    rid_matches.push((probe_rid, (split_id, build_rid)))
+                    rid_matches.push((probe_rid, Some((split_id, build_rid))))
                 }
             }
         }
@@ -268,7 +284,8 @@ impl HashMatchContext {
             return Ok(Chunk::new(vec![]));
         }
 
-        let first_split_id = rids[0].1 .0;
+        // Grab type information from first rid
+        let first_split_id = rids[0].1.unwrap().0;
         let first_split = &self.splits[first_split_id];
         let types = first_split.arrays.iter().map(|a| a.data_type().to_physical_type()).collect::<Vec<_>>();
 

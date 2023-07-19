@@ -98,8 +98,8 @@ impl QGM {
                 let extrastr = format!("c = {}", cpartitions);
                 (String::from("Repartition"), extrastr)
             }
-            LOP::Aggregation { group_by_len } => {
-                let extrastr = format!("by_len = {}", group_by_len);
+            LOP::Aggregation { key_len } => {
+                let extrastr = format!("key_len = {}", key_len);
                 (String::from("Aggregation"), extrastr)
             }
         };
