@@ -80,14 +80,26 @@ pub struct CSVDesc {
 
 impl CSVDesc {
     pub fn new(tp: TableType, pathname: Rc<String>, columns: Vec<Field>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats) -> Result<Self, String> {
-        let csvdesc = CSVDesc { tp, pathname, header, separator, columns, part_desc, table_stats };
+        let csvdesc = CSVDesc {
+            tp,
+            pathname,
+            header,
+            separator,
+            columns,
+            part_desc,
+            table_stats,
+        };
         Ok(csvdesc)
     }
 
     pub fn infer_metadata(pathname: &str, separator: char, header: bool) -> Result<Vec<Field>, String> {
         // Create a CSV reader. This is typically created on the thread that reads the file and
         // thus owns the read head.
-        let mut reader = read::ReaderBuilder::new().has_headers(header).delimiter(separator as u8).from_path(pathname).map_err(|err| stringify1(err, pathname))?;
+        let mut reader = read::ReaderBuilder::new()
+            .has_headers(header)
+            .delimiter(separator as u8)
+            .from_path(pathname)
+            .map_err(|err| stringify1(err, pathname))?;
 
         // Infers the fields using the default inferer. The inferer is just a function that maps bytes
         // to a `DataType`.
@@ -169,7 +181,10 @@ impl Metadata {
     }
 
     fn get_table_type(hm: &HashMap<String, Datum>, name: &String) -> Result<TableType, String> {
-        let tp = hm.get("TYPE").ok_or(f!("Table {name} does not specify a TYPE."))?.as_str(&f!("Table {name} has invalid TYPE."))?;
+        let tp = hm
+            .get("TYPE")
+            .ok_or(f!("Table {name} does not specify a TYPE."))?
+            .as_str(&f!("Table {name} has invalid TYPE."))?;
 
         let tp = match &tp[..] {
             "CSV" => TableType::CSV,
@@ -244,7 +259,10 @@ impl Metadata {
             _ => return Err(String::from("Invalid value for option PARTITIONS")),
         };
 
-        let part_desc = PartDesc { npartitions, part_type: PartType::RAW };
+        let part_desc = PartDesc {
+            npartitions,
+            part_type: PartType::RAW,
+        };
         Ok(part_desc)
     }
 
@@ -260,7 +278,10 @@ impl Metadata {
         match tp {
             TableType::CSV => {
                 // PATH, HEADER, SEPARATOR
-                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.as_str(&f!("PATH does not hold a string for table {name}"))?;
+                let path = hm
+                    .get("PATH")
+                    .ok_or("Table {name} does not specify a PATH")?
+                    .as_str(&f!("PATH does not hold a string for table {name}"))?;
 
                 let header = Self::get_header_parm(&hm)?;
                 let separator = Self::get_separator_parm(&hm)?;

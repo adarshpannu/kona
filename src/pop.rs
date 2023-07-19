@@ -80,7 +80,12 @@ pub struct POPProps {
 
 impl POPProps {
     pub fn new(predicates: Option<Vec<PCode>>, cols: Option<Vec<ColId>>, virtcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
-        POPProps { predicates, cols, virtcols, npartitions }
+        POPProps {
+            predicates,
+            cols,
+            virtcols,
+            npartitions,
+        }
     }
 }
 

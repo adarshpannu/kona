@@ -75,7 +75,10 @@ impl Task {
     pub fn init_context(&self, flow: &Flow, stage: &Stage, popkey: POPKey) -> Result<Box<dyn POPContext>, String> {
         let (pop, _, children) = stage.pop_graph.get3(popkey);
         let child_contexts = if let Some(children) = children {
-            let children = children.iter().map(|&child_popkey| self.init_context(flow, stage, child_popkey).unwrap()).collect::<Vec<_>>();
+            let children = children
+                .iter()
+                .map(|&child_popkey| self.init_context(flow, stage, child_popkey).unwrap())
+                .collect::<Vec<_>>();
             Some(children)
         } else {
             None

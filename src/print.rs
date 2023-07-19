@@ -184,7 +184,9 @@ impl Stage {
                 let pathname = csv.pathname.split('/').last().unwrap_or(&csv.pathname);
                 //let mut projection = csv.projection.clone();
                 //projection.sort_by(|a, b| a.cmp(b));
-                let extrastr = format!("file: {}, input_projection: {:?}", pathname, &csv.input_projection).replace('{', "(").replace('}', ")");
+                let extrastr = format!("file: {}, input_projection: {:?}", pathname, &csv.input_projection)
+                    .replace('{', "(")
+                    .replace('}', ")");
                 (String::from("CSV"), extrastr)
             }
             POP::HashMatch { .. } => {
@@ -202,7 +204,11 @@ impl Stage {
         };
 
         let label = label.replace(['"', '{', '}'], "");
-        let colstr = if let Some(cols) = &props.cols { format!("{:?}", cols).replace('{', "(").replace('}', ")") } else { String::new() };
+        let colstr = if let Some(cols) = &props.cols {
+            format!("{:?}", cols).replace('{', "(").replace('}', ")")
+        } else {
+            String::new()
+        };
 
         fprint!(
             file,

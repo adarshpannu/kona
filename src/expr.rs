@@ -110,7 +110,12 @@ impl std::default::Default for ExprProp {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub enum Expr {
     CID(QunId, ColId),
-    Column { prefix: Option<String>, colname: String, qunid: QunId, colid: ColId },
+    Column {
+        prefix: Option<String>,
+        colname: String,
+        qunid: QunId,
+        colid: ColId,
+    },
     Star,
     Literal(Datum),
     NegatedExpr,
@@ -186,7 +191,20 @@ impl Expr {
             (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
             (RelExpr(c1), RelExpr(c2)) => *c1 == *c2,
             (LogExpr(c1), LogExpr(c2)) => *c1 == *c2,
-            (Column { prefix: p1, colname: n1, qunid: _, colid: _ }, Column { prefix: p2, colname: n2, qunid: _, colid: _ }) => p1 == p2 && n1 == n2,
+            (
+                Column {
+                    prefix: p1,
+                    colname: n1,
+                    qunid: _,
+                    colid: _,
+                },
+                Column {
+                    prefix: p2,
+                    colname: n2,
+                    qunid: _,
+                    colid: _,
+                },
+            ) => p1 == p2 && n1 == n2,
             (Literal(c1), Literal(c2)) => *c1 == *c2,
             (NegatedExpr, NegatedExpr) => true,
             (BetweenExpr, BetweenExpr) => true,

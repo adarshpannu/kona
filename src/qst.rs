@@ -138,7 +138,11 @@ impl QueryBlock {
             None,
         );
 
-        let group_by = group_by.iter().enumerate().map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None)).collect::<Vec<_>>();
+        let group_by = group_by
+            .iter()
+            .enumerate()
+            .map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
+            .collect::<Vec<_>>();
 
         let outer_qun = Quantifier::new_qblock(agg_qun_id, inner_qb_key, None);
         outer_qb.name = None;
@@ -256,7 +260,11 @@ impl QueryBlock {
         if let Some(retval) = retval {
             Ok((retval.0, retval.1, colid))
         } else {
-            let colstr = if let Some(prefix) = prefix { format!("{}.{}", prefix, colname) } else { colname.to_string() };
+            let colstr = if let Some(prefix) = prefix {
+                format!("{}.{}", prefix, colname)
+            } else {
+                colname.to_string()
+            };
             Err(format!("Column {} not found in any table.", colstr))
         }
     }
@@ -303,7 +311,12 @@ impl QueryBlock {
                     return Err("Binary operands must be numeric types".to_string());
                 }
             }
-            Column { prefix, colname, ref mut qunid, ref mut colid } => {
+            Column {
+                prefix,
+                colname,
+                ref mut qunid,
+                ref mut colid,
+            } => {
                 let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
                 *colid = quncol.1;

@@ -36,7 +36,16 @@ impl Stage {
         debug!("New stage with root_lop_key: {:?}", root_lop_key);
         let pop_graph = Graph::default();
 
-        Stage { stage_id, parent_stage_id, parent_pop_key: None, root_lop_key, root_pop_key: None, nchildren: 0, npartitions: 0, pop_graph }
+        Stage {
+            stage_id,
+            parent_stage_id,
+            parent_pop_key: None,
+            root_lop_key,
+            root_pop_key: None,
+            nchildren: 0,
+            npartitions: 0,
+            pop_graph,
+        }
     }
 
     pub fn schedule(&self, env: &Env, flow: &Flow) {

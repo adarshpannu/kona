@@ -65,7 +65,11 @@ impl POP {
         }
 
         // Get schema to write+read repartitioning files to disk (arrow2)
-        let schema = if matches!(lop, LOP::Repartition { .. }) { Some(Rc::new(lop_key.get_schema(qgm, lop_graph))) } else { None };
+        let schema = if matches!(lop, LOP::Repartition { .. }) {
+            Some(Rc::new(lop_key.get_schema(qgm, lop_graph)))
+        } else {
+            None
+        };
 
         let pop_children_clone = pop_children.clone();
 
@@ -343,7 +347,10 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let pop_inner = pop_hashmatch::HashMatch { keycols, subtype: HashMatchSubtype::Join };
+            let pop_inner = pop_hashmatch::HashMatch {
+                keycols,
+                subtype: HashMatchSubtype::Join,
+            };
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
@@ -362,7 +369,6 @@ impl POP {
 
         let (lop, lopprops, _) = lop_graph.get3(lop_key);
         if let LOP::Aggregation { key_len } = lop {
-
             let qunid = lopprops.quns.elements()[0];
 
             // Populate projection-map with key columns
@@ -380,7 +386,10 @@ impl POP {
             let aggs = Self::build_agg_list(&proj_map);
             debug!("aggs = {:?}", &aggs);
 
-            let pop_inner = pop_hashmatch::HashMatch { keycols: vec![], subtype: HashMatchSubtype::Aggregation(aggs) };
+            let pop_inner = pop_hashmatch::HashMatch {
+                keycols: vec![],
+                subtype: HashMatchSubtype::Aggregation(aggs),
+            };
 
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
@@ -402,7 +411,11 @@ impl POP {
     }
 
     pub fn build_agg_list(projmap: &ProjectionMap) -> Vec<(Agg, ColId)> {
-        let mut aggs = projmap.hashmap.iter().filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None }).collect::<Vec<_>>();
+        let mut aggs = projmap
+            .hashmap
+            .iter()
+            .filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None })
+            .collect::<Vec<_>>();
         aggs.sort_by_key(|(_, colid)| *colid);
         aggs
     }

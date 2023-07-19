@@ -50,7 +50,12 @@ struct HashMatchSplit {
 
 impl HashMatchSplit {
     fn new(id: SplitId) -> Self {
-        HashMatchSplit { id, mut_arrays: vec![], arrays: vec![], hash_map: HashMap::new() }
+        HashMatchSplit {
+            id,
+            mut_arrays: vec![],
+            arrays: vec![],
+            hash_map: HashMap::new(),
+        }
     }
 }
 
@@ -124,7 +129,13 @@ impl HashMatchContext {
     pub fn try_new(pop_key: POPKey, _: &HashMatch, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let state = RandomState::with_seeds(97, 31, 45, 21);
 
-        Ok(Box::new(HashMatchContext { pop_key, children, partition_id, state, splits: vec![] }))
+        Ok(Box::new(HashMatchContext {
+            pop_key,
+            children,
+            partition_id,
+            state,
+            splits: vec![],
+        }))
     }
 
     #[allow(unused_variables)]
@@ -135,7 +146,7 @@ impl HashMatchContext {
     fn next_join(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch) -> Result<Option<ChunkBox>, String> {
         // Build hash-tables
         if self.splits.is_empty() {
-            self.process_join_build_input(flow, stage)?;
+            self.process_join_build_input(flow, stage, hash_match)?;
         }
 
         // Probe
@@ -150,27 +161,21 @@ impl HashMatchContext {
         Ok(None)
     }
 
-    fn process_join_build_input(&mut self, flow: &Flow, stage: &Stage) -> Result<(), String> {
-        let pop = stage.pop_graph.get_value(self.pop_key);
+    fn process_join_build_input(&mut self, flow: &Flow, stage: &Stage, hash_match: &HashMatch) -> Result<(), String> {
         let child = &mut self.children[1];
 
         // Initialize splits
-        for split_id in 0..NSPLITS {
-            let split = HashMatchSplit::new(split_id);
-            self.splits.push(split)
-        }
+        self.splits = (0..NSPLITS).map(|split_id| HashMatchSplit::new(split_id)).collect();
 
-        if let POP::HashMatch(hm) = pop {
-            // Collect all build chunks
-            while let Some(chunk) = child.next(flow, stage)? {
-                // Compute hash + split-# for each row in the chunk
-                let keycols = &hm.keycols[1];
-                let keys = eval_cols(keycols, &chunk);
-                let (hash_array, split_ids) = hash_chunk(&keys, &self.state);
+        // Collect all build chunks
+        while let Some(chunk) = child.next(flow, stage)? {
+            // Compute hash + split-# for each row in the chunk
+            let keycols = &hash_match.keycols[1];
+            let keys = eval_cols(keycols, &chunk);
+            let (hash_array, split_ids) = hash_chunk(&keys, &self.state);
 
-                for split in self.splits.iter_mut() {
-                    Self::insert(split, &chunk, &hash_array, &split_ids);
-                }
+            for split in self.splits.iter_mut() {
+                Self::insert(split, &chunk, &hash_array, &split_ids);
             }
         }
 
@@ -349,8 +354,16 @@ impl HashMatchContext {
         let mut build_arrays = build_chunk.into_arrays();
         let mut probe_arrays = probe_chunk.into_arrays();
 
-        let build_keys = build_arrays.iter().enumerate().filter_map(|(ix, array)| if build_cols.contains(&ix) { Some(&**array) } else { None }).collect::<Vec<_>>();
-        let probe_keys = probe_arrays.iter().enumerate().filter_map(|(ix, array)| if probe_cols.contains(&ix) { Some(&**array) } else { None }).collect::<Vec<_>>();
+        let build_keys = build_arrays
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, array)| if build_cols.contains(&ix) { Some(&**array) } else { None })
+            .collect::<Vec<_>>();
+        let probe_keys = probe_arrays
+            .iter()
+            .enumerate()
+            .filter_map(|(ix, array)| if probe_cols.contains(&ix) { Some(&**array) } else { None })
+            .collect::<Vec<_>>();
 
         // Compare key columns
         let mut filter = BooleanArray::from(vec![Some(true); chunk_height]);
@@ -366,7 +379,11 @@ impl HashMatchContext {
     }
 
     fn take_chunk(chunk: &ChunkBox, rids: PrimitiveArray<u64>) -> Result<Vec<Box<dyn Array>>, String> {
-        chunk.arrays().iter().map(|array| Ok(take::take(&**array, &rids).map_err(stringify)?)).collect::<Result<Vec<_>, String>>()
+        chunk
+            .arrays()
+            .iter()
+            .map(|array| Ok(take::take(&**array, &rids).map_err(stringify)?))
+            .collect::<Result<Vec<_>, String>>()
     }
 }
 

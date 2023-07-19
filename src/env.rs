@@ -23,7 +23,14 @@ impl Env {
         let metadata = Metadata::default();
         let options = EnvSettings::default();
 
-        Env { id, scheduler, metadata, input_pathname, output_dir, settings: options }
+        Env {
+            id,
+            scheduler,
+            metadata,
+            input_pathname,
+            output_dir,
+            settings: options,
+        }
     }
 
     pub fn set_option(&mut self, name: String, value: Datum) -> Result<(), String> {
