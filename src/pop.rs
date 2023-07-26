@@ -14,6 +14,7 @@ use crate::{
     includes::*,
     pcode::PCode,
     pop_csv::CSV,
+    pop_hashagg::HashAgg,
     pop_hashmatch::HashMatch,
     pop_repartition::{RepartitionRead, RepartitionWrite},
     stage::Stage,
@@ -25,8 +26,8 @@ pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Agg {
-    agg_type: AggType,
-    input_colid: ColId,
+    pub agg_type: AggType,
+    pub input_colid: ColId,
 }
 
 /***************************************************************************************************/
@@ -64,7 +65,10 @@ impl ProjectionMap {
     pub fn set_agg(&mut self, agg_type: AggType, colid: ColId) -> ColId {
         let prj = Projection::AggCol(Agg { agg_type, input_colid: colid });
         let next_colid = self.hashmap.len();
-        let retval = self.hashmap.entry(prj).or_insert(next_colid);
+        let retval = self.hashmap.entry(prj).or_insert_with_key(|k| {
+            debug!("ProjectionMap:set_agg(): Assigned {:?} -> {}", k, next_colid);
+            next_colid
+        });
         *retval
     }
 }
@@ -80,12 +84,7 @@ pub struct POPProps {
 
 impl POPProps {
     pub fn new(predicates: Option<Vec<PCode>>, cols: Option<Vec<ColId>>, virtcols: Option<Vec<PCode>>, npartitions: usize) -> POPProps {
-        POPProps {
-            predicates,
-            cols,
-            virtcols,
-            npartitions,
-        }
+        POPProps { predicates, cols, virtcols, npartitions }
     }
 }
 
@@ -94,6 +93,7 @@ impl POPProps {
 pub enum POP {
     CSV(CSV),
     HashMatch(HashMatch),
+    HashAgg(HashAgg),
     RepartitionWrite(RepartitionWrite),
     RepartitionRead(RepartitionRead),
 }

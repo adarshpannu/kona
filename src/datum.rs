@@ -14,7 +14,7 @@ pub enum Datum {
 }
 
 impl Datum {
-    pub fn as_isize(&self, err_str: &str) -> Result<isize, String> {
+    pub fn try_as_isize(&self, err_str: &str) -> Result<isize, String> {
         if let Datum::INT(val) = self {
             Ok(*val)
         } else {
@@ -22,7 +22,7 @@ impl Datum {
         }
     }
 
-    pub fn as_str(&self, err_str: &str) -> Result<Rc<String>, String> {
+    pub fn try_as_str(&self, err_str: &str) -> Result<Rc<String>, String> {
         if let Datum::STR(val) = self {
             Ok(Rc::clone(val))
         } else {
@@ -30,13 +30,20 @@ impl Datum {
         }
     }
 
-    pub fn as_usize(&self, err_str: &str) -> Result<usize, String> {
+    pub fn as_isize(&self) -> isize {
         if let Datum::INT(val) = self {
-            if *val >= 0 {
-                return Ok(*val as usize);
-            }
+            *val
+        } else {
+            panic!("Datum::as_isize(): Datum doesn't hold an isize.")
         }
-        Err(err_str.to_string())
+    }
+
+    pub fn as_str(&self) -> Rc<String> {
+        if let Datum::STR(val) = self {
+            val.clone()
+        } else {
+            panic!("Datum::as_str(): Datum doesn't hold a string.")
+        }
     }
 }
 

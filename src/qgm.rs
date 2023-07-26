@@ -36,6 +36,11 @@ impl QGMMetadata {
     pub fn get_field(&self, quncol: QunCol) -> Option<&Field> {
         self.tabledescmap.get(&quncol.0).map(|tabledesc| &tabledesc.fields()[quncol.1])
     }
+
+    pub fn get_fieldtype(&self, quncol: QunCol) -> Option<DataType> {
+        let fopt = self.tabledescmap.get(&quncol.0).map(|tabledesc| &tabledesc.fields()[quncol.1]);
+        fopt.map(|f| f.data_type().clone())
+    }
 }
 
 impl fmt::Debug for QGMMetadata {
@@ -55,13 +60,7 @@ pub struct QGM {
 
 impl QGM {
     pub fn new(main_qblock: QueryBlockKey, cte_list: Vec<QueryBlockKey>, qblock_graph: QueryBlockGraph, expr_graph: ExprGraph) -> QGM {
-        QGM {
-            main_qblock_key: main_qblock,
-            cte_list,
-            qblock_graph,
-            expr_graph,
-            metadata: QGMMetadata::default(),
-        }
+        QGM { main_qblock_key: main_qblock, cte_list, qblock_graph, expr_graph, metadata: QGMMetadata::default() }
     }
 }
 
@@ -131,22 +130,13 @@ pub struct Quantifier {
 
 impl fmt::Debug for Quantifier {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Quantifier")
-            .field("id", &self.id)
-            .field("name", &self.get_basename())
-            .field("alias", &self.get_alias())
-            .finish()
+        fmt.debug_struct("Quantifier").field("id", &self.id).field("name", &self.get_basename()).field("alias", &self.get_alias()).finish()
     }
 }
 
 impl Quantifier {
     pub fn new(id: QunId, source: QuantifierSource, alias: Option<String>) -> Self {
-        Quantifier {
-            id,
-            source,
-            alias,
-            tabledesc: None,
-        }
+        Quantifier { id, source, alias, tabledesc: None }
     }
 
     pub fn new_base(id: QunId, name: String, alias: Option<String>) -> Self {
@@ -233,19 +223,7 @@ impl QueryBlock {
         id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Option<Vec<ExprKey>>,
         group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>, order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty, top_n: Option<usize>,
     ) -> Self {
-        QueryBlock {
-            id,
-            name,
-            qbtype,
-            select_list,
-            quns,
-            pred_list,
-            group_by,
-            having_clause,
-            order_by,
-            distinct,
-            top_n,
-        }
+        QueryBlock { id, name, qbtype, select_list, quns, pred_list, group_by, having_clause, order_by, distinct, top_n }
     }
 
     pub fn new0(id: QBId, qbtype: QueryBlockType) -> Self {

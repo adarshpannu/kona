@@ -247,6 +247,11 @@ impl ExprKey {
         Field::new(name, props.data_type().clone(), false)
     }
 
+    pub fn get_data_type(self, expr_graph: &ExprGraph) -> &DataType {
+        let props = expr_graph.get_properties(self);
+        &props.data_type
+    }
+
     pub fn get_boolean_factors(self, expr_graph: &ExprGraph, boolean_factors: &mut Vec<ExprKey>) {
         let (expr, _, children) = expr_graph.get3(self);
         if let LogExpr(crate::expr::LogOp::And) = expr {

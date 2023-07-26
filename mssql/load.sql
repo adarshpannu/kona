@@ -55,3 +55,9 @@ AND EMP.age > 35
 AND DEPT.NAME = 'Engineering'
 ;
 
+select emp_dept_id + 55, emp_dept_id * 2
+from emp
+where 
+    age > 50 
+and emp_dept_id < 99
+;

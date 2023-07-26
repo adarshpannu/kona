@@ -193,6 +193,10 @@ impl Stage {
                 let extrastr = String::new();
                 (String::from("HashMatch"), extrastr)
             }
+            POP::HashAgg { .. } => {
+                let extrastr = String::new();
+                (String::from("HashAgg"), extrastr)
+            }
             POP::RepartitionWrite(rpw) => {
                 let extrastr = format!("c = {}", rpw.cpartitions());
                 (String::from("RepartitionWrite"), extrastr)

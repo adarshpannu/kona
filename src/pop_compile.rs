@@ -13,8 +13,7 @@ use crate::{
     pcode::PCode,
     pop::{Agg, POPProps, Projection, ProjectionMap, POP},
     pop_csv::CSV,
-    pop_hashmatch::{self, HashMatchSubtype},
-    pop_repartition,
+    pop_hashagg, pop_hashmatch, pop_repartition,
     qgm::QGM,
     stage::{StageGraph, StageLink},
 };
@@ -65,11 +64,7 @@ impl POP {
         }
 
         // Get schema to write+read repartitioning files to disk (arrow2)
-        let schema = if matches!(lop, LOP::Repartition { .. }) {
-            Some(Rc::new(lop_key.get_schema(qgm, lop_graph)))
-        } else {
-            None
-        };
+        let schema = if matches!(lop, LOP::Repartition { .. }) { Some(Rc::new(lop_key.get_schema(qgm, lop_graph))) } else { None };
 
         let pop_children_clone = pop_children.clone();
 
@@ -87,7 +82,7 @@ impl POP {
 
         // Add RepartionRead
         if let LOP::Repartition { cpartitions } = lop {
-            let read_pop_key: POPKey = Self::compile_repartition_read(lop_graph, lop_key, stage_graph, stage_link.unwrap(), schema.unwrap(), *cpartitions)?;
+            let read_pop_key: POPKey = Self::compile_repartition_read(qgm, lop_graph, lop_key, stage_graph, stage_link.unwrap(), schema.unwrap(), *cpartitions)?;
             debug!("[{:?}] compiled to {:?} in stage {}", lop_key, read_pop_key, stage_id);
 
             stage_graph.set_root_pop_key(effective_stage_id, pop_key);
@@ -264,7 +259,7 @@ impl POP {
     }
 
     pub fn compile_repartition_read(
-        lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, schema: Rc<Schema>, npartitions: usize,
+        _qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, schema: Rc<Schema>, npartitions: usize,
     ) -> Result<POPKey, String> {
         debug!("[{:?}] begin compile_repartition_read", lop_key);
 
@@ -347,10 +342,9 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let pop_inner = pop_hashmatch::HashMatch {
-                keycols,
-                subtype: HashMatchSubtype::Join,
-            };
+            let children_data_types = children.unwrap().iter().map(|child_lop_key| child_lop_key.get_types(qgm, lop_graph)).collect::<Vec<_>>();
+
+            let pop_inner = pop_hashmatch::HashMatch { keycols, children_data_types };
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
 
             let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
@@ -367,32 +361,35 @@ impl POP {
     ) -> Result<POPKey, String> {
         debug!("[{:?}] begin compile_aggregation", lop_key);
 
-        let (lop, lopprops, _) = lop_graph.get3(lop_key);
+        let (lop, lopprops, children) = lop_graph.get3(lop_key);
         if let LOP::Aggregation { key_len } = lop {
             let qunid = lopprops.quns.elements()[0];
 
-            // Populate projection-map with key columns
-            let mut proj_map = Self::compute_initial_agg_projection_map(qunid, *key_len);
+            // Populate internal projection-map with key columns.
+            let mut internal_proj_map = Self::compute_initial_agg_projection_map(qunid, *key_len);
 
             // Compile real + virt columns + predicates. As aggregate expressions (e.g. SUM(col) are visited, they are added to the projection map
             // at column offsets beyond the # of key columns.
-            let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut proj_map);
+            let (cols, virtcols) = Self::compile_projection(qgm, lop_key, lopprops, &mut internal_proj_map);
             assert!(cols.is_none());
-            let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut proj_map);
+            let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut internal_proj_map);
             debug!("[{:?}] predicates {:?}", lop_key, predicates);
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let aggs = Self::build_agg_list(&proj_map);
+            let aggs = Self::build_agg_list(&internal_proj_map);
             debug!("aggs = {:?}", &aggs);
 
-            let pop_inner = pop_hashmatch::HashMatch {
-                keycols: vec![],
-                subtype: HashMatchSubtype::Aggregation(aggs),
-            };
+            // The first `key_len` columns are keycols
+            let keycols: Vec<Vec<ColId>> = vec![(0..*key_len).collect()];
+
+            let child_lop_key = children.unwrap()[0];
+            let child_data_types = child_lop_key.get_types(qgm, lop_graph);
+
+            let pop_inner = pop_hashagg::HashAgg { keycols, child_data_types, aggs };
 
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
-            let pop_key = pop_graph.add_node_with_props(POP::HashMatch(pop_inner), props, Some(pop_children));
+            let pop_key = pop_graph.add_node_with_props(POP::HashAgg(pop_inner), props, Some(pop_children));
 
             debug!("[{:?}] end compile_aggregation", lop_key);
 
@@ -411,11 +408,7 @@ impl POP {
     }
 
     pub fn build_agg_list(projmap: &ProjectionMap) -> Vec<(Agg, ColId)> {
-        let mut aggs = projmap
-            .hashmap
-            .iter()
-            .filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None })
-            .collect::<Vec<_>>();
+        let mut aggs = projmap.hashmap.iter().filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None }).collect::<Vec<_>>();
         aggs.sort_by_key(|(_, colid)| *colid);
         aggs
     }

@@ -41,6 +41,27 @@ impl LOPKey {
         Schema::from(fields)
     }
 
+    pub fn get_types(&self, qgm: &mut QGM, lop_graph: &LOPGraph) -> Vec<DataType> {
+        let lopprops = &lop_graph.get(*self).properties;
+        let expr_graph = &qgm.expr_graph;
+        let mut types = vec![];
+
+        for quncol in lopprops.cols.elements() {
+            let typ = qgm.metadata.get_fieldtype(quncol);
+            if let Some(typ) = typ {
+                types.push(typ.clone())
+            }
+        }
+
+        if let Some(virtcols) = &lopprops.virtcols {
+            for exprkey in virtcols.iter() {
+                let typ = exprkey.get_data_type(expr_graph);
+                types.push(typ.clone())
+            }
+        }
+        types
+    }
+
     pub fn printable_key(&self) -> String {
         format!("{:?}", *self).replace('(', "").replace(')', "")
     }
@@ -77,20 +98,14 @@ pub type VirtCol = ExprKey;
 pub struct LOPProps {
     pub quns: Bitset<QunId>,
     pub cols: Bitset<QunCol>,
+    pub virtcols: Option<Vec<VirtCol>>,
     pub preds: Bitset<ExprKey>,
     pub partdesc: PartDesc,
-    pub virtcols: Option<Vec<VirtCol>>,
 }
 
 impl LOPProps {
-    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, preds: Bitset<ExprKey>, partdesc: PartDesc, virtcols: Option<Vec<VirtCol>>) -> Self {
-        LOPProps {
-            quns,
-            cols,
-            preds,
-            partdesc,
-            virtcols,
-        }
+    fn new(quns: Bitset<QunId>, cols: Bitset<QunCol>, virtcols: Option<Vec<VirtCol>>, preds: Bitset<ExprKey>, partdesc: PartDesc) -> Self {
+        LOPProps { quns, cols, preds, partdesc, virtcols }
     }
 }
 
@@ -158,11 +173,7 @@ pub struct ExprEqClass {
 
 impl Default for ExprEqClass {
     fn default() -> Self {
-        ExprEqClass {
-            next_id: 0,
-            expr_id_map: BiMap::new(),
-            disjoint_sets: PartitionVec::with_capacity(64),
-        }
+        ExprEqClass { next_id: 0, expr_id_map: BiMap::new(), disjoint_sets: PartitionVec::with_capacity(64) }
     }
 }
 
@@ -379,7 +390,7 @@ impl QGM {
                         let mut partdesc = lhs_props.partdesc.clone();
                         partdesc.npartitions = cpartitions;
 
-                        let props = LOPProps::new(quns, cols, preds, partdesc, None);
+                        let props = LOPProps::new(quns, cols, None, preds, partdesc);
 
                         let join_lop_key =
                             lop_graph.add_node_with_props(LOP::HashJoin { lhs_join_keys, rhs_join_keys }, props, Some(vec![new_lhs_plan_key, new_rhs_plan_key]));
@@ -436,11 +447,7 @@ impl QGM {
 
     fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
         let mut select_list_quncol = aps_context.all_quncols.clone_metadata();
-        qblock
-            .select_list
-            .iter()
-            .flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph))
-            .for_each(|quncol| select_list_quncol.set(quncol));
+        qblock.select_list.iter().flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph)).for_each(|quncol| select_list_quncol.set(quncol));
         select_list_quncol
     }
 
@@ -525,12 +532,7 @@ impl QGM {
 
             // Set input cols: find all column references for this qun
             let mut input_quncols = all_quncols.clone_metadata();
-            aps_context
-                .all_quncols
-                .elements()
-                .iter()
-                .filter(|&quncol| quncol.0 == qun.id)
-                .for_each(|&quncol| input_quncols.set(quncol));
+            aps_context.all_quncols.elements().iter().filter(|&quncol| quncol.0 == qun.id).for_each(|&quncol| input_quncols.set(quncol));
 
             // Set output cols + preds
             let mut unbound_quncols = select_list_quncol.clone();
@@ -567,16 +569,13 @@ impl QGM {
                     debug!("expected: {:?}", e.printable(&self.expr_graph, false))
                 }
 
-                let expected_partitioning = PartDesc {
-                    npartitions: env.settings.parallel_degree.unwrap_or(1),
-                    part_type: PartType::HASHEXPR(expected_partitioning_expr),
-                };
+                let expected_partitioning = PartDesc { npartitions: env.settings.parallel_degree.unwrap_or(1), part_type: PartType::HASHEXPR(expected_partitioning_expr) };
 
                 let child_lop_key = self.build_qblock_logical_plan(env, child_qblock_key, aps_context, lop_graph, Some(&expected_partitioning))?;
 
                 let children = Some(vec![child_lop_key]);
 
-                let props = LOPProps::new(quns, output_quncols, preds, expected_partitioning, None);
+                let props = LOPProps::new(quns, output_quncols, None, preds, expected_partitioning);
                 lop_graph.add_node_with_props(LOP::Aggregation { key_len }, props, children)
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
@@ -586,7 +585,7 @@ impl QGM {
                 };
                 let partdesc = PartDesc::new(npartitions, PartType::RAW);
 
-                let props = LOPProps::new(quns, output_quncols, preds, partdesc, None);
+                let props = LOPProps::new(quns, output_quncols, None, preds, partdesc);
 
                 lop_graph.add_node_with_props(LOP::TableScan { input_projection: input_quncols }, props, None)
             };

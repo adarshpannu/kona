@@ -24,9 +24,9 @@ impl QGM {
             let props = LOPProps {
                 quns: props.quns.clone(),
                 cols: props.cols.clone(),
+                virtcols: None,
                 preds: props.preds.clone_metadata(),
                 partdesc,
-                virtcols: None,
             };
             lop_graph.add_node_with_props(LOP::Repartition { cpartitions }, props, Some(vec![lop_key]))
         }

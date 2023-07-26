@@ -184,7 +184,7 @@ impl Metadata {
         let tp = hm
             .get("TYPE")
             .ok_or(f!("Table {name} does not specify a TYPE."))?
-            .as_str(&f!("Table {name} has invalid TYPE."))?;
+            .try_as_str(&f!("Table {name} has invalid TYPE."))?;
 
         let tp = match &tp[..] {
             "CSV" => TableType::CSV,
@@ -281,7 +281,7 @@ impl Metadata {
                 let path = hm
                     .get("PATH")
                     .ok_or("Table {name} does not specify a PATH")?
-                    .as_str(&f!("PATH does not hold a string for table {name}"))?;
+                    .try_as_str(&f!("PATH does not hold a string for table {name}"))?;
 
                 let header = Self::get_header_parm(&hm)?;
                 let separator = Self::get_separator_parm(&hm)?;

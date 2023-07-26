@@ -12,7 +12,7 @@ use crate::{
     pop_csv::CSVContext,
     pop_hashmatch::HashMatchContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
-    stage::Stage,
+    stage::Stage, pop_hashagg::HashAggContext,
 };
 
 /***************************************************************************************************/
@@ -89,6 +89,7 @@ impl Task {
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::try_new(popkey, rpw, child_contexts.unwrap(), self.partition_id)?,
             POP::RepartitionRead(rpr) => RepartitionReadContext::try_new(flow.id, popkey, rpr, self.partition_id)?,
             POP::HashMatch(hj) => HashMatchContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,
+            POP::HashAgg(ha) => HashAggContext::try_new(popkey, ha, child_contexts.unwrap(), self.partition_id)?,
         };
         Ok(ctxt)
     }
