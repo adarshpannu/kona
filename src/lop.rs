@@ -143,8 +143,20 @@ impl APSContext {
             all_quncols.set(quncol);
             all_quns.set(quncol.0);
         }
+        let mut panik = false;
         for expr_key in qgm.iter_toplevel_exprs() {
             all_preds.set(expr_key);
+
+            let props = qgm.expr_graph.get_properties(expr_key);
+            if matches!(props.data_type(), DataType::Null) {
+                let s = expr_key.printable(&qgm.expr_graph, false);
+                println!("APSContext::new(): Expression has NULL datatype: {:?}", s);
+                panik = true;
+            }
+        }
+
+        if panik {
+            panic!("APSContext::new(): Unresolved datatypes in expression graph.");
         }
 
         APSContext { all_quncols, all_quns, all_preds }

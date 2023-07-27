@@ -124,6 +124,17 @@ impl QueryBlock {
             None
         };
 
+        let group_by = group_by
+            .iter()
+            .enumerate()
+            .map(|(cid, ..)| {
+                let gbcol_expr_key = inner_select_list[cid].expr_key;
+                let gbcol_props = expr_graph.get_properties(gbcol_expr_key);
+                let gbcol_props = ExprProp { data_type: gbcol_props.data_type().clone() };
+                expr_graph.add_node_with_props(Expr::CID(agg_qun_id, cid), gbcol_props, None)
+            })
+            .collect::<Vec<_>>();
+
         let inner_qb = QueryBlock::new(
             expr_graph.next_id(),
             replace(&mut outer_qb.name, None),
@@ -137,12 +148,6 @@ impl QueryBlock {
             outer_qb.distinct,
             None,
         );
-
-        let group_by = group_by
-            .iter()
-            .enumerate()
-            .map(|(cid, ..)| expr_graph.add_node(Expr::CID(agg_qun_id, cid), None))
-            .collect::<Vec<_>>();
 
         let outer_qun = Quantifier::new_qblock(agg_qun_id, inner_qb_key, None);
         outer_qb.name = None;
@@ -169,15 +174,19 @@ impl QueryBlock {
         None
     }
 
-    fn append(expr_graph: &ExprGraph, select_list: &mut Vec<NamedExpr>, expr_key: ExprKey) -> usize {
+    fn append(expr_graph: &ExprGraph, select_list: &mut Vec<NamedExpr>, expr_key: ExprKey) -> (usize, DataType) {
         // Does this expression already exist in the select_list?
-        if let Some(ix) = Self::find(expr_graph, select_list, select_list.len(), expr_key) {
+        let cid = if let Some(ix) = Self::find(expr_graph, select_list, select_list.len(), expr_key) {
             // ... yes, return its index
-            return ix;
-        }
-        // ... append it to list
-        select_list.push(NamedExpr { alias: None, expr_key });
-        select_list.len() - 1
+            ix
+        } else {
+            // ... append it to list
+            select_list.push(NamedExpr { alias: None, expr_key });
+            select_list.len() - 1
+        };
+        let cid_props = expr_graph.get_properties(select_list[cid].expr_key);
+        let data_type = cid_props.data_type().clone();
+        (cid, data_type)
     }
 
     // transform_groupby_expr: Traverse expression `expr_key` (which is part of aggregate qb select list) such that any subexpressions are replaced with
@@ -191,15 +200,15 @@ impl QueryBlock {
         if let AggFunction(aggtype, _) = node.value {
             // Aggregate-function: replace argument with CID reference to inner query-block
             let child_key = node.children.as_ref().unwrap()[0];
-            let cid = Self::append(expr_graph, select_list, child_key);
+            let (cid, data_type) = Self::append(expr_graph, select_list, child_key);
             let new_child_key = if aggtype == AggType::AVG {
                 // AVG -> SUM / COUNT
-                let cid = expr_graph.add_node(CID(qunid, cid), None);
-                let sum = expr_graph.add_node(AggFunction(AggType::SUM, false), Some(vec![cid]));
-                let cnt = expr_graph.add_node(AggFunction(AggType::COUNT, false), Some(vec![cid]));
-                expr_graph.add_node(BinaryExpr(ArithOp::Div), Some(vec![sum, cnt]))
+                let cid = expr_graph.add_node_with_props(CID(qunid, cid), ExprProp::new(data_type), None);
+                let sum = expr_graph.add_node_with_props(AggFunction(AggType::SUM, false), ExprProp::new(DataType::Int64), Some(vec![cid]));
+                let cnt = expr_graph.add_node_with_props(AggFunction(AggType::COUNT, false), ExprProp::new(DataType::Int64), Some(vec![cid]));
+                expr_graph.add_node_with_props(BinaryExpr(ArithOp::Div), ExprProp::new(DataType::Float64), Some(vec![sum, cnt]))
             } else {
-                expr_graph.add_node(CID(qunid, cid), None)
+                expr_graph.add_node_with_props(CID(qunid, cid), ExprProp { data_type }, None)
             };
             let node = expr_graph.get_mut(*expr_key);
             node.children = Some(vec![new_child_key]);
@@ -208,7 +217,9 @@ impl QueryBlock {
             }
         } else if let Some(cid) = Self::find(expr_graph, select_list, group_by_expr_count, *expr_key) {
             // Expression in GROUP-BY list, all good
-            let new_child_key = expr_graph.add_node(CID(qunid, cid), None);
+            let cid_props = expr_graph.get_properties(select_list[cid].expr_key);
+            let data_type = cid_props.data_type().clone();
+            let new_child_key = expr_graph.add_node_with_props(CID(qunid, cid), ExprProp { data_type }, None);
             *expr_key = new_child_key;
         } else if let Column { colname, .. } = &node.value {
             // User error: Unaggregated expression in select-list not in group-by clause
@@ -260,11 +271,7 @@ impl QueryBlock {
         if let Some(retval) = retval {
             Ok((retval.0, retval.1, colid))
         } else {
-            let colstr = if let Some(prefix) = prefix {
-                format!("{}.{}", prefix, colname)
-            } else {
-                colname.to_string()
-            };
+            let colstr = if let Some(prefix) = prefix { format!("{}.{}", prefix, colname) } else { colname.to_string() };
             Err(format!("Column {} not found in any table.", colstr))
         }
     }
@@ -303,20 +310,18 @@ impl QueryBlock {
                     DataType::Boolean
                 }
             }
-            BinaryExpr(..) => {
+            BinaryExpr(arithop) => {
                 // Check argument types
                 if is_numeric(&children_datatypes[0]) && is_numeric(&children_datatypes[1]) {
-                    children_datatypes[0].clone()
+                    match arithop {
+                        ArithOp::Add | ArithOp::Sub | ArithOp::Mul => children_datatypes[0].clone(),
+                        ArithOp::Div => DataType::Float64,
+                    }
                 } else {
                     return Err("Binary operands must be numeric types".to_string());
                 }
             }
-            Column {
-                prefix,
-                colname,
-                ref mut qunid,
-                ref mut colid,
-            } => {
+            Column { prefix, colname, ref mut qunid, ref mut colid } => {
                 let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
                 *qunid = quncol.0;
                 *colid = quncol.1;

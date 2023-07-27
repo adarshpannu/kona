@@ -98,7 +98,13 @@ pub enum AggType {
 #[derive(Debug, Clone, Getters, Setters)]
 pub struct ExprProp {
     #[getset(get = "pub", set = "pub")]
-    data_type: DataType,
+    pub data_type: DataType,
+}
+
+impl ExprProp {
+    pub fn new(data_type: DataType) -> Self {
+        ExprProp { data_type }
+    }
 }
 
 impl std::default::Default for ExprProp {

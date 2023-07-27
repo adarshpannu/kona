@@ -377,7 +377,7 @@ impl POP {
 
             let props = POPProps::new(predicates, cols, virtcols, lopprops.partdesc.npartitions);
 
-            let aggs = Self::build_agg_list(&internal_proj_map);
+            let aggs = Self::build_ordered_agg_list(&internal_proj_map);
             debug!("aggs = {:?}", &aggs);
 
             // The first `key_len` columns are keycols
@@ -407,8 +407,9 @@ impl POP {
         proj_map
     }
 
-    pub fn build_agg_list(projmap: &ProjectionMap) -> Vec<(Agg, ColId)> {
-        let mut aggs = projmap.hashmap.iter().filter_map(|(k, v)| if let Projection::AggCol(agg) = *k { Some((agg, *v)) } else { None }).collect::<Vec<_>>();
+    // build_ordered_agg_list: Ordered by the operator-internal chunk
+    pub fn build_ordered_agg_list(projmap: &ProjectionMap) -> Vec<(Agg, ColId)> {
+        let mut aggs = projmap.hashmap.iter().filter_map(|(k, v)| if let Projection::AggCol(agg) = k { Some((agg.clone(), *v)) } else { None }).collect::<Vec<_>>();
         aggs.sort_by_key(|(_, colid)| *colid);
         aggs
     }

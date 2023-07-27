@@ -1,6 +1,4 @@
 
-use adarshdb;
-GO
 
 if exists (select * from sysobjects where name = 'EMP')
 begin
@@ -45,6 +43,26 @@ WITH
 )
 GO
 
+if exists (select * from sysobjects where name = 'DEPT')
+begin
+    drop table DEPT_DETAILS
+end
+
+create table DEPT_DETAILS (
+    details_dept_id int,
+    location varchar(30),
+);
+
+BULK INSERT DEPT_DETAILS
+FROM '/dept_details.csv'
+WITH
+(
+        FORMAT='CSV',
+        FIRSTROW=2
+)
+GO
+
+
 select * from DEPT;
 GO
 
@@ -61,3 +79,26 @@ where
     age > 50 
 and emp_dept_id < 99
 ;
+
+select sum(age + 10)*99 / count(age + 50), avg(age + 50), emp_dept_id + 55, max(distinct age), emp_dept_id * 2, max(emp_dept_id * 2), max(name)
+from emp E
+where 
+    age > 30 
+and emp_dept_id < 99
+group by emp_dept_id + 55, emp_dept_id * 2
+having sum(age) > 100 and emp_dept_id + 55 > 10
+;
+
+
+select sum(E.age + 50)*99 / count(E.age + 50), avg(E.age), D.dept_id, sum(E.age)
+from emp E, dept D, dept_details DD
+where 
+    E.age > 20 
+and D.dept_id < 99
+and E.emp_dept_id = D.dept_id
+and D.dept_id = DD.details_dept_id
+and D.name = 'Engineering'
+group by D.dept_id
+having sum(E.age) > 100 and D.dept_id < 10
+;
+

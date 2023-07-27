@@ -41,7 +41,7 @@ impl ExprKey {
         let inst = if let Some(colid) = colid {
             PInstruction::Column(colid)
         } else {
-            let (expr, _, children) = expr_graph.get3(*self);
+            let (expr, props, children) = expr_graph.get3(*self);
 
             // Post-order traversal (i.e. children before parents except when compiling aggs)
             if !matches!(expr, Expr::AggFunction(..)) {
@@ -67,7 +67,7 @@ impl ExprKey {
                 Expr::AggFunction(agg_type, _) => {
                     let child_expr = expr_graph.get_value(children.unwrap()[0]);
                     if let Expr::CID(_, colid) = child_expr {
-                        let array_id = proj_map.set_agg(*agg_type, *colid);
+                        let array_id = proj_map.set_agg(*agg_type, *colid, props.data_type().clone());
                         PInstruction::Column(array_id)
                     } else {
                         panic!("Malformed agg expression")
@@ -123,7 +123,8 @@ impl PCode {
                             let rhs = rhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
                             let array: Box<dyn Array> = match arithop {
                                 ArithOp::Add => Box::new(arithmetics::basic::add(lhs, rhs)),
-                                _ => todo!(),
+                                ArithOp::Div => Box::new(arithmetics::basic::div(lhs, rhs)),
+                                nyi => todo!("nyi: {:?}", nyi),
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }

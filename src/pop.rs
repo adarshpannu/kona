@@ -24,10 +24,11 @@ pub type POPGraph = Graph<POPKey, POP, POPProps>;
 
 /***************************************************************************************************/
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Agg {
     pub agg_type: AggType,
     pub input_colid: ColId,
+    pub output_data_type: DataType,
 }
 
 /***************************************************************************************************/
@@ -62,8 +63,8 @@ impl ProjectionMap {
         self
     }
 
-    pub fn set_agg(&mut self, agg_type: AggType, colid: ColId) -> ColId {
-        let prj = Projection::AggCol(Agg { agg_type, input_colid: colid });
+    pub fn set_agg(&mut self, agg_type: AggType, input_colid: ColId, output_data_type: DataType) -> ColId {
+        let prj = Projection::AggCol(Agg { agg_type, input_colid, output_data_type });
         let next_colid = self.hashmap.len();
         let retval = self.hashmap.entry(prj).or_insert_with_key(|k| {
             debug!("ProjectionMap:set_agg(): Assigned {:?} -> {}", k, next_colid);

@@ -8,8 +8,11 @@ use std::{
     rc::Rc,
 };
 
-use ahash::RandomState;
-use arrow2::{array::Utf8Array, datatypes::PhysicalType, types::PrimitiveType};
+use arrow2::{
+    array::{MutableArray, MutableBooleanArray, MutablePrimitiveArray, MutableUtf8Array, Utf8Array},
+    datatypes::PhysicalType,
+    types::PrimitiveType,
+};
 
 use crate::{
     datum::Datum,
@@ -18,7 +21,7 @@ use crate::{
     graph::POPKey,
     includes::*,
     pop::{chunk_to_string, Agg, POPContext, POP},
-    pop_hash::{SplitId, NSPLITS},
+    pop_hash::NSPLITS,
     stage::Stage,
 };
 
@@ -27,18 +30,22 @@ use crate::{
 pub struct HashAgg {
     pub keycols: Vec<Vec<ColId>>, // Maintain a list of key columns for each child. len() == 2 for joins
     pub child_data_types: Vec<DataType>,
-    pub aggs: Vec<(Agg, ColId)>, // ColId represents offset into
+    pub aggs: Vec<(Agg, ColId)>, // ColId represents the ordering of each aggregator and starts at keylen
 }
 
+impl HashAgg {
+    pub fn keylen(&self) -> usize {
+        self.keycols[0].len()
+    }
+}
 /***************************************************************************************************/
 struct HashAggSplit {
-    id: SplitId,
     hash_map: HashMap<Vec<Option<Datum>>, Vec<Option<Datum>>>, // Hash-of-keys -> Accumulators
 }
 
 impl HashAggSplit {
-    fn new(id: SplitId) -> Self {
-        HashAggSplit { id, hash_map: HashMap::new() }
+    fn new() -> Self {
+        HashAggSplit { hash_map: HashMap::new() }
     }
 }
 /***************************************************************************************************/
@@ -47,40 +54,35 @@ pub struct HashAggContext {
     pop_key: POPKey,
     children: Vec<Box<dyn POPContext>>,
     partition_id: PartitionId,
-    state: RandomState,
     splits: Vec<HashAggSplit>,
+    output_split: usize,
 }
 
 impl HashAggContext {
     pub fn try_new(pop_key: POPKey, _: &HashAgg, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
-        let state = RandomState::with_seeds(97, 31, 45, 21);
-
-        Ok(Box::new(HashAggContext { pop_key, children, partition_id, state, splits: vec![] }))
+        Ok(Box::new(HashAggContext { pop_key, children, partition_id, splits: vec![], output_split: 0 }))
     }
 
     fn next_agg(&mut self, flow: &Flow, stage: &Stage, hash_agg: &HashAgg) -> Result<Option<ChunkBox>, String> {
-        // Build hash-tables
+        // Initialize hash-tables
         if self.splits.is_empty() {
             // Initialize splits
             if self.splits.is_empty() {
-                self.splits = (0..NSPLITS).map(|split_id| HashAggSplit::new(split_id)).collect();
+                self.splits = (0..NSPLITS).map(|_| HashAggSplit::new()).collect();
             }
         }
 
-        // Aggregate
-        let child = &mut self.children[0];
-        while let Some(chunk) = child.next(flow, stage)? {
+        // Perform the aggregation
+        while let Some(chunk) = self.children[0].next(flow, stage)? {
             if !chunk.is_empty() {
-                let chunk = self.process_agg_input(flow, stage, hash_agg, chunk)?;
-                debug!("HashAggContext::next \n{}", chunk_to_string(&chunk, "HashAggContext::next"));
-                return Ok(Some(chunk));
+                self.perform_aggregation(flow, stage, hash_agg, chunk)?;
             }
         }
-        Ok(None)
+
+        self.contruct_internal_output(stage, hash_agg)
     }
 
-    fn process_agg_input(&mut self, flow: &Flow, stage: &Stage, hash_agg: &HashAgg, chunk: ChunkBox) -> Result<ChunkBox, String> {
-        let props = stage.pop_graph.get_properties(self.pop_key);
+    fn perform_aggregation(&mut self, _: &Flow, _stage: &Stage, hash_agg: &HashAgg, chunk: ChunkBox) -> Result<(), String> {
         let keycols = &hash_agg.keycols[0];
 
         let mut iters = chunk.arrays().iter().map(|array| array_to_iter(&**array)).collect::<Vec<_>>();
@@ -89,11 +91,126 @@ impl HashAggContext {
             let value = iters.iter_mut().skip(keycols.len()).map(|it| it.next().unwrap()).collect::<Vec<_>>();
             self.insert(hash_agg, key.clone(), value.clone());
         }
-        for split in self.splits.iter() {
-            debug!("Final hash_map: {:?}", split.hash_map);
+
+        Ok(())
+    }
+
+    fn init_mutable_array(data_type: &DataType, len: usize) -> Box<dyn MutableArray> {
+        match data_type.to_physical_type() {
+            PhysicalType::Primitive(PrimitiveType::Int64) => Box::new(MutablePrimitiveArray::<i64>::with_capacity(len)),
+            PhysicalType::Utf8 => Box::new(MutableUtf8Array::<i32>::with_capacity(len)),
+            PhysicalType::Boolean => Box::new(MutableBooleanArray::with_capacity(len)),
+            typ => todo!("not implemented: {:?}", typ),
         }
-        // Extract values
-        todo!()
+    }
+
+    fn append_mutable_array(mutarr: &mut Box<dyn MutableArray>, datum: Option<&Datum>) {
+        match mutarr.data_type().to_physical_type() {
+            PhysicalType::Primitive(PrimitiveType::Int64) => {
+                let mutarr = mutarr.as_mut_any().downcast_mut::<MutablePrimitiveArray<i64>>().unwrap();
+                mutarr.push(datum.map(|ivalue| ivalue.as_isize() as i64));
+            }
+            PhysicalType::Utf8 => {
+                let mutarr = mutarr.as_mut_any().downcast_mut::<MutableUtf8Array<i32>>().unwrap();
+                let a = datum.map(|ivalue| ivalue.to_string());
+                mutarr.push(a);
+            }
+
+            _ => todo!(),
+        }
+    }
+
+    fn convert_mutarr_to_immutable(mutarrays: Vec<Box<dyn MutableArray>>) -> Vec<Box<dyn Array>> {
+        mutarrays
+            .into_iter()
+            .map(|mutarr| match mutarr.data_type().to_physical_type() {
+                PhysicalType::Primitive(PrimitiveType::Int64) => {
+                    let mutarr = mutarr.as_any().downcast_ref::<MutablePrimitiveArray<i64>>().unwrap().clone();
+                    let iter = mutarr.iter().map(|i| i.cloned());
+                    let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
+                    let arr: Box<dyn Array> = Box::new(arr);
+                    arr
+                }
+                PhysicalType::Utf8 => {
+                    let mutarr = mutarr.as_any().downcast_ref::<MutableUtf8Array<i32>>().unwrap().clone();
+                    let iter = mutarr.iter().map(|s| s.to_owned());
+                    let arr = Utf8Array::<i32>::from_trusted_len_iter(iter);
+                    let arr: Box<dyn Array> = Box::new(arr);
+                    arr
+                }
+                _ => todo!(),
+            })
+            .collect()
+    }
+
+    fn convert_to_array(v: &[Option<Datum>], data_type: &DataType) -> Box<dyn Any> {
+        match data_type.to_physical_type() {
+            PhysicalType::Primitive(PrimitiveType::Int64) => {
+                let iter = v.iter().map(|datum| datum.as_ref().map(|intval| intval.as_isize() as i64));
+                let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
+                return Box::new(arr);
+            }
+            PhysicalType::Utf8 => {
+                todo!()
+            }
+            PhysicalType::Boolean => {
+                todo!()
+            }
+            typ => todo!("{:?} unsupported", typ),
+        }
+    }
+
+    fn contruct_internal_output(&mut self, stage: &Stage, hash_agg: &HashAgg) -> Result<Option<ChunkBox>, String> {
+        let props = stage.pop_graph.get_properties(self.pop_key);
+
+        while self.output_split < self.splits.len() {
+            let split = &self.splits[self.output_split];
+            debug!("[{:?}, p={}] Final hash_map: {:?}", self.pop_key, self.partition_id, split.hash_map);
+            self.output_split += 1;
+
+            if split.hash_map.len() > 0 {
+                // Build internal output arrays
+                let nelements = split.hash_map.len();
+                let mut arrays: Vec<Box<dyn MutableArray>> = Vec::with_capacity(hash_agg.keylen() + hash_agg.aggs.len());
+                for ix in 0..hash_agg.keylen() {
+                    let mutarr = Self::init_mutable_array(&hash_agg.child_data_types[ix], nelements);
+                    arrays.push(mutarr);
+                }
+                for agg in hash_agg.aggs.iter() {
+                    debug!("***** AGG = {:?}", agg);
+                    let mutarr = Self::init_mutable_array(&agg.0.output_data_type, nelements);
+                    arrays.push(mutarr);
+                }
+
+                // Populate arrays
+                debug!("[{:?}, p={}] Final hash_map: {:?}", self.pop_key, self.partition_id, split.hash_map);
+                for (key, accumulators) in split.hash_map.iter() {
+                    let keylen = hash_agg.keylen();
+                    for (kx, key) in key.iter().enumerate() {
+                        let mutarr = &mut arrays[kx];
+                        Self::append_mutable_array(mutarr, key.as_ref());
+                    }
+                    for (ax, acc) in accumulators.iter().enumerate() {
+                        let mutarr = &mut arrays[ax + keylen];
+                        Self::append_mutable_array(mutarr, acc.as_ref());
+                    }
+                }
+
+                let arrays = Self::convert_mutarr_to_immutable(arrays);
+                let chunk = Chunk::new(arrays);
+                chunk_to_string(&chunk, "Aggregation internal output");
+
+                // Run predicates, if any
+                let chunk = POPKey::eval_predicates(props, chunk);
+                //debug!("After join preds: \n{}", chunk_to_string(&chunk, "After join preds"));
+
+                let projection_chunk = POPKey::eval_projection(props, &chunk);
+                debug!("hash_agg projection: \n{}", chunk_to_string(&projection_chunk, "hash_agg projection"));
+
+                return Ok(Some(projection_chunk));
+            }
+        }
+        return Ok(None);
     }
 
     fn insert(&mut self, hash_agg: &HashAgg, key: Vec<Option<Datum>>, value: Vec<Option<Datum>>) {
@@ -109,7 +226,7 @@ impl HashAggContext {
 
         let accumulators = split.hash_map.entry(key.clone()).or_insert_with(|| vec![]);
         let do_init = accumulators.len() == 0;
-        let keylen = hash_agg.keycols[0].len();
+        let keylen = hash_agg.keylen();
 
         let get_input = |colid: ColId| {
             if colid < keylen {
@@ -119,16 +236,16 @@ impl HashAggContext {
             }
         };
 
-        for (accnum, &(Agg { agg_type, input_colid }, _)) in hash_agg.aggs.iter().enumerate() {
+        for (accnum, &(Agg { agg_type, input_colid, .. }, _)) in hash_agg.aggs.iter().enumerate() {
             let input_type = &hash_agg.child_data_types[input_colid].to_physical_type();
-
             match (agg_type, input_type) {
                 (AggType::COUNT, _) => {
                     if do_init {
                         accumulators.push(Some(Datum::INT(1isize)));
                     } else {
                         let acc = &mut accumulators[accnum];
-                        *acc = Some(Datum::INT(1isize));
+                        let new_count = acc.as_ref().unwrap().as_isize() + 1;
+                        *acc = Some(Datum::INT(new_count))
                     }
                 }
                 (AggType::SUM, _) => {
@@ -160,9 +277,12 @@ impl HashAggContext {
                                     *acc = cur_datum.cloned()
                                 }
                             } else {
-                                // Current value is NULL
+                                // Accumulator is NULL
                                 todo!("What to do here?")
                             }
+                        } else {
+                            // Current value is NULL
+                            todo!("What to do here?")
                         }
                     }
                 }
@@ -188,9 +308,12 @@ impl HashAggContext {
                                     *acc = cur_datum.cloned()
                                 }
                             } else {
-                                // Current value is NULL
+                                // Accumulator is NULL
                                 todo!("What to do here?")
                             }
+                        } else {
+                            // Current value is NULL
+                            todo!("What to do here?")
                         }
                     }
                 }

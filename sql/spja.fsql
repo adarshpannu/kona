@@ -7,17 +7,17 @@ DESCRIBE TABLE dept;
 DESCRIBE TABLE dept_details;
 
 set PARALLEL_DEGREE = 5;
-set PARSE_ONLY = "true";
+--set PARSE_ONLY = "true";
 
-select sum(E.age + 50)*99 / count(E.age + 50), avg(distinct E.age), D.dept_id
+select sum(E.age + 50)*99 / count(E.age + 50), avg(E.age), D.dept_id, sum(E.age)
 from emp E, dept D, dept_details DD
 where 
-    E.age > 50 
+    E.age > 20 
 and D.dept_id < 99
 and E.emp_dept_id = D.dept_id
 and D.dept_id = DD.details_dept_id
-and D.name = "Engineering"
+and D.name = 'Engineering'
 group by D.dept_id
-having sum(E.age) > 100 and D.dept_id > 10
+having sum(E.age) > 100 and D.dept_id < 10
 ;
 
