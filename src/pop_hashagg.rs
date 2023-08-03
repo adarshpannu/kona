@@ -143,23 +143,6 @@ impl HashAggContext {
             .collect()
     }
 
-    fn convert_to_array(v: &[Option<Datum>], data_type: &DataType) -> Box<dyn Any> {
-        match data_type.to_physical_type() {
-            PhysicalType::Primitive(PrimitiveType::Int64) => {
-                let iter = v.iter().map(|datum| datum.as_ref().map(|intval| intval.as_isize() as i64));
-                let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
-                return Box::new(arr);
-            }
-            PhysicalType::Utf8 => {
-                todo!()
-            }
-            PhysicalType::Boolean => {
-                todo!()
-            }
-            typ => todo!("{:?} unsupported", typ),
-        }
-    }
-
     fn contruct_internal_output(&mut self, stage: &Stage, hash_agg: &HashAgg) -> Result<Option<ChunkBox>, String> {
         let props = stage.pop_graph.get_properties(self.pop_key);
 
@@ -177,7 +160,6 @@ impl HashAggContext {
                     arrays.push(mutarr);
                 }
                 for agg in hash_agg.aggs.iter() {
-                    debug!("***** AGG = {:?}", agg);
                     let mutarr = Self::init_mutable_array(&agg.0.output_data_type, nelements);
                     arrays.push(mutarr);
                 }
@@ -202,7 +184,6 @@ impl HashAggContext {
 
                 // Run predicates, if any
                 let chunk = POPKey::eval_predicates(props, chunk);
-                //debug!("After join preds: \n{}", chunk_to_string(&chunk, "After join preds"));
 
                 let projection_chunk = POPKey::eval_projection(props, &chunk);
                 debug!("hash_agg projection: \n{}", chunk_to_string(&projection_chunk, "hash_agg projection"));

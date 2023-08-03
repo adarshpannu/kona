@@ -73,14 +73,17 @@ pub struct NamedExpr {
 impl NamedExpr {
     pub fn new(alias: Option<String>, expr_key: ExprKey, graph: &ExprGraph) -> Self {
         let expr = &graph.get(expr_key).value;
+
+        /*
         let mut alias = alias;
         if alias.is_none() {
             if let Expr::Column { colname, .. } = expr {
                 alias = Some(colname.clone())
-            } else if let Expr::Star = expr {
+            } else if let Expr::Star { .. } = expr {
                 alias = Some("*".to_string())
             }
         }
+        */
 
         NamedExpr { alias, expr_key }
     }
@@ -136,6 +139,13 @@ impl fmt::Debug for Quantifier {
 
 impl Quantifier {
     pub fn new(id: QunId, source: QuantifierSource, alias: Option<String>) -> Self {
+        let mut alias = alias;
+        if alias.is_none() {
+            // For unaliased base references, the basename becomes the alias i.e. "SELECT * FROM TABLE" -> "SELECT * FROM TABLE AS TABLE"
+            if let QuantifierSource::Basename(bn) = &source {
+                alias = Some(bn.clone())
+            }
+        }
         Quantifier { id, source, alias, tabledesc: None }
     }
 

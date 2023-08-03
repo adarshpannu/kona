@@ -116,13 +116,8 @@ impl std::default::Default for ExprProp {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub enum Expr {
     CID(QunId, ColId),
-    Column {
-        prefix: Option<String>,
-        colname: String,
-        qunid: QunId,
-        colid: ColId,
-    },
-    Star,
+    Column { prefix: Option<String>, colname: String, qunid: QunId, colid: ColId },
+    Star { prefix: Option<String> },
     Literal(Datum),
     NegatedExpr,
     BinaryExpr(ArithOp),
@@ -150,7 +145,7 @@ impl Expr {
                     format!("{} (${}.{})", colname, *qunid, *colid)
                 }
             }
-            Star => String::from("*"),
+            Star { .. } => String::from("*"),
             Literal(v) => format!("{}", v).replace('"', r#"\""#),
             BinaryExpr(op) => format!("{}", op),
             NegatedExpr => "-".to_string(),
@@ -197,20 +192,7 @@ impl Expr {
             (BinaryExpr(c1), BinaryExpr(c2)) => *c1 == *c2,
             (RelExpr(c1), RelExpr(c2)) => *c1 == *c2,
             (LogExpr(c1), LogExpr(c2)) => *c1 == *c2,
-            (
-                Column {
-                    prefix: p1,
-                    colname: n1,
-                    qunid: _,
-                    colid: _,
-                },
-                Column {
-                    prefix: p2,
-                    colname: n2,
-                    qunid: _,
-                    colid: _,
-                },
-            ) => p1 == p2 && n1 == n2,
+            (Column { prefix: p1, colname: n1, qunid: _, colid: _ }, Column { prefix: p2, colname: n2, qunid: _, colid: _ }) => p1 == p2 && n1 == n2,
             (Literal(c1), Literal(c2)) => *c1 == *c2,
             (NegatedExpr, NegatedExpr) => true,
             (BetweenExpr, BetweenExpr) => true,
@@ -293,7 +275,7 @@ impl ExprKey {
                     colname.to_string()
                 }
             }
-            Star => String::from("*"),
+            Star { .. } => String::from("*"),
             Literal(v) => format!("{}", v).replace('"', r#"\""#),
             BinaryExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);

@@ -11,62 +11,66 @@ digraph example1 {
     exprnodeExprKey6v1[label="*"];
     exprnodeExprKey4v1 -> exprnodeExprKey6v1;
     exprnodeExprKey4v1[label="SUM"];
-    exprnodeExprKey51v1 -> exprnodeExprKey4v1;
-    exprnodeExprKey51v1[label="$3.2"];
+    exprnodeExprKey53v1 -> exprnodeExprKey4v1;
+    exprnodeExprKey53v1[label="$3.2"];
     exprnodeExprKey5v1 -> exprnodeExprKey6v1;
     exprnodeExprKey5v1[label="99"];
     exprnodeExprKey10v1 -> exprnodeExprKey11v1;
     exprnodeExprKey10v1[label="COUNT"];
-    exprnodeExprKey52v1 -> exprnodeExprKey10v1;
-    exprnodeExprKey52v1[label="$3.3"];
+    exprnodeExprKey54v1 -> exprnodeExprKey10v1;
+    exprnodeExprKey54v1[label="$3.3"];
     exprnodeExprKey11v1 -> "QB_1_selectlist";
-    exprnodeExprKey15v1[label="COUNT: 1"];
-    exprnodeExprKey53v1 -> exprnodeExprKey15v1;
-    exprnodeExprKey53v1[label="$3.3"];
-    exprnodeExprKey15v1 -> "QB_1_selectlist";
-    exprnodeExprKey54v1[label="$3.0: 2"];
-    exprnodeExprKey54v1 -> "QB_1_selectlist";
-    exprnodeExprKey58v1[label="/: 3"];
+    exprnodeExprKey58v1[label="/: 1"];
     exprnodeExprKey56v1 -> exprnodeExprKey58v1;
     exprnodeExprKey56v1[label="SUM"];
     exprnodeExprKey55v1 -> exprnodeExprKey56v1;
-    exprnodeExprKey55v1[label="$3.4"];
+    exprnodeExprKey55v1[label="$3.3"];
     exprnodeExprKey57v1 -> exprnodeExprKey58v1;
     exprnodeExprKey57v1[label="COUNT"];
     exprnodeExprKey55v1 -> exprnodeExprKey57v1;
-    exprnodeExprKey55v1[label="$3.4"];
+    exprnodeExprKey55v1[label="$3.3"];
     exprnodeExprKey58v1 -> "QB_1_selectlist";
-    exprnodeExprKey59v1[label="$3.1: 4"];
+    exprnodeExprKey59v1[label="$3.0: 2"];
     exprnodeExprKey59v1 -> "QB_1_selectlist";
+    exprnodeExprKey20v1[label="MAX: 3"];
+    exprnodeExprKey60v1 -> exprnodeExprKey20v1;
+    exprnodeExprKey60v1[label="$3.4"];
+    exprnodeExprKey20v1 -> "QB_1_selectlist";
+    exprnodeExprKey61v1[label="$3.1: 4"];
+    exprnodeExprKey61v1 -> "QB_1_selectlist";
     exprnodeExprKey27v1[label="MAX: 5"];
-    exprnodeExprKey60v1 -> exprnodeExprKey27v1;
-    exprnodeExprKey60v1[label="$3.1"];
+    exprnodeExprKey62v1 -> exprnodeExprKey27v1;
+    exprnodeExprKey62v1[label="$3.1"];
     exprnodeExprKey27v1 -> "QB_1_selectlist";
+    exprnodeExprKey29v1[label="MAX: 6"];
+    exprnodeExprKey63v1 -> exprnodeExprKey29v1;
+    exprnodeExprKey63v1[label="$3.5"];
+    exprnodeExprKey29v1 -> "QB_1_selectlist";
 }
     "QUN_3"[label="QUN_3 /", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_1 {
-    exprnodeExprKey44v1[label=">"];
-    exprnodeExprKey42v1 -> exprnodeExprKey44v1;
-    exprnodeExprKey42v1[label="SUM"];
-    exprnodeExprKey61v1 -> exprnodeExprKey42v1;
-    exprnodeExprKey61v1[label="$3.4"];
-    exprnodeExprKey43v1 -> exprnodeExprKey44v1;
-    exprnodeExprKey43v1[label="100"];
-    exprnodeExprKey44v1 -> QB_1_pred_list;
-    exprnodeExprKey49v1[label=">"];
-    exprnodeExprKey62v1 -> exprnodeExprKey49v1;
-    exprnodeExprKey62v1[label="$3.0"];
-    exprnodeExprKey48v1 -> exprnodeExprKey49v1;
-    exprnodeExprKey48v1[label="10"];
-    exprnodeExprKey49v1 -> QB_1_pred_list;
+    exprnodeExprKey46v1[label=">"];
+    exprnodeExprKey44v1 -> exprnodeExprKey46v1;
+    exprnodeExprKey44v1[label="SUM"];
+    exprnodeExprKey64v1 -> exprnodeExprKey44v1;
+    exprnodeExprKey64v1[label="$3.4"];
+    exprnodeExprKey45v1 -> exprnodeExprKey46v1;
+    exprnodeExprKey45v1[label="100"];
+    exprnodeExprKey46v1 -> QB_1_pred_list;
+    exprnodeExprKey51v1[label=">"];
+    exprnodeExprKey65v1 -> exprnodeExprKey51v1;
+    exprnodeExprKey65v1[label="$3.0"];
+    exprnodeExprKey50v1 -> exprnodeExprKey51v1;
+    exprnodeExprKey50v1[label="10"];
+    exprnodeExprKey51v1 -> QB_1_pred_list;
     "QB_1_pred_list"[label="pred_list",shape=box,style=filled];
 }
   subgraph cluster_group_byQB_1 {
     "QB_1_group_by"[label="group_by",shape=box,style=filled];
-    exprnodeExprKey63v1[label="$3.0: 0"];
-    exprnodeExprKey63v1 -> "QB_1_group_by";
-    exprnodeExprKey64v1[label="$3.1: 1"];
-    exprnodeExprKey64v1 -> "QB_1_group_by";
+    exprnodeExprKey66v1[label="$3.0: 0"];
+    exprnodeExprKey66v1 -> "QB_1_group_by";
+    exprnodeExprKey67v1[label="$3.1: 1"];
+    exprnodeExprKey67v1 -> "QB_1_group_by";
 }
     label = "QB_1 type=GroupBy";
 }
@@ -74,18 +78,18 @@ digraph example1 {
   subgraph cluster_QB_4 {
     "QB_4_selectlist"[label="select_list",shape=box,style=filled];
   subgraph cluster_select_listQB_4 {
-    exprnodeExprKey37v1[label="+: 0"];
-    exprnodeExprKey35v1 -> exprnodeExprKey37v1;
-    exprnodeExprKey35v1[label="EMP_DEPT_ID ($1.2)"];
-    exprnodeExprKey36v1 -> exprnodeExprKey37v1;
-    exprnodeExprKey36v1[label="55"];
-    exprnodeExprKey37v1 -> "QB_4_selectlist";
-    exprnodeExprKey40v1[label="*: 1"];
-    exprnodeExprKey38v1 -> exprnodeExprKey40v1;
-    exprnodeExprKey38v1[label="EMP_DEPT_ID ($1.2)"];
-    exprnodeExprKey39v1 -> exprnodeExprKey40v1;
-    exprnodeExprKey39v1[label="2"];
-    exprnodeExprKey40v1 -> "QB_4_selectlist";
+    exprnodeExprKey39v1[label="+: 0"];
+    exprnodeExprKey37v1 -> exprnodeExprKey39v1;
+    exprnodeExprKey37v1[label="EMP_DEPT_ID ($1.2)"];
+    exprnodeExprKey38v1 -> exprnodeExprKey39v1;
+    exprnodeExprKey38v1[label="55"];
+    exprnodeExprKey39v1 -> "QB_4_selectlist";
+    exprnodeExprKey42v1[label="*: 1"];
+    exprnodeExprKey40v1 -> exprnodeExprKey42v1;
+    exprnodeExprKey40v1[label="EMP_DEPT_ID ($1.2)"];
+    exprnodeExprKey41v1 -> exprnodeExprKey42v1;
+    exprnodeExprKey41v1[label="2"];
+    exprnodeExprKey42v1 -> "QB_4_selectlist";
     exprnodeExprKey3v1[label="+: 2"];
     exprnodeExprKey1v1 -> exprnodeExprKey3v1;
     exprnodeExprKey1v1[label="AGE ($1.1)"];
@@ -100,21 +104,23 @@ digraph example1 {
     exprnodeExprKey9v1 -> "QB_4_selectlist";
     exprnodeExprKey19v1[label="AGE ($1.1): 4"];
     exprnodeExprKey19v1 -> "QB_4_selectlist";
+    exprnodeExprKey28v1[label="NAME ($1.0): 5"];
+    exprnodeExprKey28v1 -> "QB_4_selectlist";
 }
     "QUN_1"[label="QUN_1 EMP/E", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_4 {
-    exprnodeExprKey30v1[label=">"];
-    exprnodeExprKey28v1 -> exprnodeExprKey30v1;
-    exprnodeExprKey28v1[label="AGE ($1.1)"];
-    exprnodeExprKey29v1 -> exprnodeExprKey30v1;
-    exprnodeExprKey29v1[label="20"];
-    exprnodeExprKey30v1 -> QB_4_pred_list;
-    exprnodeExprKey33v1[label="<"];
-    exprnodeExprKey31v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey31v1[label="EMP_DEPT_ID ($1.2)"];
-    exprnodeExprKey32v1 -> exprnodeExprKey33v1;
-    exprnodeExprKey32v1[label="99"];
-    exprnodeExprKey33v1 -> QB_4_pred_list;
+    exprnodeExprKey32v1[label=">"];
+    exprnodeExprKey30v1 -> exprnodeExprKey32v1;
+    exprnodeExprKey30v1[label="AGE ($1.1)"];
+    exprnodeExprKey31v1 -> exprnodeExprKey32v1;
+    exprnodeExprKey31v1[label="30"];
+    exprnodeExprKey32v1 -> QB_4_pred_list;
+    exprnodeExprKey35v1[label="<"];
+    exprnodeExprKey33v1 -> exprnodeExprKey35v1;
+    exprnodeExprKey33v1[label="EMP_DEPT_ID ($1.2)"];
+    exprnodeExprKey34v1 -> exprnodeExprKey35v1;
+    exprnodeExprKey34v1[label="99"];
+    exprnodeExprKey35v1 -> QB_4_pred_list;
     "QB_4_pred_list"[label="pred_list",shape=box,style=filled];
 }
     label = "QB_4 type=Select";

@@ -16,6 +16,7 @@ use crate::{
     pop_csv::CSV,
     pop_hashagg::HashAgg,
     pop_hashmatch::HashMatch,
+    pop_parquet::Parquet,
     pop_repartition::{RepartitionRead, RepartitionWrite},
     stage::Stage,
 };
@@ -93,6 +94,7 @@ impl POPProps {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum POP {
     CSV(CSV),
+    Parquet(Parquet),
     HashMatch(HashMatch),
     HashAgg(HashAgg),
     RepartitionWrite(RepartitionWrite),

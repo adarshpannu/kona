@@ -1,14 +1,15 @@
 // metadata
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, fs::File};
 
 use arrow2::io::csv::read;
 
 use crate::{datum::Datum, expr::ExprGraph, graph::ExprKey, includes::*};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableType {
     CSV,
+    Parquet,
 }
 
 #[derive(Debug, Clone)]
@@ -80,26 +81,14 @@ pub struct CSVDesc {
 
 impl CSVDesc {
     pub fn new(tp: TableType, pathname: Rc<String>, columns: Vec<Field>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats) -> Result<Self, String> {
-        let csvdesc = CSVDesc {
-            tp,
-            pathname,
-            header,
-            separator,
-            columns,
-            part_desc,
-            table_stats,
-        };
+        let csvdesc = CSVDesc { tp, pathname, header, separator, columns, part_desc, table_stats };
         Ok(csvdesc)
     }
 
     pub fn infer_metadata(pathname: &str, separator: char, header: bool) -> Result<Vec<Field>, String> {
         // Create a CSV reader. This is typically created on the thread that reads the file and
         // thus owns the read head.
-        let mut reader = read::ReaderBuilder::new()
-            .has_headers(header)
-            .delimiter(separator as u8)
-            .from_path(pathname)
-            .map_err(|err| stringify1(err, pathname))?;
+        let mut reader = read::ReaderBuilder::new().has_headers(header).delimiter(separator as u8).from_path(pathname).map_err(|err| stringify1(err, pathname))?;
 
         // Infers the fields using the default inferer. The inferer is just a function that maps bytes
         // to a `DataType`.
@@ -181,13 +170,13 @@ impl Metadata {
     }
 
     fn get_table_type(hm: &HashMap<String, Datum>, name: &String) -> Result<TableType, String> {
-        let tp = hm
-            .get("TYPE")
-            .ok_or(f!("Table {name} does not specify a TYPE."))?
-            .try_as_str(&f!("Table {name} has invalid TYPE."))?;
+        let tp = hm.get("TYPE").ok_or(f!("Table {name} does not specify a TYPE."))?.try_as_str(&f!("Table {name} has invalid TYPE."))?;
 
-        let tp = match &tp[..] {
+        let tp = tp.to_uppercase();
+        let tp = tp.as_str();
+        let tp = match tp {
             "CSV" => TableType::CSV,
+            "PARQUET" => TableType::Parquet,
             _ => return Err(f!("Table {name} has invalid TYPE.")),
         };
         Ok(tp)
@@ -259,10 +248,7 @@ impl Metadata {
             _ => return Err(String::from("Invalid value for option PARTITIONS")),
         };
 
-        let part_desc = PartDesc {
-            npartitions,
-            part_type: PartType::RAW,
-        };
+        let part_desc = PartDesc { npartitions, part_type: PartType::RAW };
         Ok(part_desc)
     }
 
@@ -278,10 +264,7 @@ impl Metadata {
         match tp {
             TableType::CSV => {
                 // PATH, HEADER, SEPARATOR
-                let path = hm
-                    .get("PATH")
-                    .ok_or("Table {name} does not specify a PATH")?
-                    .try_as_str(&f!("PATH does not hold a string for table {name}"))?;
+                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str(&f!("PATH does not hold a string for table {name}"))?;
 
                 let header = Self::get_header_parm(&hm)?;
                 let separator = Self::get_separator_parm(&hm)?;
@@ -300,6 +283,28 @@ impl Metadata {
                 self.tables.insert(name.to_string(), csvdesc);
                 info!("Cataloged table {}", &name);
             }
+            TableType::Parquet => {
+                // PATH, HEADER, SEPARATOR
+                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str(&f!("PATH does not hold a string for table {name}"))?;
+
+                if hm.get("HEADER").is_some() {
+                    return Err(f!("HEADER cannot be specified for Parquet files."));
+                }
+                if hm.get("SEPARATOR").is_some() {
+                    return Err(f!("HEADER cannot be specified for Parquet files."));
+                }
+                if hm.get("COLUMNS").is_some() {
+                    return Err(f!("COLUMNS cannot be specified for Parquet files."));
+                }
+
+                let part_desc = Self::get_part_desc(&hm)?;
+                let table_stats = Self::get_table_stats(&hm)?;
+
+                let columns = ParquetDesc::infer_metadata(&path)?;
+                let csvdesc = Rc::new(ParquetDesc::new(tp, path, columns, part_desc, table_stats)?);
+                self.tables.insert(name.to_string(), csvdesc);
+                info!("Cataloged table {}", &name);
+            }
         }
         Ok(())
     }
@@ -313,8 +318,10 @@ impl Metadata {
         let tbldesc = tbldesc.unwrap();
         info!("Table {}", name);
         info!("  pathname = \"{}\"", tbldesc.pathname());
-        info!("  HEADER = {}", tbldesc.header());
-        info!("  SEPARATOR = '{}'", tbldesc.separator());
+        if tbldesc.get_type() == TableType::CSV {
+            info!("  HEADER = {}", tbldesc.header());
+            info!("  SEPARATOR = '{}'", tbldesc.separator());
+        }
         info!("  PARTITIONS = {:?}", tbldesc.get_part_desc());
         info!("  STATS = {:?}", tbldesc.get_stats());
         info!("  {} COLUMNS", tbldesc.fields().len());
@@ -327,5 +334,73 @@ impl Metadata {
     pub fn get_tabledesc(&self, name: &str) -> Option<Rc<dyn TableDesc>> {
         let val = self.tables.get(&name.to_uppercase());
         val.cloned()
+    }
+}
+
+#[derive(Debug)]
+pub struct ParquetDesc {
+    tp: TableType,
+    pathname: Rc<String>,
+    columns: Vec<Field>,
+    part_desc: PartDesc,
+    table_stats: TableStats,
+}
+
+impl ParquetDesc {
+    pub fn new(tp: TableType, pathname: Rc<String>, columns: Vec<Field>, part_desc: PartDesc, table_stats: TableStats) -> Result<Self, String> {
+        let csvdesc = ParquetDesc { tp, pathname, columns, part_desc, table_stats };
+        Ok(csvdesc)
+    }
+
+    pub fn infer_metadata(pathname: &str) -> Result<Vec<Field>, String> {
+        use arrow2::io::parquet::read;
+
+        let mut reader = File::open(pathname).map_err(stringify)?;
+
+        let metadata = read::read_metadata(&mut reader).map_err(stringify)?;
+
+        let schema = read::infer_schema(&metadata).map_err(stringify)?;
+
+        let fields = schema.fields.iter().map(|f| Field::new(f.name.to_uppercase(), f.data_type.clone(), f.is_nullable)).collect();
+
+        Ok(fields)
+    }
+}
+
+impl TableDesc for ParquetDesc {
+    fn get_type(&self) -> TableType {
+        self.tp
+    }
+
+    fn fields(&self) -> &Vec<Field> {
+        &self.columns
+    }
+
+    fn pathname(&self) -> &String {
+        &self.pathname
+    }
+
+    fn describe(&self) -> String {
+        format!("Type: Parquet, {:?}", self)
+    }
+
+    fn get_column(&self, colname: &str) -> Option<(usize, &Field)> {
+        self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
+    }
+
+    fn get_part_desc(&self) -> &PartDesc {
+        &self.part_desc
+    }
+
+    fn header(&self) -> bool {
+        todo!()
+    }
+
+    fn separator(&self) -> char {
+        todo!()
+    }
+
+    fn get_stats(&self) -> &TableStats {
+        &self.table_stats
     }
 }

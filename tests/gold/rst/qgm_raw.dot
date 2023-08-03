@@ -33,9 +33,9 @@ digraph example1 {
     exprnodeExprKey12v1[label="S3 ($0.0)"];
     exprnodeExprKey13v1 -> "QB_1_selectlist";
 }
-    "QUN_3"[label="QUN_3 T/", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_2"[label="QUN_2 S/", fillcolor=black, fontcolor=white, style=filled]
-    "QUN_1"[label="QUN_1 R/", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_3"[label="QUN_3 T/T", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_2"[label="QUN_2 S/S", fillcolor=black, fontcolor=white, style=filled]
+    "QUN_1"[label="QUN_1 R/R", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_1 {
     exprnodeExprKey60v1[label="And"];
     exprnodeExprKey54v1 -> exprnodeExprKey60v1;

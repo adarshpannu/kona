@@ -102,3 +102,7 @@ group by D.dept_id
 having sum(E.age) > 100 and D.dept_id < 10
 ;
 
+select * from emp E1, emp E2;
+
+
+

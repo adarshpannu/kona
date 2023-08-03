@@ -189,6 +189,15 @@ impl Stage {
                     .replace('}', ")");
                 (String::from("CSV"), extrastr)
             }
+            POP::Parquet(pq) => {
+                let pathname = pq.pathname.split('/').last().unwrap_or(&pq.pathname);
+                //let mut projection = csv.projection.clone();
+                //projection.sort_by(|a, b| a.cmp(b));
+                let extrastr = format!("file: {}, input_projection: {:?}", pathname, &pq.input_projection)
+                    .replace('{', "(")
+                    .replace('}', ")");
+                (String::from("Parquet"), extrastr)
+            }
             POP::HashMatch { .. } => {
                 let extrastr = String::new();
                 (String::from("HashMatch"), extrastr)

@@ -1,5 +1,5 @@
 // includes.rs
-pub use std::{any::Any, fs, mem::replace};
+pub use std::{any::Any, collections::HashSet, fs, mem::replace};
 
 pub use arrow2::{
     array::{Array, BooleanArray, PrimitiveArray},
@@ -101,3 +101,12 @@ pub fn get_partition_dir(flow_id: usize, stage_link: StageLink, pid: PartitionId
 pub fn get_output_dir(flow_id: usize) -> String {
     format!("{}/flow-{}/output", TEMPDIR, flow_id)
 }
+
+pub fn has_duplicates<T: Eq + std::hash::Hash>(vec: &[T]) -> bool {
+    // Create a HashSet from the vector to remove duplicates
+    let set: HashSet<&T> = vec.iter().collect();
+
+    // Compare the lengths to check for duplicates
+    vec.len() != set.len()
+}
+

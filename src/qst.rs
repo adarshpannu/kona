@@ -24,6 +24,12 @@ impl QueryBlock {
     pub fn resolve(qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata) -> Result<(), String> {
         let qblock = &mut qblock_graph.get_mut(qbkey).value;
 
+        // Ensure that every quantifier in this qblock is uniquely identifiable
+        let qun_aliases = qblock.quns.iter().filter_map(|qun| qun.get_alias()).collect::<Vec<_>>();
+        if has_duplicates(&qun_aliases) {
+            return Err("Query has two or more quantifiers with the same aliases.".to_owned());
+        }
+
         // Resolve nested query blocks first
         let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
         for qbkey in qbkey_children {
@@ -45,6 +51,9 @@ impl QueryBlock {
                 }
             }
         }
+
+        // Resolve any stars (*)
+        qblock.resolve_star(env, expr_graph)?;
 
         // Resolve select list
         for ne in qblock.select_list.iter() {
@@ -305,7 +314,7 @@ impl QueryBlock {
             RelExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
-                    return Err("Datatype mismatch".to_string());
+                    return Err(f!("Datatype mismatch: {:?} vs {:?}  ({}:{})", children_datatypes[0], children_datatypes[1], file!(), line!()));
                 } else {
                     DataType::Boolean
                 }
@@ -355,12 +364,48 @@ impl QueryBlock {
                 }
             }
             _ => {
-                debug!("TODO: {:?}", &expr);
-                todo!();
+                panic!("Unexpected expression found: {:?}", &expr);
             }
         };
         node.properties.set_data_type(datatype);
         Ok(())
+    }
+
+    pub fn resolve_star(&mut self, env: &Env, expr_graph: &mut ExprGraph) -> Result<(), String> {
+        let select_list = replace(&mut self.select_list, vec![]);
+        let mut new_select_list = vec![];
+
+        for ne in select_list.into_iter() {
+            let expr_key = ne.expr_key;
+            let expr = expr_graph.get_value(ne.expr_key);
+            let isstar_with_prefix = if let Expr::Star { prefix } = &expr { (true, prefix.clone()) } else { (false, None) };
+
+            if isstar_with_prefix.0 {
+                let prefix = isstar_with_prefix.1;
+
+                // Handle two cases:
+                //    SELECT * (no prefix)
+                //    SELECT TABLENAME.* (matching prefix)
+                let qun_iter = self.quns.iter().filter(|qun| if prefix.is_none() || qun.get_alias() == prefix.as_ref() { true } else { false });
+                for qun in qun_iter {
+                    let desc = &**qun.tabledesc.as_ref().unwrap();
+                    for field in desc.fields().iter() {
+                        let column = Column { prefix: prefix.clone(), colname: field.name.clone(), qunid: 0, colid: 0 };
+                        let new_expr_key = expr_graph.add_node(column, None);
+                        let named_expr = NamedExpr { alias: None, expr_key: new_expr_key };
+                        new_select_list.push(named_expr);
+                    }
+                }
+            } else {
+                new_select_list.push(ne);
+            }
+        }
+        self.select_list = new_select_list;
+        Ok(())
+    }
+
+    fn find_quantifier_by_alias(&self, alias: Option<&String>) -> Option<&Quantifier> {
+        self.quns.iter().find(|qun| qun.get_alias() == alias)
     }
 }
 

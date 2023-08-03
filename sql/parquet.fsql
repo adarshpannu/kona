@@ -1,0 +1,13 @@
+CATALOG TABLE emp ( "TYPE" = "PaRQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.parquet");
+
+CATALOG TABLE userdata1 ( "TYPE" = "PaRQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/userdata1.parquet");
+
+DESCRIBE TABLE emp;
+
+DESCRIBE TABLE userdata1;
+
+
+SELECT EMP.name from EMP, EMP E2;
+
+
+

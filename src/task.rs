@@ -10,9 +10,11 @@ use crate::{
     includes::*,
     pop::{POPContext, POP},
     pop_csv::CSVContext,
+    pop_hashagg::HashAggContext,
     pop_hashmatch::HashMatchContext,
+    pop_parquet::ParquetContext,
     pop_repartition::{RepartitionReadContext, RepartitionWriteContext},
-    stage::Stage, pop_hashagg::HashAggContext,
+    stage::Stage,
 };
 
 /***************************************************************************************************/
@@ -75,10 +77,7 @@ impl Task {
     pub fn init_context(&self, flow: &Flow, stage: &Stage, popkey: POPKey) -> Result<Box<dyn POPContext>, String> {
         let (pop, _, children) = stage.pop_graph.get3(popkey);
         let child_contexts = if let Some(children) = children {
-            let children = children
-                .iter()
-                .map(|&child_popkey| self.init_context(flow, stage, child_popkey).unwrap())
-                .collect::<Vec<_>>();
+            let children = children.iter().map(|&child_popkey| self.init_context(flow, stage, child_popkey).unwrap()).collect::<Vec<_>>();
             Some(children)
         } else {
             None
@@ -86,6 +85,7 @@ impl Task {
 
         let ctxt = match &pop {
             POP::CSV(csv) => CSVContext::try_new(popkey, csv, self.partition_id)?,
+            POP::Parquet(pq) => ParquetContext::try_new(popkey, pq, self.partition_id)?,
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::try_new(popkey, rpw, child_contexts.unwrap(), self.partition_id)?,
             POP::RepartitionRead(rpr) => RepartitionReadContext::try_new(flow.id, popkey, rpr, self.partition_id)?,
             POP::HashMatch(hj) => HashMatchContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,

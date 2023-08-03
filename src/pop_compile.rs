@@ -13,7 +13,9 @@ use crate::{
     pcode::PCode,
     pop::{Agg, POPProps, Projection, ProjectionMap, POP},
     pop_csv::CSV,
-    pop_hashagg, pop_hashmatch, pop_repartition,
+    pop_hashagg, pop_hashmatch,
+    pop_parquet::Parquet,
+    pop_repartition,
     qgm::QGM,
     stage::{StageGraph, StageLink},
 };
@@ -121,6 +123,10 @@ impl POP {
                     CSV::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), tbldesc.header(), tbldesc.separator(), lopprops.partdesc.npartitions, input_projection);
                 POP::CSV(inner)
             }
+            TableType::Parquet => {
+                let inner = Parquet::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), lopprops.partdesc.npartitions, input_projection);
+                POP::Parquet(inner)
+            }
         };
 
         // Compile real + virt columns
@@ -174,8 +180,12 @@ impl POP {
     pub fn compute_projection_map(cols: &Bitset<QunCol>, virtcols: Option<&Vec<VirtCol>>) -> ProjectionMap {
         let mut proj_map = ProjectionMap::default();
 
+        // Sort QunCols by col-id. This ordered property is especially necessary for Parquet projection pushdown
+        let mut sorted_quncols = cols.elements().into_iter().collect::<Vec<_>>();
+        sorted_quncols.sort_by_key(|qc| qc.1);
+
         // Add singleton columns
-        for (ix, &quncol) in cols.elements().iter().enumerate() {
+        for (ix, quncol) in sorted_quncols.into_iter().enumerate() {
             let prj = Projection::QunCol(quncol);
             proj_map.set(prj, ix);
         }

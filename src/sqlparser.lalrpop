@@ -283,8 +283,8 @@ JoinType: JoinType = {
 correlation_clause: String = "AS"? <id:Identifier> => id;
 
 NamedExpr: NamedExpr = {
-    "*" => {
-        let star = parser_state.expr_graph.add_node(Star, None);
+    <prefix:(Identifier ".")?> "*" => {
+        let star = parser_state.expr_graph.add_node(Star { prefix: prefix.map(|e| e.0) }, None);
         NamedExpr::new(None, star, &parser_state.expr_graph)
     },
     <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr, &parser_state.expr_graph)
@@ -411,7 +411,7 @@ AggName: AggType = {
 
 AggArg: ExprKey = {
     <arg:Expr> => arg,
-    "*" => parser_state.expr_graph.add_node(Star, None)
+    "*" => parser_state.expr_graph.add_node(Star { prefix: None }, None)
 }
 
 ScalarFunction: ExprKey = {
