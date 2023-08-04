@@ -18,19 +18,14 @@ pub struct Node<K, V, P> {
 
 impl<K, V, P> Node<K, V, P> {
     pub fn new(v: V, properties: P) -> Self {
-        Node {
-            value: v,
-            properties,
-            children: None,
-        }
+        Node { value: v, properties, children: None }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph<K, V, P>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     pub sm: SlotMap<K, Node<K, V, P>>,
     next_id: usize,
 }
@@ -133,40 +128,29 @@ where
     }
 
     pub fn iter(&self, root: K) -> GraphIterator<K> {
-        GraphIterator {
-            queue: vec![root],
-            stop_depth_traversal: None,
-        }
+        GraphIterator { queue: vec![root], stop_depth_traversal: None }
     }
 
     pub fn iter_cond<F>(&self, root: K, cond: Option<Box<dyn Fn(K) -> bool>>) -> GraphIterator<K> {
-        GraphIterator {
-            queue: vec![root],
-            stop_depth_traversal: cond,
-        }
+        GraphIterator { queue: vec![root], stop_depth_traversal: cond }
     }
 
     pub fn true_iter(&self, root: K) -> TrueGraphIterator<'_, K, V, P> {
-        let graph_iter = GraphIterator {
-            queue: vec![root],
-            stop_depth_traversal: None,
-        };
+        let graph_iter = GraphIterator { queue: vec![root], stop_depth_traversal: None };
         TrueGraphIterator { graph_iter, graph: self }
     }
 }
 
 pub struct GraphIterator<K>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     queue: Vec<K>,
     stop_depth_traversal: Option<Box<dyn Fn(K) -> bool>>, // If true, don't explore children of a given node
 }
 
 pub struct TrueGraphIterator<'a, K, V, P>
 where
-    K: slotmap::Key,
-{
+    K: slotmap::Key, {
     graph_iter: GraphIterator<K>,
     graph: &'a Graph<K, V, P>,
 }

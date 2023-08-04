@@ -263,7 +263,7 @@ impl HashMatchContext {
         if self.splits.is_empty() {
             return Ok(Chunk::new(vec![]));
         }
-        
+
         let types = &hash_match.children_data_types[1];
         let build_arrays = types
             .into_iter()

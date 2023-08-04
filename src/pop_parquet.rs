@@ -28,7 +28,7 @@ impl ParquetContext {
         let mut reader = File::open(&pq.pathname).map_err(stringify)?;
         let metadata = read::read_metadata(&mut reader).map_err(stringify)?;
         let schema = read::infer_schema(&metadata).map_err(stringify)?;
-        let schema = schema.filter(|ix, _field| pq.input_projection.iter().find(|&&jx| ix == jx).is_some());
+        let schema = schema.filter(|ix, _field| pq.ordered_input_projection.iter().find(|&&jx| ix == jx).is_some());
 
         let row_groups = metadata.row_groups.into_iter().enumerate().map(|(_, row_group)| row_group).collect::<Vec<_>>();
         let file_reader = read::FileReader::new(reader, row_groups, schema, Some(1024 * 8 * 8), None, None);
@@ -71,12 +71,12 @@ impl POPContext for ParquetContext {
 pub struct Parquet {
     pub pathname: String,
     pub fields: Vec<Field>,
-    pub input_projection: Vec<ColId>,
+    pub ordered_input_projection: Vec<ColId>,
 }
 
 impl Parquet {
-    pub fn new(pathname: String, fields: Vec<Field>, npartitions: usize, input_projection: Vec<ColId>) -> Parquet {
-        Parquet { pathname, fields, input_projection }
+    pub fn new(pathname: String, fields: Vec<Field>, _npartitions: usize, ordered_input_projection: Vec<ColId>) -> Parquet {
+        Parquet { pathname, fields, ordered_input_projection }
     }
 }
 

@@ -1,6 +1,6 @@
 // metadata
 
-use std::{collections::HashMap, rc::Rc, fs::File};
+use std::{collections::HashMap, fs::File, rc::Rc};
 
 use arrow2::io::csv::read;
 

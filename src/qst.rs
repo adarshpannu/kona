@@ -371,12 +371,11 @@ impl QueryBlock {
         Ok(())
     }
 
-    pub fn resolve_star(&mut self, env: &Env, expr_graph: &mut ExprGraph) -> Result<(), String> {
+    pub fn resolve_star(&mut self, _env: &Env, expr_graph: &mut ExprGraph) -> Result<(), String> {
         let select_list = replace(&mut self.select_list, vec![]);
         let mut new_select_list = vec![];
 
         for ne in select_list.into_iter() {
-            let expr_key = ne.expr_key;
             let expr = expr_graph.get_value(ne.expr_key);
             let isstar_with_prefix = if let Expr::Star { prefix } = &expr { (true, prefix.clone()) } else { (false, None) };
 
@@ -403,12 +402,21 @@ impl QueryBlock {
         self.select_list = new_select_list;
         Ok(())
     }
-
-    fn find_quantifier_by_alias(&self, alias: Option<&String>) -> Option<&Quantifier> {
-        self.quns.iter().find(|qun| qun.get_alias() == alias)
-    }
 }
 
 fn is_numeric(dt: &DataType) -> bool {
-    matches!(dt, DataType::Int64)
+    match dt {
+        DataType::Int8
+        | DataType::Int16
+        | DataType::Int32
+        | DataType::Int64
+        | DataType::UInt8
+        | DataType::UInt16
+        | DataType::UInt32
+        | DataType::UInt64
+        | DataType::Float16
+        | DataType::Float32
+        | DataType::Float64 => true,
+        _ => false,
+    }
 }

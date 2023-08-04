@@ -104,14 +104,15 @@ impl POP {
         let tbldesc = qgm.metadata.get_tabledesc(qunid).unwrap();
 
         // Build input map
-        let (input_projection, mut input_proj_map) = if let LOP::TableScan { input_projection } = lop {
+        let (ordered_input_projection, mut input_proj_map) = if let LOP::TableScan { input_projection } = lop {
             let proj_map: ProjectionMap = Self::compute_projection_map(input_projection, None);
-            let input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
-            (input_projection, proj_map)
+            let mut ordered_input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
+            ordered_input_projection.sort();
+            (ordered_input_projection, proj_map)
         } else {
             return Err(String::from("Internal error: compile_scan() received a POP that isn't a TableScan"));
         };
-        debug!("[{:?}] input_projection: {:?}", lop_key, input_projection);
+        debug!("[{:?}] ordered_input_projection: {:?}", lop_key, ordered_input_projection);
 
         // Compile predicates
         let predicates = Self::compile_predicates(qgm, &lopprops.preds, &mut input_proj_map);
@@ -119,12 +120,18 @@ impl POP {
 
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
-                let inner =
-                    CSV::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), tbldesc.header(), tbldesc.separator(), lopprops.partdesc.npartitions, input_projection);
+                let inner = CSV::new(
+                    tbldesc.pathname().clone(),
+                    tbldesc.fields().clone(),
+                    tbldesc.header(),
+                    tbldesc.separator(),
+                    lopprops.partdesc.npartitions,
+                    ordered_input_projection,
+                );
                 POP::CSV(inner)
             }
             TableType::Parquet => {
-                let inner = Parquet::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), lopprops.partdesc.npartitions, input_projection);
+                let inner = Parquet::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), lopprops.partdesc.npartitions, ordered_input_projection);
                 POP::Parquet(inner)
             }
         };

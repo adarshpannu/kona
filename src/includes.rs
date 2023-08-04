@@ -109,4 +109,3 @@ pub fn has_duplicates<T: Eq + std::hash::Hash>(vec: &[T]) -> bool {
     // Compare the lengths to check for duplicates
     vec.len() != set.len()
 }
-

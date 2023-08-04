@@ -3,7 +3,7 @@
 use std::{collections::HashMap, fmt, io::Write, process::Command, rc::Rc};
 
 use crate::{
-    expr::{Expr, ExprGraph},
+    expr::ExprGraph,
     graph::{ExprKey, Graph, QueryBlockKey},
     includes::*,
     metadata::TableDesc,
@@ -71,20 +71,7 @@ pub struct NamedExpr {
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_key: ExprKey, graph: &ExprGraph) -> Self {
-        let expr = &graph.get(expr_key).value;
-
-        /*
-        let mut alias = alias;
-        if alias.is_none() {
-            if let Expr::Column { colname, .. } = expr {
-                alias = Some(colname.clone())
-            } else if let Expr::Star { .. } = expr {
-                alias = Some("*".to_string())
-            }
-        }
-        */
-
+    pub fn new(alias: Option<String>, expr_key: ExprKey, _graph: &ExprGraph) -> Self {
         NamedExpr { alias, expr_key }
     }
 }

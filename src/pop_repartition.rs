@@ -33,12 +33,7 @@ impl RepartitionWriteContext {
     pub fn try_new(pop_key: POPKey, rpw: &RepartitionWrite, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let writers = (0..rpw.cpartitions).map(|_| None).collect();
 
-        Ok(Box::new(RepartitionWriteContext {
-            pop_key,
-            children,
-            partition_id,
-            writers,
-        }))
+        Ok(Box::new(RepartitionWriteContext { pop_key, children, partition_id, writers }))
     }
 
     fn eval_repart_keys(repart_code: &[PCode], input: &ChunkBox) -> ChunkBox {
@@ -171,12 +166,7 @@ pub struct RepartitionWrite {
 
 impl RepartitionWrite {
     pub fn new(repart_key: Vec<PCode>, schema: Rc<Schema>, stage_link: StageLink, cpartitions: PartitionId) -> Self {
-        RepartitionWrite {
-            repart_key,
-            schema,
-            stage_link,
-            cpartitions,
-        }
+        RepartitionWrite { repart_key, schema, stage_link, cpartitions }
     }
 }
 
