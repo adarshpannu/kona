@@ -1,5 +1,8 @@
 // graph
 
+use std::fmt;
+
+use regex::Regex;
 use slotmap::{new_key_type, SlotMap};
 
 use crate::includes::*;
@@ -188,5 +191,41 @@ where
     type Item = K;
     fn next(&mut self) -> Option<Self::Item> {
         self.graph_iter.next(self.graph)
+    }
+}
+
+pub fn key_to_id(keystr: &str) -> String {
+    let re1 = Regex::new(r"^.*\(").unwrap();
+    let re2 = Regex::new(r"\).*$").unwrap();
+    //let re3 = Regex::new(r"v1$").unwrap();
+
+    let id = keystr;
+    let id = re1.replace_all(&id, "");
+    let id = re2.replace_all(&id, "");
+    //let id = re3.replace_all(&id, "");
+    id.to_string()
+}
+
+impl fmt::Display for QueryBlockKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for ExprKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.printable_id())
+    }
+}
+
+impl fmt::Display for LOPKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.printable_id())
+    }
+}
+
+impl fmt::Display for POPKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.printable_id())
     }
 }

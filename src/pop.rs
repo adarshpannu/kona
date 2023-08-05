@@ -5,7 +5,7 @@ use std::{
     io::{self, Write},
 };
 
-use arrow2::io::csv::write;
+use arrow2::{io::csv::write, compute::filter::filter_chunk};
 
 use crate::{
     expr::AggType,
@@ -133,11 +133,25 @@ impl Write for VecWriter {
 }
 
 pub fn chunk_to_string(chunk: &ChunkBox, header: &str) -> String {
+    // Only display a maximum of 10 rows
+    let len = chunk.len();
+    let new_chunk;
+    let chunk = if len > 10 {
+        let filter_values = (0..len).map(|ix| if ix < 10 { Some(true) } else { Some(false) }).collect::<Vec<_>>();
+        let filter_values = BooleanArray::from(filter_values);
+        new_chunk = filter_chunk(chunk, &filter_values).unwrap();
+        &new_chunk
+    } else {
+        chunk
+    };
+
     let mut writer = VecWriter::new();
     let options = write::SerializeOptions::default();
     writer.write_fmt(format_args!("\n---------- {} ----------\n", header)).unwrap();
     write::write_chunk(&mut writer, chunk, &options).unwrap();
-    //writer.write(b"--------------------\n").unwrap();
+    if len > 10 {
+        writer.write_fmt(format_args!("---------- [{} rows not shown] ----------", len - 10)).unwrap();
+    }
     writer.into_string()
 }
 

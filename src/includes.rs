@@ -8,7 +8,8 @@ pub use arrow2::{
     datatypes::{DataType, Field, Schema},
     error::Result as A2Result,
 };
-pub use log::{debug, error, info, warn};
+
+pub use tracing::{debug, error, event, info, Level};
 pub use serde::{Deserialize, Serialize};
 
 pub use crate::{env::Env, stage::StageLink};

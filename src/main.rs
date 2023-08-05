@@ -18,6 +18,7 @@ extern crate lalrpop_util;
 
 #[macro_use]
 extern crate fstrings;
+extern crate tracing;
 
 lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
@@ -58,6 +59,8 @@ pub mod task;
 
 pub mod print;
 
+pub use tracing::{debug, event, info, Level};
+
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     // Clear output directories
@@ -73,7 +76,35 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     Ok(())
 }
 
-fn run_job(env: &mut Env) -> Result<(), String> {
+pub fn enable_tracing(env: &mut Env, astlist: &mut Vec<AST>, run_trace: bool) -> Result<(), String> {
+    let mut ix_trace = None;
+    for (ix, ast) in astlist.iter().enumerate() {
+        match ast {
+            AST::SetOption { name, value } => {
+                if name.to_uppercase() == "TRACE" {
+                    if ix_trace.is_some() {
+                        return Err("Multiple SET TRACE statements found.".to_owned());
+                    }
+                    if run_trace {
+                        env.set_option(name.clone(), value.clone())?;
+                    }
+                    ix_trace = Some(ix);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(ix_trace) = ix_trace {
+        astlist.remove(ix_trace);
+    } else if run_trace {
+        // Default trace setting
+        logging::init("info");
+    }
+    Ok(())
+}
+
+fn run_job(env: &mut Env, run_trace: bool) -> Result<(), String> {
     let pathname = &env.input_pathname;
     let contents = fs::read_to_string(pathname).map_err(|err| stringify1("Cannot open file: {}", err))?;
 
@@ -82,8 +113,11 @@ fn run_job(env: &mut Env) -> Result<(), String> {
     let qgm_raw_pathname = format!("{}/{}", env.output_dir, "qgm_raw.dot");
     let qgm_resolved_pathname = format!("{}/{}", env.output_dir, "qgm_resolved.dot");
 
-    // Remove commented lines
-    let astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
+    let mut astlist: Vec<AST> = sqlparser::JobParser::new().parse(&mut parser_state, &contents).unwrap();
+
+    // Run any SET TRACE statement right away, if required. Additionally, ensure only one such statement exists in the job.
+    enable_tracing(env, &mut astlist, run_trace)?;
+
     for ast in astlist.into_iter() {
         match ast {
             AST::CatalogTable { name, options } => {
@@ -128,14 +162,14 @@ fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "yard=info,yard::pop_compile=debug,yard::pop_repartition=debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
-    logging::init("debug");
+    //logging::init("debug");
 
-    let input_pathname = f!("{TOPDIR}/sql/simple.fsql");
+    let input_pathname = f!("{TOPDIR}/sql/tpch-q1.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
 
     let mut env = Env::new(99, 1, input_pathname, output_dir);
 
-    let jobres = run_job(&mut env);
+    let jobres = run_job(&mut env, true);
     if let Err(errstr) = &jobres {
         let errstr = errstr.to_string();
         error!("{}", errstr);
@@ -150,7 +184,7 @@ fn main() -> Result<(), String> {
 #[test]
 fn run_unit_tests() -> Result<(), String> {
     // Initialize logger with INFO as default
-    logging::init("error");
+    //logging::init("error");
     let mut npassed = 0;
     let mut ntotal = 0;
     //let diffcmd = "/Applications/DiffMerge.app/Contents/MacOS/DiffMerge";
@@ -168,7 +202,7 @@ fn run_unit_tests() -> Result<(), String> {
         let mut env = Env::new(id, 1, input_pathname, output_dir.clone());
         env.set_option("PARSE_ONLY".to_string(), datum::Datum::STR(Rc::new("true".to_string()))).unwrap();
 
-        let jobres = run_job(&mut env);
+        let jobres = run_job(&mut env, false);
         if let Err(errstr) = jobres {
             let errstr = format!("{}", &errstr);
             error!("{}", errstr);
@@ -201,7 +235,13 @@ fn display_output_dir(flow: &Flow) {
     let files = list_files(&output_dir).unwrap();
     for file_path in files.iter() {
         let contents = fs::read_to_string(file_path).expect("Should have been able to read the file");
-        print!("{}", contents);
+        let lines = contents.split('\n').collect::<Vec<_>>();
+        for line in lines.iter().take(10) {
+            print!("{}\n", line);
+        }
+        if lines.len() > 10 {
+            println!("[{} lines not shown]", lines.len());
+        }
     }
     println!("----------------------------");
     println!("");

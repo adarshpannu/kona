@@ -1,3 +1,4 @@
+SET TRACE = "info,[compile]=debug";
 
 CATALOG TABLE LINEITEM( "TYPE" = "PARQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/tpch0.01/lineitem.tbl",
     PATH="/Users/adarshrp/Projects/tpch-data/sf0.01/lineitem.parquet");

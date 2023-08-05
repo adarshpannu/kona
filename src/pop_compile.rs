@@ -44,6 +44,7 @@ impl POP {
         Ok(flow)
     }
 
+    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId) -> Result<POPKey, String> {
         let (lop, _, lop_children) = lop_graph.get3(lop_key);
 
@@ -95,9 +96,8 @@ impl POP {
         Ok(pop_key)
     }
 
+    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_scan(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId) -> Result<POPKey, String> {
-        debug!("[{:?}] begin compile_scan", lop_key);
-
         let (lop, lopprops, ..) = lop_graph.get3(lop_key);
 
         let qunid = lopprops.quns.elements()[0];
@@ -148,6 +148,7 @@ impl POP {
         Ok(pop_key)
     }
 
+    //#[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_projection(qgm: &QGM, lop_key: LOPKey, lopprops: &LOPProps, proj_map: &mut ProjectionMap) -> (Option<Vec<ColId>>, Option<Vec<PCode>>) {
         let cols = lopprops
             .cols
@@ -222,8 +223,6 @@ impl POP {
         let mut pcodevec = vec![];
         if !exprs.is_empty() {
             for expr_key in exprs.iter() {
-                debug!("Compile expression: {:?}", expr_key.printable(&qgm.expr_graph, false));
-
                 let mut pcode = PCode::default();
                 expr_key.compile(&qgm.expr_graph, &mut pcode, proj_map);
                 pcodevec.push(pcode);
@@ -234,12 +233,11 @@ impl POP {
         }
     }
 
+    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_repartition_write(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, pop_children: Vec<POPKey>, schema: Rc<Schema>,
         cpartitions: usize,
     ) -> Result<POPKey, String> {
-        debug!("[{:?}] begin compile_repartition_write", lop_key);
-
         let stage_id = stage_link.0;
         let (_, lopprops, children) = lop_graph.get3(lop_key);
 
@@ -275,11 +273,10 @@ impl POP {
         Ok(pop_key)
     }
 
+    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_repartition_read(
         _qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_link: StageLink, schema: Rc<Schema>, npartitions: usize,
     ) -> Result<POPKey, String> {
-        debug!("[{:?}] begin compile_repartition_read", lop_key);
-
         debug!("[{:?}] compile_repartition_read: schema = {:?}", lop_key, &schema);
 
         let stage_id = stage_link.1;
@@ -307,11 +304,10 @@ impl POP {
         Ok(pop_key)
     }
 
+    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_join(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
-        debug!("[{:?}] begin compile_join", lop_key);
-
         let (lop, lopprops, children) = lop_graph.get3(lop_key);
         if let LOP::HashJoin { lhs_join_keys, rhs_join_keys } = lop {
             let keyexprs = [lhs_join_keys, rhs_join_keys];
@@ -373,11 +369,10 @@ impl POP {
         }
     }
 
+    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
     pub fn compile_aggregation(
         qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId, pop_children: Vec<POPKey>,
     ) -> Result<POPKey, String> {
-        debug!("[{:?}] begin compile_aggregation", lop_key);
-
         let (lop, lopprops, children) = lop_graph.get3(lop_key);
         if let LOP::Aggregation { key_len } = lop {
             let qunid = lopprops.quns.elements()[0];

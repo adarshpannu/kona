@@ -4,12 +4,11 @@ use std::collections::HashMap;
 
 use bimap::BiMap;
 use partitions::PartitionVec;
-use regex::Regex;
 
 use crate::{
     bitset::Bitset,
     expr::{Expr::*, ExprGraph, *},
-    graph::{ExprKey, Graph, LOPKey, QueryBlockKey},
+    graph::{ExprKey, Graph, LOPKey, QueryBlockKey, key_to_id},
     includes::*,
     metadata::{PartDesc, PartType},
     qgm::{QueryBlock, QueryBlockType},
@@ -72,13 +71,8 @@ impl LOPKey {
     }
 
     pub fn printable_id(&self) -> String {
-        let re1 = Regex::new(r"^.*\(").unwrap();
-        let re2 = Regex::new(r"\).*$").unwrap();
-
-        let id = format!("{:?}", *self);
-        let id = re1.replace_all(&id, "");
-        let id = re2.replace_all(&id, "");
-        id.to_string()
+        let keystr = format!("{:?}", *self);
+        key_to_id(&keystr)
     }
 }
 

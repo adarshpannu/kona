@@ -1,37 +1,21 @@
 // logging
 
-use std::{io::Write, thread};
+use std::env;
 
-use chrono::{DateTime, Local};
-use env_logger::{fmt::Color, Env};
-use log::Level;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-pub fn init(default_log_level: &str) {
-    let mut builder = env_logger::Builder::from_env(Env::default().default_filter_or(default_log_level));
-    let builder = builder.format(|buf, record| {
-        let now: DateTime<Local> = Local::now();
-        let mut level_style = buf.style();
+pub fn init(trace_cmd: &str) {
+    env::set_var("RUST_LOG", "debug,[{tag}]=debug");
 
-        let level = record.level();
-        if level == Level::Error || level == Level::Warn {
-            level_style.set_color(Color::Red).set_bold(true);
-        } else if level == Level::Info {
-            level_style.set_color(Color::Green).set_bold(false);
-        } else if level == Level::Debug {
-            level_style.set_color(Color::Blue).set_bold(false);
-        }
+    //env::set_var("RUST_LOG", "info,yard[inc{myfield1=1}]=debug");
+    //env::set_var("RUST_LOG", "yard=debug");
 
-        writeln!(
-            buf,
-            "[{} {} {}:{} {}] - {}",
-            now.to_rfc3339(),
-            level_style.value(record.level()),
-            //record.module_path().unwrap_or("<no-mod>"),
-            record.file().unwrap_or("unknown"),
-            record.line().unwrap_or(0),
-            thread::current().name().unwrap_or("<unnamed-thread>"),
-            record.args()
-        )
-    });
-    builder.init();
+    //let env_filter = EnvFilter::from_default_env();
+    let env_filter = EnvFilter::builder().parse_lossy(trace_cmd);
+
+    tracing_subscriber::registry()
+        .with(fmt::layer()) //.pretty())
+        .with(env_filter)
+        .init();
 }
+

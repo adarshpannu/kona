@@ -1,3 +1,5 @@
+SET TRACE = "info,[compile_join{lop=9v1}]=debug";
+
 CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/R.csv", "PARTITIONS" = 3);
 CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/S.csv", "PARTITIONS" = 3 );
 CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/T.csv",  "PARTITIONS" = 3);

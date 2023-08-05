@@ -13,8 +13,8 @@ lalrpop = "0.20.0"
 [dependencies]
 clp = {git = "https://github.com/adarshpannu/clp"}
 #mio = {version = "0.7" , features = ["os-poll", "os-util", "tcp", "udp", "uds"]}
-env_logger = "0.10.0"
-log = "0.4.0"
+tracing = "0.1.37"
+tracing-subscriber = {version = "0.3.17", features = ["env-filter"]}
 serde = {version = "1.0", features = ["derive", "rc"]}
 typed-arena = "2.0.1"
 #serde_traitobject = "0.2.7"

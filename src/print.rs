@@ -2,12 +2,10 @@
 
 use std::{fs::File, io::Write, process::Command};
 
-use regex::Regex;
-
 use crate::{
     bitset::Bitset,
     expr::Expr,
-    graph::{ExprKey, LOPKey, POPKey},
+    graph::{key_to_id, ExprKey, LOPKey, POPKey},
     includes::*,
     lop::{LOPGraph, VirtCol, LOP},
     pop::{POPGraph, POP},
@@ -387,12 +385,7 @@ impl POPKey {
     }
 
     pub fn printable_id(&self) -> String {
-        let re1 = Regex::new(r"^.*\(").unwrap();
-        let re2 = Regex::new(r"\).*$").unwrap();
-
-        let id = format!("{:?}", *self);
-        let id = re1.replace_all(&id, "");
-        let id = re2.replace_all(&id, "");
-        id.to_string()
+        let keystr = format!("{:?}", *self);
+        key_to_id(&keystr)
     }
 }

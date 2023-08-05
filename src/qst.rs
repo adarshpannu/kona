@@ -322,6 +322,9 @@ impl QueryBlock {
             BinaryExpr(arithop) => {
                 // Check argument types
                 if is_numeric(&children_datatypes[0]) && is_numeric(&children_datatypes[1]) {
+                    if children_datatypes[0] != children_datatypes[1] {
+                        return Err(f!("Binary operands don't have identical types: {:?} vs {:?}", children_datatypes[0], children_datatypes[1]))
+                    }
                     match arithop {
                         ArithOp::Add | ArithOp::Sub | ArithOp::Mul => children_datatypes[0].clone(),
                         ArithOp::Div => DataType::Float64,

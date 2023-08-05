@@ -2,6 +2,8 @@
 
 #![allow(clippy::borrowed_box)]
 
+use std::fmt;
+
 use arrow2::scalar::{PrimitiveScalar, Scalar, Utf8Scalar};
 
 use crate::{
@@ -35,7 +37,10 @@ pub enum PInstruction {
 }
 
 impl ExprKey {
+    #[tracing::instrument(fields(expr = self.to_string()), skip_all, parent = None)]
     pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, proj_map: &mut ProjectionMap) {
+        debug!("Compile expression: {}", self.printable(expr_graph, false));
+
         let prj = Projection::VirtCol(*self);
         let colid = proj_map.get(prj);
         let inst = if let Some(colid) = colid {
@@ -96,10 +101,19 @@ impl<'a> Column<'a> {
     }
 }
 
-#[derive(Debug)]
 enum PCodeStack<'a> {
     Datum(Datum),
     Column(Column<'a>),
+}
+
+impl<'a> fmt::Debug for PCodeStack<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let display_str = match self {
+            PCodeStack::Column(col) => f!("{:?}", col.get().data_type()),
+            PCodeStack::Datum(datum) => f!("{:?}", datum),
+        };
+        write!(fmt, "{}", display_str)
+    }
 }
 
 impl PCode {
@@ -139,8 +153,8 @@ impl PCode {
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
-                        _ => {
-                            panic!("Not implemented: {:?}", inst)
+                        (lhs, op, rhs) => {
+                            todo!("Not yet implemented: {:?} {:?} {:?}", lhs, op, rhs)
                         }
                     }
                 }

@@ -8,7 +8,7 @@ use Expr::*;
 
 use crate::{
     datum::Datum,
-    graph::{ExprKey, Graph, QueryBlockKey},
+    graph::{key_to_id, ExprKey, Graph, QueryBlockKey},
     includes::*,
 };
 
@@ -253,8 +253,13 @@ impl ExprKey {
         }
     }
 
-    pub fn to_string(self: &ExprKey) -> String {
+    pub fn to_string0(self: &ExprKey) -> String {
         format!("{:?}", *self).replace('(', "").replace(')', "")
+    }
+
+    pub fn printable_id(&self) -> String {
+        let keystr = format!("{:?}", *self);
+        key_to_id(&keystr)
     }
 
     pub fn is_column(&self, graph: &ExprGraph) -> bool {

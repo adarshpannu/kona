@@ -1,11 +1,12 @@
 // env
 
-use crate::{datum::Datum, includes::*, metadata::Metadata, scheduler::Scheduler};
+use crate::{datum::Datum, includes::*, logging, metadata::Metadata, scheduler::Scheduler};
 
 #[derive(Debug, Default)]
 pub struct EnvSettings {
     pub parallel_degree: Option<usize>,
     pub parse_only: Option<bool>,
+    pub trace: Option<String>,
 }
 
 pub struct Env {
@@ -32,6 +33,10 @@ impl Env {
         match name.as_str() {
             "PARALLEL_DEGREE" => self.settings.parallel_degree = Some(self.get_int_option(name.as_str(), &value)? as usize),
             "PARSE_ONLY" => self.settings.parse_only = Some(self.get_boolean_option(name.as_str(), &value)?),
+            "TRACE" => {
+                self.settings.trace = Some(self.get_string_option(name.as_str(), &value)?);
+                logging::init(&self.settings.trace.as_ref().unwrap());
+            }
             _ => return Err(f!("Invalid option specified: {name}.")),
         };
         Ok(())
@@ -53,5 +58,13 @@ impl Env {
             return Ok(*ival);
         }
         Err(f!("Option {name} needs to be an integer. It holds {value} instead."))
+    }
+
+    pub fn get_string_option(&self, name: &str, value: &Datum) -> Result<String, String> {
+        if let Datum::STR(s) = value {
+            Ok((&**s).clone())
+        } else {
+            Err(f!("Option {name} needs to be a string. It holds {value} instead."))
+        }
     }
 }
