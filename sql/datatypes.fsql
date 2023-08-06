@@ -1,0 +1,11 @@
+SET TRACE = "info,[resolve_expr]=debug";
+
+CATALOG TABLE datatypes ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/datatypes.csv", COLUMNS="C1=INT,C2=STRING,C3=STRING", PARTITIONS = 1);
+
+DESCRIBE TABLE datatypes;
+
+SELECT C1
+FROM datatypes
+where C1 > CAST("0" as INT64);
+
+
