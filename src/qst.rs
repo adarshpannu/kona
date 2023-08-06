@@ -342,6 +342,7 @@ impl QueryBlock {
             LogExpr(..) => DataType::Boolean,
             Literal(Utf8(_)) => DataType::Utf8,
             Literal(Int64(_)) => DataType::Int64,
+            Literal(Float64(_)) => DataType::Float64,
             Literal(Boolean(_)) => DataType::Boolean,
             AggFunction(aggtype, ..) => {
                 if !agg_fns_allowed {

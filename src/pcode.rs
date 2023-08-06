@@ -7,7 +7,7 @@ use std::fmt;
 use arrow2::scalar::{PrimitiveScalar, Scalar, Utf8Scalar};
 
 use crate::{
-    datum::Datum,
+    datum::{Datum, F64},
     expr::{ArithOp, Expr, ExprGraph, LogOp, RelOp},
     graph::ExprKey,
     includes::*,
@@ -133,18 +133,30 @@ impl PCode {
 
                     match (lhs, op, rhs) {
                         (PCodeStack::Column(lhs), arithop, PCodeStack::Column(rhs)) => {
-                            let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
-                            let rhs = rhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
+                            let lhs = &**lhs.get();
+                            let rhs = &**rhs.get();
                             let array: Box<dyn Array> = match arithop {
-                                ArithOp::Add => Box::new(arithmetics::basic::add(lhs, rhs)),
-                                ArithOp::Div => Box::new(arithmetics::basic::div(lhs, rhs)),
-                                nyi => todo!("nyi: {:?}", nyi),
+                                ArithOp::Add => arithmetics::add(lhs, rhs),
+                                ArithOp::Sub => arithmetics::sub(lhs, rhs),
+                                ArithOp::Mul => arithmetics::mul(lhs, rhs),
+                                ArithOp::Div => arithmetics::div(lhs, rhs),
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
                         (PCodeStack::Column(lhs), arithop, PCodeStack::Datum(Datum::Int64(i))) => {
                             let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
                             let rhs = &(i as i64);
+                            let array: Box<dyn Array> = match arithop {
+                                ArithOp::Add => Box::new(arithmetics::basic::add_scalar(lhs, rhs)),
+                                ArithOp::Sub => Box::new(arithmetics::basic::sub_scalar(lhs, rhs)),
+                                ArithOp::Mul => Box::new(arithmetics::basic::mul_scalar(lhs, rhs)),
+                                ArithOp::Div => Box::new(arithmetics::basic::div_scalar(lhs, rhs)),
+                            };
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        (PCodeStack::Column(lhs), arithop, PCodeStack::Datum(Datum::Float64(fvalue))) => {
+                            let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<f64>>().unwrap();
+                            let rhs = &f64::from(fvalue);
                             let array: Box<dyn Array> = match arithop {
                                 ArithOp::Add => Box::new(arithmetics::basic::add_scalar(lhs, rhs)),
                                 ArithOp::Sub => Box::new(arithmetics::basic::sub_scalar(lhs, rhs)),

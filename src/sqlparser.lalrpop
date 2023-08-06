@@ -428,6 +428,10 @@ Number: ExprKey = {
         .map(|i| parser_state.expr_graph.add_node(Literal(Int64(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
+    Double =>? { f64::from_str(<>)
+        .map(|f| parser_state.expr_graph.add_node(Literal(Float64(F64::from(f))), None))
+        .map_err(|_| ParseError::User { error: "Invalid double." }) 
+    },
 }
 
 Integer = r"[-+]?[0-9]+";
