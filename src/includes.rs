@@ -8,11 +8,15 @@ pub use arrow2::{
     datatypes::{DataType, Field, Schema},
     error::Result as A2Result,
 };
-
-pub use tracing::{debug, error, event, info, Level};
 pub use serde::{Deserialize, Serialize};
+pub use tracing::{debug, error, event, info, Level};
 
-pub use crate::{env::Env, stage::StageLink};
+pub use crate::{
+    datum::{Datum, Datum::*},
+    env::Env,
+    stage::StageLink,
+    *,
+};
 
 pub const TOPDIR: &str = "/Users/adarshrp/Projects/yard";
 pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";

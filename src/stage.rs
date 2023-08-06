@@ -47,7 +47,7 @@ impl Stage {
         for partition_id in 0..npartitions {
             let task = Task::new(partition_id);
             //task.run(flow, self);
-
+            
             let thread_id = partition_id % (env.scheduler.nthreads());
 
             let task_triplet = &(flow, self, task);

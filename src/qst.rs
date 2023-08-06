@@ -1,9 +1,9 @@
 // QST: Query Semantic Transforms
 
+use core::panic;
 use std::rc::Rc;
 
 use crate::{
-    datum::Datum,
     expr::{AggType, ArithOp, Expr, Expr::*, ExprGraph, ExprProp},
     graph::{ExprKey, Node, QueryBlockKey},
     includes::*,
@@ -285,7 +285,10 @@ impl QueryBlock {
         }
     }
 
+    #[tracing::instrument(fields(expr = expr_key.to_string()), skip_all, parent = None)]
     pub fn resolve_expr(&self, env: &Env, expr_graph: &mut ExprGraph, expr_key: ExprKey, agg_fns_allowed: bool) -> Result<(), String> {
+        debug!("Unresolved expression: {} ...", expr_key.printable(expr_graph, false));
+
         let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_key).value {
             // Nested aggregate functions not allowed
             false
@@ -293,10 +296,9 @@ impl QueryBlock {
             agg_fns_allowed
         };
 
-        let children = expr_graph.get(expr_key).children.clone();
-
+        // Resolve children first
         let mut children_datatypes = vec![];
-
+        let children = expr_graph.get(expr_key).children.clone();
         if let Some(children) = children {
             for child_key in children {
                 self.resolve_expr(env, expr_graph, child_key, children_agg_fns_allowed)?;
@@ -305,12 +307,11 @@ impl QueryBlock {
             }
         }
 
-        let node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
-        let expr = &mut node.value;
-        //info!("Check: {:?}", expr);
-
+        // Now resolve current expr node
+        let (expr, props, ..) = expr_graph.get3(expr_key);
+        let mut resolved_expr = None;
         let datatype = match expr {
-            CID(_, _) => node.properties.data_type().clone(),
+            CID(_, _) => props.data_type().clone(),
             RelExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
@@ -323,7 +324,7 @@ impl QueryBlock {
                 // Check argument types
                 if is_numeric(&children_datatypes[0]) && is_numeric(&children_datatypes[1]) {
                     if children_datatypes[0] != children_datatypes[1] {
-                        return Err(f!("Binary operands don't have identical types: {:?} vs {:?}", children_datatypes[0], children_datatypes[1]))
+                        return Err(f!("Binary operands don't have identical types: {:?} vs {:?}", children_datatypes[0], children_datatypes[1]));
                     }
                     match arithop {
                         ArithOp::Add | ArithOp::Sub | ArithOp::Mul => children_datatypes[0].clone(),
@@ -333,16 +334,15 @@ impl QueryBlock {
                     return Err("Binary operands must be numeric types".to_string());
                 }
             }
-            Column { prefix, colname, ref mut qunid, ref mut colid } => {
+            Column { prefix, colname, .. } => {
                 let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
-                *qunid = quncol.0;
-                *colid = quncol.1;
+                resolved_expr = Some(Column { prefix: prefix.clone(), colname: colname.clone(), qunid: quncol.0, colid: quncol.1 });
                 datatype
             }
             LogExpr(..) => DataType::Boolean,
-            Literal(Datum::STR(_)) => DataType::Utf8,
-            Literal(Datum::INT(_)) => DataType::Int64,
-            Literal(Datum::BOOL(_)) => DataType::Boolean,
+            Literal(Utf8(_)) => DataType::Utf8,
+            Literal(Int64(_)) => DataType::Int64,
+            Literal(Boolean(_)) => DataType::Boolean,
             AggFunction(aggtype, ..) => {
                 if !agg_fns_allowed {
                     return Err(format!("Aggregate function {:?} not allowed.", aggtype));
@@ -366,12 +366,50 @@ impl QueryBlock {
                     return Err(String::from("Only numeric datatypes can be negated."));
                 }
             }
+            Cast(to_datatype) => {
+                // Perform cast
+                let child_expr_key = expr_graph.get(expr_key).children.as_ref().unwrap()[0];
+                let from_expr = expr_graph.get_value(child_expr_key);
+                let new_value = Self::resolve_cast(from_expr, to_datatype)?;
+                let datatype = new_value.datatype();
+                resolved_expr = Some(Literal(new_value));
+                datatype
+            }
             _ => {
                 panic!("Unexpected expression found: {:?}", &expr);
             }
         };
+
+        debug!("Resolved expression: {}: {:?}", expr_key.printable(expr_graph, false), datatype);
+
+        let node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
         node.properties.set_data_type(datatype);
+        if let Some(resolved_expr) = resolved_expr {
+            node.value = resolved_expr;
+            node.children = None;
+        }
+
         Ok(())
+    }
+
+    pub fn resolve_cast(from_expr: &Expr, to_datatype: &str) -> Result<Datum, String> {
+        if let Literal(from_value) = from_expr {
+            let to_value = match (from_value, to_datatype) {
+                (Utf8(s), "INT64") => {
+                    let to_value: i64 = s.parse::<i64>().map_err(stringify)?;
+                    Int64(to_value)
+                }
+                (Utf8(s), "DATE32") => {
+                    let date: chrono::NaiveDate = s.parse::<chrono::NaiveDate>().map_err(stringify)?;
+                    let date: i32 = chrono::Datelike::num_days_from_ce(&date) - arrow2::temporal_conversions::EPOCH_DAYS_FROM_CE;
+                    Date32(date)
+                }
+                _ => todo!(),
+            };
+            return Ok(to_value);
+        } else {
+            panic!("resolve_cast(): Can only cast to literals")
+        }
     }
 
     pub fn resolve_star(&mut self, _env: &Env, expr_graph: &mut ExprGraph) -> Result<(), String> {

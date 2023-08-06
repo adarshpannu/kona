@@ -142,7 +142,7 @@ impl PCode {
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
-                        (PCodeStack::Column(lhs), arithop, PCodeStack::Datum(Datum::INT(i))) => {
+                        (PCodeStack::Column(lhs), arithop, PCodeStack::Datum(Datum::Int64(i))) => {
                             let lhs = lhs.get().as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
                             let rhs = &(i as i64);
                             let array: Box<dyn Array> = match arithop {
@@ -178,17 +178,22 @@ impl PCode {
                         (PCodeStack::Column(lhs), relop, PCodeStack::Datum(d)) => {
                             let scalar_i64; // = PrimitiveScalar::new(DataType::Int64, Some(0 as i64));
                             let scalar_utf8; // = PrimitiveScalar::new(DataType::Int64, Some(0 as i64));
+                            let scalar_i32;
 
                             let lhs = &**lhs.get();
                             let rhs: &dyn Scalar = match d {
-                                Datum::INT(i) => {
+                                Datum::Int64(i) => {
                                     scalar_i64 = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
                                     &scalar_i64
                                 }
-                                Datum::STR(s) => {
+                                Datum::Utf8(s) => {
                                     let s = &*s.clone();
                                     scalar_utf8 = Utf8Scalar::<i32>::new(Some(s));
                                     &scalar_utf8
+                                }
+                                Datum::Date32(d) => {
+                                    scalar_i32 = PrimitiveScalar::new(DataType::Date32, Some(d as i32));
+                                    &scalar_i32
                                 }
                                 _ => todo!(),
                             };
@@ -203,7 +208,9 @@ impl PCode {
                             };
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
-                        _ => todo!(),
+                        (lhs, op, rhs) => {
+                            todo!("Not yet implemented: {:?} {:?} {:?}", lhs, op, rhs)
+                        }
                     }
                 }
                 PInstruction::LogExpr(op) => {

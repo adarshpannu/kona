@@ -1,7 +1,7 @@
 target/
 src/temp/*
 metastore_db/*
-.ipynb_checkpoints/*
+data/.ipynb_checkpoints/*
 derby.log
 temp/*
 tmp/*

@@ -3,10 +3,10 @@ use lalrpop_util::ParseError;
 
 use crate::expr::{Expr::*, *};
 use crate::datum::*;
+use crate::datum::Datum::*;
 use crate::ast::*;
 use crate::qgm::*;
 use crate::graph::*;
-use std::rc::Rc;
 
 grammar(parser_state: &mut ParserState);
 
@@ -122,13 +122,12 @@ CatalogTableOption: (String, Datum) = {
 }
 
 CatalogTableOptionValue: Datum = {
-    Integer =>? { isize::from_str(<>)
-        .map(Datum::INT)
+    Integer =>? { i64::from_str(<>)
+        .map(Int64)
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
     <str:IdentifierOrQuotedString> =>? {
-        let str = Rc::new(str);
-        Ok(Datum::STR(str))
+        Ok(Utf8(str))
     }
 }
 
@@ -303,7 +302,7 @@ LogExprFactor: ExprKey = {
 RelExpr: ExprKey = {
     <l:Expr> <op:RelOp> <r:RelExprRHS> => parser_state.expr_graph.add_node(RelExpr(op), Some(vec![l, r])),
     <l:Expr> "IS" <not:"NOT"?> "NULL" => {
-        let r = parser_state.expr_graph.add_node(Literal(Datum::NULL), None);
+        let r = parser_state.expr_graph.add_node(Literal(Null), None);
         let expr = parser_state.expr_graph.add_node(RelExpr(RelOp::Is), Some(vec![l, r]));
         if not.is_some() {
             parser_state.expr_graph.add_node(LogExpr(LogOp::Not), Some(vec![expr]))
@@ -385,7 +384,7 @@ Factor: ExprKey = {
 
 Term: ExprKey = {
     <cr:ColumnReference> => parser_state.expr_graph.add_node(Column { prefix: cr.0, colname: cr.1, qunid: 0, colid: 0 }, None),
-    QuotedString => parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(<>))), None),
+    QuotedString => parser_state.expr_graph.add_node(Literal(Utf8(<>)), None),
     Number,
     ScalarFunction,
     AggFunction,
@@ -417,17 +416,16 @@ AggArg: ExprKey = {
 ScalarFunction: ExprKey = {
     <name:Identifier> "(" <args:FunctionArgs?> ")" => parser_state.expr_graph.add_node(ScalarFunction(name), args),
     "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
-        let datatype = parser_state.expr_graph.add_node(Literal(Datum::STR(Rc::new(datatype))), None);
-        let args = vec![arg, datatype];
-        parser_state.expr_graph.add_node(ScalarFunction(String::from("CAST")), Some(args))
+        let args = vec![arg];
+        parser_state.expr_graph.add_node(Cast(datatype), Some(args))
     }
 }
 
 FunctionArgs = CommaSeparatedList<Expr>;
 
 Number: ExprKey = {
-    Integer =>? { isize::from_str(<>)
-        .map(|i| parser_state.expr_graph.add_node(Literal(Datum::INT(i)), None))
+    Integer =>? { i64::from_str(<>)
+        .map(|i| parser_state.expr_graph.add_node(Literal(Int64(i)), None))
         .map_err(|_| ParseError::User { error: "Invalid integer" }) 
     },
 }

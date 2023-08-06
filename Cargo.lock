@@ -1778,6 +1778,7 @@ dependencies = [
  "itertools 0.11.0",
  "lalrpop",
  "lalrpop-util",
+ "lazy_static",
  "partitions",
  "regex",
  "self_cell",

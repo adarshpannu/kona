@@ -4,7 +4,7 @@
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
-use std::{fs, process::Command, rc::Rc};
+use std::{fs, process::Command};
 
 use ast::AST;
 use flow::Flow;
@@ -18,6 +18,9 @@ extern crate lalrpop_util;
 
 #[macro_use]
 extern crate fstrings;
+
+extern crate lazy_static;
+
 extern crate tracing;
 
 lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
@@ -70,9 +73,6 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
 
     // Run the flow
     env.scheduler.run_flow(env, flow)?;
-
-    env.scheduler.end_all_threads();
-    env.scheduler.join();
     Ok(())
 }
 
@@ -149,6 +149,10 @@ fn run_job(env: &mut Env, run_trace: bool) -> Result<(), String> {
             }
         }
     }
+
+    env.scheduler.end_all_threads();
+    env.scheduler.join();
+
     Ok(())
 }
 
@@ -164,7 +168,7 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     //logging::init("debug");
 
-    let input_pathname = f!("{TOPDIR}/sql/tpch-q1.fsql");
+    let input_pathname = f!("{TOPDIR}/sql/scratch.fsql");
     let output_dir = f!("{TOPDIR}/tmp");
 
     let mut env = Env::new(99, 1, input_pathname, output_dir);
@@ -200,7 +204,7 @@ fn run_unit_tests() -> Result<(), String> {
 
         ntotal = ntotal + 1;
         let mut env = Env::new(id, 1, input_pathname, output_dir.clone());
-        env.set_option("PARSE_ONLY".to_string(), datum::Datum::STR(Rc::new("true".to_string()))).unwrap();
+        env.set_option("PARSE_ONLY".to_string(), Utf8(String::from("true"))).unwrap();
 
         let jobres = run_job(&mut env, false);
         if let Err(errstr) = jobres {

@@ -1,11 +1,14 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = "," );
+SET TRACE = "info";
 
-DESCRIBE TABLE emp;
+CATALOG TABLE LINEITEM( "TYPE" = "PARQUET",
+    --PATH="/Users/adarshrp/Projects/tpch-data/sf0.01/lineitem.parquet");
+    PATH="/Users/adarshrp/Downloads/part-0.parquet");
 
-set PARSE_ONLY = "true";
+DESCRIBE TABLE LINEITEM;
 
-select C1
-FROM T1, T2 INNER JOIN T3 ON 1 = 2 LEFT JOIN T4 on 3 = 4;
-
+SELECT (1.0 - L_DISCOUNT) 
+FROM LINEITEM
+WHERE L_SHIPDATE <= CAST('1992-01-10' AS DATE32)
+;
 
 

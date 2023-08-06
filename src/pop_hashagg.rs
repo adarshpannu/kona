@@ -5,7 +5,6 @@
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
-    rc::Rc,
 };
 
 use arrow2::{
@@ -15,7 +14,6 @@ use arrow2::{
 };
 
 use crate::{
-    datum::Datum,
     expr::AggType,
     flow::Flow,
     graph::POPKey,
@@ -23,6 +21,7 @@ use crate::{
     pop::{chunk_to_string, Agg, POPContext, POP},
     pop_hash::NSPLITS,
     stage::Stage,
+    Datum,
 };
 
 /***************************************************************************************************/
@@ -96,19 +95,25 @@ impl HashAggContext {
     }
 
     fn init_mutable_array(data_type: &DataType, len: usize) -> Box<dyn MutableArray> {
-        match data_type.to_physical_type() {
-            PhysicalType::Primitive(PrimitiveType::Int64) => Box::new(MutablePrimitiveArray::<i64>::with_capacity(len)),
-            PhysicalType::Utf8 => Box::new(MutableUtf8Array::<i32>::with_capacity(len)),
-            PhysicalType::Boolean => Box::new(MutableBooleanArray::with_capacity(len)),
+        match data_type {
+            DataType::Int32 => Box::new(MutablePrimitiveArray::<i32>::with_capacity(len)),
+            DataType::Date32 => Box::new(MutablePrimitiveArray::<i32>::with_capacity(len).to(DataType::Date32)),
+            DataType::Int64 => Box::new(MutablePrimitiveArray::<i64>::with_capacity(len)),
+            DataType::Utf8 => Box::new(MutableUtf8Array::<i32>::with_capacity(len)),
+            DataType::Boolean => Box::new(MutableBooleanArray::with_capacity(len)),
             typ => todo!("not implemented: {:?}", typ),
         }
     }
 
     fn append_mutable_array(mutarr: &mut Box<dyn MutableArray>, datum: Option<&Datum>) {
         match mutarr.data_type().to_physical_type() {
+            PhysicalType::Primitive(PrimitiveType::Int32) => {
+                let mutarr = mutarr.as_mut_any().downcast_mut::<MutablePrimitiveArray<i32>>().unwrap();
+                mutarr.push(datum.map(|ivalue| ivalue.try_as_i32().unwrap()));
+            }
             PhysicalType::Primitive(PrimitiveType::Int64) => {
                 let mutarr = mutarr.as_mut_any().downcast_mut::<MutablePrimitiveArray<i64>>().unwrap();
-                mutarr.push(datum.map(|ivalue| ivalue.as_isize() as i64));
+                mutarr.push(datum.map(|ivalue| ivalue.try_as_i64().unwrap()));
             }
             PhysicalType::Utf8 => {
                 let mutarr = mutarr.as_mut_any().downcast_mut::<MutableUtf8Array<i32>>().unwrap();
@@ -123,22 +128,33 @@ impl HashAggContext {
     fn convert_mutarr_to_immutable(mutarrays: Vec<Box<dyn MutableArray>>) -> Vec<Box<dyn Array>> {
         mutarrays
             .into_iter()
-            .map(|mutarr| match mutarr.data_type().to_physical_type() {
-                PhysicalType::Primitive(PrimitiveType::Int64) => {
-                    let mutarr = mutarr.as_any().downcast_ref::<MutablePrimitiveArray<i64>>().unwrap().clone();
-                    let iter = mutarr.iter().map(|i| i.cloned());
-                    let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
-                    let arr: Box<dyn Array> = Box::new(arr);
-                    arr
+            .map(|mutarr| {
+                let data_type = mutarr.data_type();
+                match data_type {
+                    DataType::Int32 | DataType::Date32 => {
+                        let mutarr = mutarr.as_any().downcast_ref::<MutablePrimitiveArray<i32>>().unwrap().clone();
+                        let iter = mutarr.iter().map(|i| i.cloned());
+                        let arr = PrimitiveArray::<i32>::from_trusted_len_iter(iter);
+                        let arr = if *data_type == DataType::Date32 { arr.to(DataType::Date32) } else { arr };
+                        let arr: Box<dyn Array> = Box::new(arr);
+                        arr
+                    }
+                    DataType::Int64 => {
+                        let mutarr = mutarr.as_any().downcast_ref::<MutablePrimitiveArray<i64>>().unwrap().clone();
+                        let iter = mutarr.iter().map(|i| i.cloned());
+                        let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
+                        let arr: Box<dyn Array> = Box::new(arr);
+                        arr
+                    }
+                    DataType::Utf8 => {
+                        let mutarr = mutarr.as_any().downcast_ref::<MutableUtf8Array<i32>>().unwrap().clone();
+                        let iter = mutarr.iter().map(|s| s.to_owned());
+                        let arr = Utf8Array::<i32>::from_trusted_len_iter(iter);
+                        let arr: Box<dyn Array> = Box::new(arr);
+                        arr
+                    }
+                    _ => todo!(),
                 }
-                PhysicalType::Utf8 => {
-                    let mutarr = mutarr.as_any().downcast_ref::<MutableUtf8Array<i32>>().unwrap().clone();
-                    let iter = mutarr.iter().map(|s| s.to_owned());
-                    let arr = Utf8Array::<i32>::from_trusted_len_iter(iter);
-                    let arr: Box<dyn Array> = Box::new(arr);
-                    arr
-                }
-                _ => todo!(),
             })
             .collect()
     }
@@ -194,6 +210,7 @@ impl HashAggContext {
         return Ok(None);
     }
 
+    #[tracing::instrument(fields(key, value), skip_all, parent = None)]
     fn insert(&mut self, hash_agg: &HashAgg, key: Vec<Option<Datum>>, value: Vec<Option<Datum>>) {
         let mut hasher = DefaultHasher::new();
 
@@ -222,21 +239,21 @@ impl HashAggContext {
             match (agg_type, input_type) {
                 (AggType::COUNT, _) => {
                     if do_init {
-                        accumulators.push(Some(Datum::INT(1isize)));
+                        accumulators.push(Some(Int64(1)));
                     } else {
                         let acc = &mut accumulators[accnum];
-                        let new_count = acc.as_ref().unwrap().as_isize() + 1;
-                        *acc = Some(Datum::INT(new_count))
+                        let new_count = acc.as_ref().unwrap().try_as_i64().unwrap() + 1;
+                        *acc = Some(Int64(new_count))
                     }
                 }
                 (AggType::SUM, _) => {
-                    let cur_value = get_input(input_colid).map_or(0, |e| e.as_isize());
+                    let cur_value = get_input(input_colid).map_or(0, |e| e.try_as_i64().unwrap());
                     if do_init {
-                        accumulators.push(Some(Datum::INT(cur_value)));
+                        accumulators.push(Some(Int64(cur_value)));
                     } else {
                         let acc = &mut accumulators[accnum];
-                        let old_sum = acc.as_ref().map_or(0, |e| e.as_isize());
-                        *acc = Some(Datum::INT(old_sum + cur_value));
+                        let old_sum = acc.as_ref().map_or(0, |e| e.try_as_i64().unwrap());
+                        *acc = Some(Int64(old_sum + cur_value));
                     }
                 }
                 (AggType::MAX | AggType::MIN, PhysicalType::Primitive(PrimitiveType::Int64)) => {
@@ -249,9 +266,9 @@ impl HashAggContext {
                             accumulators.push(None);
                         }
                     } else {
-                        if let Some(Datum::INT(cur_int)) = cur_datum {
+                        if let Some(Int64(cur_int)) = cur_datum {
                             let acc = &mut accumulators[accnum];
-                            if let Some(Datum::INT(acc_int)) = acc {
+                            if let Some(Int64(acc_int)) = acc {
                                 if (agg_type == AggType::MAX) && (cur_int > acc_int) {
                                     *acc = cur_datum.cloned()
                                 } else if (agg_type == AggType::MIN) && (cur_int < acc_int) {
@@ -267,6 +284,36 @@ impl HashAggContext {
                         }
                     }
                 }
+                (AggType::MAX | AggType::MIN, PhysicalType::Primitive(PrimitiveType::Int32)) => {
+                    let cur_datum = get_input(input_colid);
+                    if do_init {
+                        if cur_datum.is_some() {
+                            accumulators.push(cur_datum.cloned());
+                        } else {
+                            // Current value is NULL
+                            accumulators.push(None);
+                        }
+                    } else {
+                        if let Some(cur_int) = cur_datum {
+                            let cur_int = cur_int.try_as_i32();
+                            let acc = &mut accumulators[accnum];
+                            if let Some(acc_int) = acc {
+                                let acc_int = acc_int.try_as_i32();
+                                if (agg_type == AggType::MAX) && (cur_int > acc_int) {
+                                    *acc = cur_datum.cloned()
+                                } else if (agg_type == AggType::MIN) && (cur_int < acc_int) {
+                                    *acc = cur_datum.cloned()
+                                }
+                            } else {
+                                // Accumulator is NULL
+                                todo!("What to do here?")
+                            }
+                        } else {
+                            // Current value is NULL ... How do you compare NULLs to something else?
+                            todo!("What to do here?")
+                        }
+                    }
+                }
 
                 (AggType::MAX | AggType::MIN, PhysicalType::Utf8) => {
                     let cur_datum = get_input(input_colid);
@@ -278,11 +325,11 @@ impl HashAggContext {
                             accumulators.push(None);
                         }
                     } else {
-                        if let Some(Datum::STR(cur_str)) = cur_datum {
+                        if let Some(Utf8(cur_str)) = cur_datum {
                             let acc = &mut accumulators[accnum];
-                            if let Some(Datum::STR(acc_str)) = acc {
-                                let cur_str = &*cur_str.as_str();
-                                let acc_str = &*acc_str.as_str();
+                            if let Some(Utf8(acc_str)) = acc {
+                                let cur_str = cur_str.as_str();
+                                let acc_str = acc_str.as_str();
                                 if (agg_type == AggType::MAX) && (cur_str > acc_str) {
                                     *acc = cur_datum.cloned()
                                 } else if (agg_type == AggType::MIN) && (cur_str < acc_str) {
@@ -305,20 +352,25 @@ impl HashAggContext {
 }
 
 fn array_to_iter(array: &dyn Array) -> Box<dyn Iterator<Item = Option<Datum>> + '_> {
-    match array.data_type().to_physical_type() {
-        PhysicalType::Primitive(PrimitiveType::Int64) => {
+    match array.data_type() {
+        DataType::Date32 => {
+            let basearr = array.as_any().downcast_ref::<PrimitiveArray<i32>>().unwrap();
+            let it = basearr.iter().map(|e| e.map(|&e| Date32(e)));
+            Box::new(it)
+        }
+        DataType::Int64 => {
             let basearr = array.as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|&e| Datum::INT(e as isize)));
+            let it = basearr.iter().map(|e| e.map(|&e| Int64(e)));
             Box::new(it)
         }
-        PhysicalType::Utf8 => {
+        DataType::Utf8 => {
             let basearr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|e| Datum::STR(Rc::new(String::from(e)))));
+            let it = basearr.iter().map(|e| e.map(|e| Utf8(e.to_string())));
             Box::new(it)
         }
-        PhysicalType::Boolean => {
+        DataType::Boolean => {
             let basearr = array.as_any().downcast_ref::<BooleanArray>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|e| Datum::BOOL(e)));
+            let it = basearr.iter().map(|e| e.map(|e| Boolean(e)));
             Box::new(it)
         }
         typ => panic!("array_to_iter(), todo: {:?}", typ),

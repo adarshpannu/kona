@@ -7,7 +7,6 @@ use regex::Regex;
 use Expr::*;
 
 use crate::{
-    datum::Datum,
     graph::{key_to_id, ExprKey, Graph, QueryBlockKey},
     includes::*,
 };
@@ -130,6 +129,7 @@ pub enum Expr {
     Subquery(QueryBlockKey),
     AggFunction(AggType, bool),
     ScalarFunction(String),
+    Cast(String),
 }
 
 impl Expr {
@@ -160,6 +160,7 @@ impl Expr {
                 format!("{:?}", aggtype)
             }
             ScalarFunction(name) => format!("{}()", name),
+            Cast(_) => String::from("CAST"),
         }
     }
 
@@ -309,6 +310,9 @@ impl ExprKey {
             }
             ScalarFunction(name) => {
                 format!("{}()", name)
+            }
+            Cast(target_type) => {
+                format!("(CAST AS {})", target_type)
             }
         };
         if do_escape {

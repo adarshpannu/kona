@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs::File, rc::Rc};
 
 use arrow2::io::csv::read;
 
-use crate::{datum::Datum, expr::ExprGraph, graph::ExprKey, includes::*};
+use crate::{expr::ExprGraph, graph::ExprKey, includes::*, Datum};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableType {
@@ -149,7 +149,7 @@ impl Metadata {
 
         let colstr = hm.get("COLUMNS");
         let colstr = match colstr {
-            Some(Datum::STR(fieldstr)) => fieldstr,
+            Some(Utf8(fieldstr)) => fieldstr,
             _ => return Err(f!("Invalid value for option COLUMNS: '{colstr:?}'")),
         };
 
@@ -170,7 +170,8 @@ impl Metadata {
     }
 
     fn get_table_type(hm: &HashMap<String, Datum>, name: &String) -> Result<TableType, String> {
-        let tp = hm.get("TYPE").ok_or(f!("Table {name} does not specify a TYPE."))?.try_as_str(&f!("Table {name} has invalid TYPE."))?;
+        let tp = hm.get("TYPE").ok_or(f!("Table {name} does not specify a TYPE."))?;
+        let tp = tp.try_as_str().ok_or(f!("Table {name} has invalid TYPE."))?;
 
         let tp = tp.to_uppercase();
         let tp = tp.as_str();
@@ -185,7 +186,7 @@ impl Metadata {
     fn get_header_parm(hm: &HashMap<String, Datum>) -> Result<bool, String> {
         let header = hm.get("HEADER");
         let header = match header {
-            Some(Datum::STR(header)) => yes_or_no(header).ok_or(f!("Invalid value for option HEADER: '{header}'"))?,
+            Some(Utf8(header)) => yes_or_no(header).ok_or(f!("Invalid value for option HEADER: '{header}'"))?,
             None => true,
             _ => return Err(f!("Invalid value for option HEADER: '{header:?}'")),
         };
@@ -194,8 +195,8 @@ impl Metadata {
 
     fn get_separator_parm(hm: &HashMap<String, Datum>) -> Result<char, String> {
         let separator = match hm.get("SEPARATOR") {
-            Some(Datum::STR(sep)) => {
-                let sep = &**sep;
+            Some(Utf8(sep)) => {
+                let sep = sep.as_str();
                 if sep.len() != 1 {
                     return Err(f!("Invalid value for option SEPARATOR: '{sep}'"));
                 } else {
@@ -209,7 +210,7 @@ impl Metadata {
 
     fn get_table_stats(hm: &HashMap<String, Datum>) -> Result<TableStats, String> {
         let nrows = match hm.get("NROWS") {
-            Some(Datum::INT(nrows)) => {
+            Some(Int64(nrows)) => {
                 if *nrows > 0 {
                     *nrows as usize
                 } else {
@@ -221,7 +222,7 @@ impl Metadata {
         };
 
         let avg_row_size = match hm.get("AVG_ROW_SIZE") {
-            Some(Datum::INT(avg_row_size)) => {
+            Some(Int64(avg_row_size)) => {
                 if *avg_row_size > 0 {
                     *avg_row_size as usize
                 } else {
@@ -237,7 +238,7 @@ impl Metadata {
 
     fn get_part_desc(hm: &HashMap<String, Datum>) -> Result<PartDesc, String> {
         let npartitions = match hm.get("PARTITIONS") {
-            Some(Datum::INT(npartitions)) => {
+            Some(Int64(npartitions)) => {
                 if *npartitions > 0 {
                     *npartitions as usize
                 } else {
@@ -264,7 +265,8 @@ impl Metadata {
         match tp {
             TableType::CSV => {
                 // PATH, HEADER, SEPARATOR
-                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str(&f!("PATH does not hold a string for table {name}"))?;
+                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str().ok_or("PATH does not hold a string for table {name}")?;
+                let path = Rc::new(String::from(path));
 
                 let header = Self::get_header_parm(&hm)?;
                 let separator = Self::get_separator_parm(&hm)?;
@@ -285,7 +287,8 @@ impl Metadata {
             }
             TableType::Parquet => {
                 // PATH, HEADER, SEPARATOR
-                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str(&f!("PATH does not hold a string for table {name}"))?;
+                let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str().ok_or("PATH does not hold a string for table {name}")?;
+                let path = Rc::new(String::from(path));
 
                 if hm.get("HEADER").is_some() {
                     return Err(f!("HEADER cannot be specified for Parquet files."));
