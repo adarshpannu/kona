@@ -31,18 +31,18 @@ impl ParquetContext {
         let mut reader = File::open(&pq.pathname).map_err(stringify)?;
         let metadata = read::read_metadata(&mut reader).map_err(stringify)?;
         let schema = read::infer_schema(&metadata).map_err(stringify)?;
-        let schema = schema.filter(|ix, _field| pq.ordered_input_projection.iter().find(|&&jx| ix == jx).is_some());
+        let schema = schema.filter(|ix, _field| pq.input_projection.iter().find(|&&jx| ix == jx).is_some());
 
         let row_groups = metadata.row_groups.into_iter().enumerate().map(|(_, row_group)| row_group).collect::<Vec<_>>();
         let file_reader = read::FileReader::new(reader, row_groups, schema, Some(1024 * 8 * 8), None, None);
 
-        let mut input_projection_pairs: Vec<(ColId, usize)> = pq.ordered_input_projection.iter().cloned().enumerate().collect::<Vec<_>>();
+        let mut input_projection_pairs: Vec<(ColId, usize)> = pq.input_projection.iter().cloned().enumerate().collect::<Vec<_>>();
         input_projection_pairs.sort_by(|a, b| a.1.cmp(&b.1));
 
         let input_projection_final_ordering: Vec<usize> = input_projection_pairs.iter().map(|e| e.0).collect();
 
         let pqctx = ParquetContext { pop_key, input_projection_final_ordering, file_reader, partition_id };
-        debug!("input_projection {:?}", pq.ordered_input_projection);
+        debug!("input_projection {:?}", pq.input_projection);
 
         debug!("{:?}", pqctx);
 
@@ -95,12 +95,12 @@ impl POPContext for ParquetContext {
 pub struct Parquet {
     pub pathname: String,
     pub fields: Vec<Field>,
-    pub ordered_input_projection: Vec<ColId>,
+    pub input_projection: Vec<ColId>,
 }
 
 impl Parquet {
-    pub fn new(pathname: String, fields: Vec<Field>, _npartitions: usize, ordered_input_projection: Vec<ColId>) -> Parquet {
-        Parquet { pathname, fields, ordered_input_projection }
+    pub fn new(pathname: String, fields: Vec<Field>, _npartitions: usize, input_projection: Vec<ColId>) -> Parquet {
+        Parquet { pathname, fields, input_projection }
     }
 }
 

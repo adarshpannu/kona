@@ -48,7 +48,7 @@ impl CSVContext {
 
         let rows = vec![ByteRecord::default(); CHUNK_SIZE];
 
-        let csvctx = CSVContext { pop_key, fields: csv.fields.clone(), projection: csv.ordered_input_projection.clone(), reader, rows, partition_id, partition };
+        let csvctx = CSVContext { pop_key, fields: csv.fields.clone(), projection: csv.input_projection.clone(), reader, rows, partition_id, partition };
 
         Ok(Box::new(csvctx))
     }
@@ -116,14 +116,14 @@ pub struct CSV {
     pub header: bool,
     pub separator: char,
     pub partitions: Vec<TextFilePartition>,
-    pub ordered_input_projection: Vec<ColId>,
+    pub input_projection: Vec<ColId>,
 }
 
 impl CSV {
-    pub fn new(pathname: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, ordered_input_projection: Vec<ColId>) -> CSV {
+    pub fn new(pathname: String, fields: Vec<Field>, header: bool, separator: char, npartitions: usize, input_projection: Vec<ColId>) -> CSV {
         let partitions = Self::compute_partitions(&pathname, npartitions as u64).unwrap();
 
-        CSV { pathname, fields, header, separator, partitions, ordered_input_projection }
+        CSV { pathname, fields, header, separator, partitions, input_projection }
     }
 
     fn compute_partitions(pathname: &str, nsplits: u64) -> Result<Vec<TextFilePartition>, String> {
