@@ -254,10 +254,6 @@ impl ExprKey {
         }
     }
 
-    pub fn to_string0(self: &ExprKey) -> String {
-        format!("{:?}", *self).replace('(', "").replace(')', "")
-    }
-
     pub fn is_column(&self, graph: &ExprGraph) -> bool {
         let expr = &graph.get(*self).value;
         matches!(expr, Column { .. })

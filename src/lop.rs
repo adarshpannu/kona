@@ -60,15 +60,6 @@ impl LOPKey {
         }
         types
     }
-
-    pub fn printable_key(&self) -> String {
-        format!("{:?}", *self).replace('(', "").replace(')', "")
-    }
-
-    pub fn printable(&self, lop_graph: &LOPGraph) -> String {
-        let lop = &lop_graph.get(*self).value;
-        format!("{:?}-{:?}", *lop, *self)
-    }
 }
 
 /***************************************************************************************************/

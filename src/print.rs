@@ -141,10 +141,10 @@ impl QGM {
             if let Some(to_stage_id) = stage.parent_stage_id {
                 let from_stage_id = stage.stage_id;
                 let from_pop_key = stage.root_pop_key.unwrap();
-                let from_name = from_pop_key.printable_key(from_stage_id);
+                let from_name = from_pop_key.full_id(from_stage_id);
                 let to_pop_key = stage.parent_pop_key.unwrap();
-                let to_name = to_pop_key.printable_key(to_stage_id);
-                fprint!(file, "    popkey{} -> popkey{};\n", from_name, to_name);
+                let to_name = to_pop_key.full_id(to_stage_id);
+                fprint!(file, "    {} -> {};\n", from_name, to_name);
             }
         }
 
@@ -163,14 +163,14 @@ impl QGM {
 
 impl Stage {
     pub fn write_pop_to_graphviz(&self, pop_key: POPKey, file: &mut File) -> Result<(), String> {
-        let id = pop_key.printable_key(self.stage_id);
+        let full_id = pop_key.full_id(self.stage_id);
         let pop_graph = &self.pop_graph;
         let (pop, props, children) = pop_graph.get3(pop_key);
 
         if let Some(children) = children {
             for &child_key in children.iter() {
-                let child_name = child_key.printable_key(self.stage_id);
-                fprint!(file, "    popkey{} -> popkey{};\n", child_name, id);
+                let child_name = child_key.full_id(self.stage_id);
+                fprint!(file, "    {} -> {};\n", child_name, full_id);
                 self.write_pop_to_graphviz(child_key, file)?;
             }
         }
@@ -215,8 +215,8 @@ impl Stage {
 
         fprint!(
             file,
-            "    popkey{}[label=\"{}-{}|p = {}|cols = {}, vcols = #{}|{}\", color=\"{}\"];\n",
-            id,
+            "    {}[label=\"{}-{}|p = {}|cols = {}, vcols = #{}|{}\", color=\"{}\"];\n",
+            full_id,
             label,
             pop_key.id(),
             props.npartitions,
@@ -375,8 +375,8 @@ pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> S
 }
 
 impl POPKey {
-    pub fn printable_key(&self, stage_id: StageId) -> String {
-        format!("{:?}_stage{}", *self, stage_id).replace('(', "").replace(')', "")
+    pub fn full_id(&self, stage_id: StageId) -> String {
+        format!("stage{}_popkey{}", self.id(), stage_id)
     }
 
     pub fn printable(&self, pop_graph: &POPGraph) -> String {
