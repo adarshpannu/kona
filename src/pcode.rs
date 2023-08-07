@@ -39,7 +39,7 @@ pub enum PInstruction {
 impl ExprKey {
     #[tracing::instrument(fields(expr = self.to_string()), skip_all, parent = None)]
     pub fn compile(&self, expr_graph: &ExprGraph, pcode: &mut PCode, proj_map: &mut ProjectionMap) {
-        debug!("Compile expression: {}", self.printable(expr_graph, false));
+        debug!("Compile expression: {}", self.describe(expr_graph, false));
 
         let prj = Projection::VirtCol(*self);
         let colid = proj_map.get(prj);

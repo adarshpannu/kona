@@ -172,7 +172,7 @@ impl POP {
             let pcodevec = virtcols
                 .iter()
                 .map(|expr_key| {
-                    debug!("Compile virtcol: {:?}", expr_key.printable(&qgm.expr_graph, false));
+                    debug!("Compile virtcol: {:?}", expr_key.describe(&qgm.expr_graph, false));
                     let mut pcode = PCode::default();
                     expr_key.compile(&qgm.expr_graph, &mut pcode, proj_map);
                     pcode
@@ -331,7 +331,7 @@ impl POP {
                             if let Some(colid) = colid {
                                 colid
                             } else {
-                                panic!("compile_join: LOP {:?}, join key {:?} not found in child LOP's projection", lop_key, expr_key.printable(&qgm.expr_graph, false));
+                                panic!("compile_join: LOP {:?}, join key {:?} not found in child LOP's projection", lop_key, expr_key.describe(&qgm.expr_graph, false));
                             }
                         })
                         .collect::<Vec<_>>()

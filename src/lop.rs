@@ -129,7 +129,7 @@ impl APSContext {
 
             let props = qgm.expr_graph.get_properties(expr_key);
             if matches!(props.data_type(), DataType::Null) {
-                let s = expr_key.printable(&qgm.expr_graph, false);
+                let s = expr_key.describe(&qgm.expr_graph, false);
                 println!("APSContext::new(): Expression has NULL datatype: {:?}", s);
                 panik = true;
             }
@@ -558,7 +558,7 @@ impl QGM {
 
                 // child == subplan that we'll be aggregating.
                 for e in expected_partitioning_expr.iter() {
-                    debug!("expected: {:?}", e.printable(&self.expr_graph, false))
+                    debug!("expected: {:?}", e.describe(&self.expr_graph, false))
                 }
 
                 let expected_partitioning = PartDesc { npartitions: env.settings.parallel_degree.unwrap_or(1), part_type: PartType::HASHEXPR(expected_partitioning_expr) };

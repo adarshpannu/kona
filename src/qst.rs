@@ -203,7 +203,7 @@ impl QueryBlock {
     pub fn transform_groupby_expr(
         expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId, expr_key: &mut ExprKey,
     ) -> Result<(), String> {
-        //debug!("transform_groupby_expr: {:?}", expr_key.printable(&expr_graph, false));
+        //debug!("transform_groupby_expr: {:?}", expr_key.describe(&expr_graph, false));
 
         let node = expr_graph.get(*expr_key);
         if let AggFunction(aggtype, _) = node.value {
@@ -287,7 +287,7 @@ impl QueryBlock {
 
     #[tracing::instrument(fields(expr = expr_key.to_string()), skip_all, parent = None)]
     pub fn resolve_expr(&self, env: &Env, expr_graph: &mut ExprGraph, expr_key: ExprKey, agg_fns_allowed: bool) -> Result<(), String> {
-        debug!("Unresolved expression: {} ...", expr_key.printable(expr_graph, false));
+        debug!("Unresolved expression: {} ...", expr_key.describe(expr_graph, false));
 
         let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_key).value {
             // Nested aggregate functions not allowed
@@ -381,7 +381,7 @@ impl QueryBlock {
             }
         };
 
-        debug!("Resolved expression: {}: {:?}", expr_key.printable(expr_graph, false), datatype);
+        debug!("Resolved expression: {}: {:?}", expr_key.describe(expr_graph, false), datatype);
 
         let node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
         node.properties.set_data_type(datatype);

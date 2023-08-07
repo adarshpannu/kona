@@ -72,23 +72,23 @@ impl QGM {
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
         }
-        let mut colstring = props.cols.printable(self);
+        let mut colstring = props.cols.describe(self);
 
         if let Some(virtcols) = props.virtcols.as_ref() {
-            colstring = format!("{{{}|{}}}", colstring, printable_virtcols(virtcols, self, true));
+            colstring = format!("{{{}|{}}}", colstring, describe_virtcols(virtcols, self, true));
         };
 
-        let predstring = props.preds.printable(self, true);
+        let predstring = props.preds.describe(self, true);
 
         let (label, extrastr) = match &lop {
             LOP::TableScan { input_projection } => {
-                let input_projection = input_projection.printable(self);
+                let input_projection = input_projection.describe(self);
                 let extrastr = format!("(input = {})", input_projection);
                 (String::from("TableScan"), extrastr)
             }
             LOP::HashJoin { lhs_join_keys, rhs_join_keys } => {
-                let lhsstr = printable_preds(lhs_join_keys, self, true, false);
-                let rhsstr = printable_preds(rhs_join_keys, self, true, false);
+                let lhsstr = describe_preds(lhs_join_keys, self, true, false);
+                let rhsstr = describe_preds(rhs_join_keys, self, true, false);
                 let extrastr = format!("{} = {}", lhsstr, rhsstr);
                 (String::from("HashJoin"), extrastr)
             }
@@ -111,7 +111,7 @@ impl QGM {
             props.quns.elements(),
             colstring,
             predstring,
-            props.partdesc.printable(&self.expr_graph, true),
+            props.partdesc.describe(&self.expr_graph, true),
             extrastr
         );
 
@@ -315,7 +315,7 @@ impl QueryBlock {
 }
 
 impl Bitset<QunCol> {
-    fn printable(&self, qgm: &QGM) -> String {
+    fn describe(&self, qgm: &QGM) -> String {
         let cols = self
             .elements()
             .iter()
@@ -334,19 +334,19 @@ impl Bitset<QunCol> {
 }
 
 impl Bitset<ExprKey> {
-    fn printable(&self, qgm: &QGM, do_escape: bool) -> String {
-        printable_preds(&self.elements(), qgm, do_escape, true)
+    fn describe(&self, qgm: &QGM, do_escape: bool) -> String {
+        describe_preds(&self.elements(), qgm, do_escape, true)
     }
 }
 
-pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool, do_column_split: bool) -> String {
+pub fn describe_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool, do_column_split: bool) -> String {
     let mut predstring = String::from("");
 
     if do_column_split {
         predstring.push('{')
     }
     for (ix, &pred_key) in preds.iter().enumerate() {
-        let predstr = pred_key.printable(&qgm.expr_graph, do_escape);
+        let predstr = pred_key.describe(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
         if ix < preds.len() - 1 {
             if do_column_split {
@@ -362,10 +362,10 @@ pub fn printable_preds(preds: &Vec<ExprKey>, qgm: &QGM, do_escape: bool, do_colu
     predstring
 }
 
-pub fn printable_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> String {
+pub fn describe_virtcols(preds: &Vec<VirtCol>, qgm: &QGM, do_escape: bool) -> String {
     let mut predstring = String::from("");
     for (ix, expr_key) in preds.iter().enumerate() {
-        let predstr = expr_key.printable(&qgm.expr_graph, do_escape);
+        let predstr = expr_key.describe(&qgm.expr_graph, do_escape);
         predstring.push_str(&predstr);
         if ix < preds.len() - 1 {
             predstring.push('|')
@@ -379,7 +379,7 @@ impl POPKey {
         format!("stage{}_popkey{}", self.id(), stage_id)
     }
 
-    pub fn printable(&self, pop_graph: &POPGraph) -> String {
+    pub fn describe(&self, pop_graph: &POPGraph) -> String {
         let pop = &pop_graph.get(*self).value;
         format!("{:?}-{:?}", *pop, *self)
     }

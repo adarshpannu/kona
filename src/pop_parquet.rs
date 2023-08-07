@@ -55,7 +55,7 @@ impl POPContext for ParquetContext {
         self
     }
 
-    #[tracing::instrument(fields(), skip_all, parent = None)]
+    #[tracing::instrument(fields(stage_id = stage.stage_id, pop_key = %self.pop_key, partition_id = self.partition_id), skip_all, parent = None)]
     fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
@@ -65,7 +65,7 @@ impl POPContext for ParquetContext {
         if let Some(chunk) = chunk {
             let chunk = chunk.map_err(stringify)?;
 
-            debug!("ParquetContext:next(): \n{}", chunk_to_string(&chunk, "ParquetContext:next before reorder"));
+            //debug!("ParquetContext:next(): \n{}", chunk_to_string(&chunk, "ParquetContext:next before reorder"));
 
             // Parquet readers read columns by ordinal # but the input projection could be unordered
             // We need to re-build the chunk based on unordered input projection.
@@ -73,17 +73,24 @@ impl POPContext for ParquetContext {
             arrays.sort_by(|a, b| a.1.cmp(&b.1));
             let arrays = arrays.into_iter().map(|(a, _)| a).collect::<Vec<_>>();
 
-            let mut chunk = Chunk::new(arrays);
+            let chunk = Chunk::new(arrays);
+            if !chunk.is_empty() {
+                debug!(input = 0, "{}", chunk_to_string(&chunk, "input"));
+            }
 
-            debug!("ParquetContext:next(): \n{}", chunk_to_string(&chunk, "ParquetContext:next after reorder"));
+            // Compute predicates, if any
+            let chunk = POPKey::eval_predicates(props, chunk);
+            if !chunk.is_empty() {
+                debug!(filtered = 1, "{}", chunk_to_string(&chunk, "filtered"));
+            }
 
-            // Run predicates and virtcols, if any
-            chunk = POPKey::eval_predicates(props, chunk);
-
-            let projection_chunk = POPKey::eval_projection(props, &chunk);
-            let headerstr = format!("ParquetContext::next Stage = {}, {:?}, Partition = {}", stage.stage_id, pop_key, self.partition_id);
-            debug!("{}", chunk_to_string(&projection_chunk, &headerstr));
-            Ok(Some(projection_chunk))
+            // Project and return
+            let chunk = POPKey::eval_projection(props, &chunk);
+            if !chunk.is_empty() {
+                //let headerstr = format!("ParquetContext::next Stage = {}, {:?}, Partition = {}", stage.stage_id, pop_key, self.partition_id);
+                debug!(projected = 2, "{}", chunk_to_string(&chunk, ""));
+            }
+            Ok(Some(chunk))
         } else {
             Ok(None)
         }

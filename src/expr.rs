@@ -259,7 +259,7 @@ impl ExprKey {
         matches!(expr, Column { .. })
     }
 
-    pub fn printable(&self, graph: &ExprGraph, do_escape: bool) -> String {
+    pub fn describe(&self, graph: &ExprGraph, do_escape: bool) -> String {
         let (expr, _, children) = graph.get3(*self);
         let retval = match expr {
             CID(qunid, colid) => {
@@ -276,19 +276,19 @@ impl ExprKey {
             Literal(v) => format!("{}", v).replace('"', r#"\""#),
             BinaryExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
+                format!("{} {} {}", lhs_key.describe(graph, false), op, rhs_key.describe(graph, false),)
             }
             NegatedExpr => {
                 let lhs_key = children.unwrap()[0];
-                format!("-{}", lhs_key.printable(graph, false))
+                format!("-{}", lhs_key.describe(graph, false))
             }
             RelExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
+                format!("{} {} {}", lhs_key.describe(graph, false), op, rhs_key.describe(graph, false),)
             }
             LogExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!("{} {} {}", lhs_key.printable(graph, false), op, rhs_key.printable(graph, false),)
+                format!("{} {} {}", lhs_key.describe(graph, false), op, rhs_key.describe(graph, false),)
             }
             BetweenExpr => String::from("BETWEEEN"),
             InListExpr => String::from("IN"),
@@ -297,7 +297,7 @@ impl ExprKey {
             Subquery(_) => String::from("(subquery)"),
             AggFunction(aggtype, _) => {
                 let child_id = children.unwrap()[0];
-                format!("{:?}({})", aggtype, child_id.printable(graph, false))
+                format!("{:?}({})", aggtype, child_id.describe(graph, false))
             }
             ScalarFunction(name) => {
                 format!("{}()", name)

@@ -29,7 +29,7 @@ impl PartDesc {
         PartDesc { npartitions, part_type }
     }
 
-    pub fn printable(&self, expr_graph: &ExprGraph, do_escape: bool) -> String {
+    pub fn describe(&self, expr_graph: &ExprGraph, do_escape: bool) -> String {
         let part_type_str = match &self.part_type {
             PartType::RAW => String::from("RAW"),
             PartType::HASHEXPR(exprs) => {
@@ -38,7 +38,7 @@ impl PartDesc {
                     if ix > 0 {
                         exprstr.push_str(", ")
                     }
-                    exprstr.push_str(&expr_key.printable(expr_graph, do_escape));
+                    exprstr.push_str(&expr_key.describe(expr_graph, do_escape));
                 }
                 exprstr.to_string()
             }
