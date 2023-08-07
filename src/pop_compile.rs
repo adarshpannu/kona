@@ -106,8 +106,7 @@ impl POP {
         // Build input map
         let (ordered_input_projection, mut input_proj_map) = if let LOP::TableScan { input_projection } = lop {
             let proj_map: ProjectionMap = Self::compute_projection_map(input_projection, None);
-            let mut ordered_input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
-            ordered_input_projection.sort();
+            let ordered_input_projection = input_projection.elements().iter().map(|&quncol| quncol.1).collect::<Vec<ColId>>();
             (ordered_input_projection, proj_map)
         } else {
             return Err(String::from("Internal error: compile_scan() received a POP that isn't a TableScan"));
@@ -189,8 +188,7 @@ impl POP {
         let mut proj_map = ProjectionMap::default();
 
         // Sort QunCols by col-id. This ordered property is especially necessary for Parquet projection pushdown
-        let mut sorted_quncols = cols.elements().into_iter().collect::<Vec<_>>();
-        sorted_quncols.sort_by_key(|qc| qc.1);
+        let sorted_quncols = cols.elements().into_iter().collect::<Vec<_>>();
 
         // Add singleton columns
         for (ix, quncol) in sorted_quncols.into_iter().enumerate() {

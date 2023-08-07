@@ -10,6 +10,7 @@ pub use arrow2::{
 };
 pub use serde::{Deserialize, Serialize};
 pub use tracing::{debug, error, event, info, Level};
+pub use crate::graph::KeyId;
 
 pub use crate::{
     datum::{Datum, Datum::*},

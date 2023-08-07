@@ -8,7 +8,7 @@ use partitions::PartitionVec;
 use crate::{
     bitset::Bitset,
     expr::{Expr::*, ExprGraph, *},
-    graph::{ExprKey, Graph, LOPKey, QueryBlockKey, key_to_id},
+    graph::{ExprKey, Graph, LOPKey, QueryBlockKey},
     includes::*,
     metadata::{PartDesc, PartType},
     qgm::{QueryBlock, QueryBlockType},
@@ -68,11 +68,6 @@ impl LOPKey {
     pub fn printable(&self, lop_graph: &LOPGraph) -> String {
         let lop = &lop_graph.get(*self).value;
         format!("{:?}-{:?}", *lop, *self)
-    }
-
-    pub fn printable_id(&self) -> String {
-        let keystr = format!("{:?}", *self);
-        key_to_id(&keystr)
     }
 }
 

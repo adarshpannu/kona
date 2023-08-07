@@ -25,6 +25,9 @@ extern crate tracing;
 
 lalrpop_mod!(pub sqlparser); // synthesized by LALRPOP
 
+#[macro_use]
+extern crate derivative;
+
 pub mod bitset;
 pub mod env;
 pub mod graph;
@@ -150,8 +153,8 @@ fn run_job(env: &mut Env, run_trace: bool) -> Result<(), String> {
         }
     }
 
-    env.scheduler.end_all_threads();
-    env.scheduler.join();
+    env.scheduler.end_all_threads()?;
+    env.scheduler.join()?;
 
     Ok(())
 }

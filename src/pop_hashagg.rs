@@ -14,6 +14,7 @@ use arrow2::{
 };
 
 use crate::{
+    datum::F64,
     expr::AggType,
     flow::Flow,
     graph::POPKey,
@@ -48,20 +49,30 @@ impl HashAggSplit {
     }
 }
 /***************************************************************************************************/
-
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct HashAggContext {
     pop_key: POPKey,
-    children: Vec<Box<dyn POPContext>>,
     partition_id: PartitionId,
+
+    #[derivative(Debug = "ignore")]
     splits: Vec<HashAggSplit>,
+    
     output_split: usize,
+
+    #[derivative(Debug = "ignore")]
+    children: Vec<Box<dyn POPContext>>,
 }
 
 impl HashAggContext {
+    #[tracing::instrument(fields(pop_key), skip_all)]
     pub fn try_new(pop_key: POPKey, _: &HashAgg, children: Vec<Box<dyn POPContext>>, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
-        Ok(Box::new(HashAggContext { pop_key, children, partition_id, splits: vec![], output_split: 0 }))
+        let ctxt = HashAggContext { pop_key, children, partition_id, splits: vec![], output_split: 0 };
+        debug!("{:?}", ctxt);
+        Ok(Box::new(ctxt))
     }
 
+    #[tracing::instrument(fields(), skip_all, parent = None)]
     fn next_agg(&mut self, flow: &Flow, stage: &Stage, hash_agg: &HashAgg) -> Result<Option<ChunkBox>, String> {
         // Initialize hash-tables
         if self.splits.is_empty() {
@@ -101,6 +112,7 @@ impl HashAggContext {
             DataType::Int64 => Box::new(MutablePrimitiveArray::<i64>::with_capacity(len)),
             DataType::Utf8 => Box::new(MutableUtf8Array::<i32>::with_capacity(len)),
             DataType::Boolean => Box::new(MutableBooleanArray::with_capacity(len)),
+            DataType::Float64 => Box::new(MutablePrimitiveArray::<f64>::with_capacity(len)),
             typ => todo!("not implemented: {:?}", typ),
         }
     }
@@ -114,6 +126,10 @@ impl HashAggContext {
             PhysicalType::Primitive(PrimitiveType::Int64) => {
                 let mutarr = mutarr.as_mut_any().downcast_mut::<MutablePrimitiveArray<i64>>().unwrap();
                 mutarr.push(datum.map(|ivalue| ivalue.try_as_i64().unwrap()));
+            }
+            PhysicalType::Primitive(PrimitiveType::Float64) => {
+                let mutarr = mutarr.as_mut_any().downcast_mut::<MutablePrimitiveArray<f64>>().unwrap();
+                mutarr.push(datum.map(|ivalue| ivalue.try_as_f64().unwrap()));
             }
             PhysicalType::Utf8 => {
                 let mutarr = mutarr.as_mut_any().downcast_mut::<MutableUtf8Array<i32>>().unwrap();
@@ -143,6 +159,13 @@ impl HashAggContext {
                         let mutarr = mutarr.as_any().downcast_ref::<MutablePrimitiveArray<i64>>().unwrap().clone();
                         let iter = mutarr.iter().map(|i| i.cloned());
                         let arr = PrimitiveArray::<i64>::from_trusted_len_iter(iter);
+                        let arr: Box<dyn Array> = Box::new(arr);
+                        arr
+                    }
+                    DataType::Float64 => {
+                        let mutarr = mutarr.as_any().downcast_ref::<MutablePrimitiveArray<f64>>().unwrap().clone();
+                        let iter = mutarr.iter().map(|i| i.cloned());
+                        let arr = PrimitiveArray::<f64>::from_trusted_len_iter(iter);
                         let arr: Box<dyn Array> = Box::new(arr);
                         arr
                     }
@@ -246,7 +269,7 @@ impl HashAggContext {
                         *acc = Some(Int64(new_count))
                     }
                 }
-                (AggType::SUM, _) => {
+                (AggType::SUM, PhysicalType::Primitive(PrimitiveType::Int64)) => {
                     let cur_value = get_input(input_colid).map_or(0, |e| e.try_as_i64().unwrap());
                     if do_init {
                         accumulators.push(Some(Int64(cur_value)));
@@ -254,6 +277,18 @@ impl HashAggContext {
                         let acc = &mut accumulators[accnum];
                         let old_sum = acc.as_ref().map_or(0, |e| e.try_as_i64().unwrap());
                         *acc = Some(Int64(old_sum + cur_value));
+                    }
+                }
+                (AggType::SUM, PhysicalType::Primitive(PrimitiveType::Float64)) => {
+                    let cur_value = get_input(input_colid).map_or(0f64, |e| e.try_as_f64().unwrap());
+                    if do_init {
+                        accumulators.push(Some(Float64(F64::from(cur_value))));
+                    } else {
+                        let acc = &mut accumulators[accnum];
+                        let old_sum = acc.as_ref().map_or(0f64, |e| e.try_as_f64().unwrap());
+                        let new_sum = old_sum + cur_value;
+                        let new_sum = F64::from(new_sum);
+                        *acc = Some(Float64(new_sum));
                     }
                 }
                 (AggType::MAX | AggType::MIN, PhysicalType::Primitive(PrimitiveType::Int64)) => {
@@ -371,6 +406,11 @@ fn array_to_iter(array: &dyn Array) -> Box<dyn Iterator<Item = Option<Datum>> + 
         DataType::Boolean => {
             let basearr = array.as_any().downcast_ref::<BooleanArray>().unwrap();
             let it = basearr.iter().map(|e| e.map(|e| Boolean(e)));
+            Box::new(it)
+        }
+        DataType::Float64 => {
+            let basearr = array.as_any().downcast_ref::<PrimitiveArray<f64>>().unwrap();
+            let it = basearr.iter().map(|opt_f64_value| opt_f64_value.map(|&f64_value| Float64(F64::from(f64_value))));
             Box::new(it)
         }
         typ => panic!("array_to_iter(), todo: {:?}", typ),

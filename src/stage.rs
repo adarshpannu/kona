@@ -11,7 +11,9 @@ use crate::{
     Flow,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Derivative)]
+#[derivative(Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct Stage {
     pub stage_id: StageId,
     pub parent_stage_id: Option<StageId>, // 0 == no stage depends on this
@@ -20,6 +22,8 @@ pub struct Stage {
     pub root_pop_key: Option<POPKey>,
     pub nchildren: usize, // # of stages this stage depends on
     pub npartitions: usize,
+
+    #[derivative(Debug = "ignore")]
     pub pop_graph: POPGraph,
 }
 
@@ -39,7 +43,7 @@ impl Stage {
         Stage { stage_id, parent_stage_id, parent_pop_key: None, root_lop_key, root_pop_key: None, nchildren: 0, npartitions: 0, pop_graph }
     }
 
-    pub fn schedule(&self, env: &Env, flow: &Flow) {
+    pub fn schedule(&self, env: &Env, flow: &Flow) -> Result<(), String> {
         debug!("Schedule stage: {:?}", self.root_pop_key);
 
         let (_, props, ..) = self.pop_graph.get3(self.root_pop_key.unwrap());
@@ -47,14 +51,15 @@ impl Stage {
         for partition_id in 0..npartitions {
             let task = Task::new(partition_id);
             //task.run(flow, self);
-            
+
             let thread_id = partition_id % (env.scheduler.nthreads());
 
             let task_triplet = &(flow, self, task);
             let task_serialized: Vec<u8> = bincode::serialize(&task_triplet).unwrap();
 
-            env.scheduler.s2t_channels_sx[thread_id].send(SchedulerMessage::ScheduleTask(task_serialized)).unwrap();
+            env.scheduler.s2t_channels_sx[thread_id].send(SchedulerMessage::ScheduleTask(task_serialized)).map_err(stringify)?;
         }
+        Ok(())
     }
 }
 

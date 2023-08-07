@@ -25,21 +25,23 @@ pub struct Scheduler {
 }
 
 impl Scheduler {
-    pub fn join(&mut self) {
+    pub fn join(&mut self) -> Result<(), String> {
         let threads = self.threads.take();
         for thrd in threads.unwrap() {
-            thrd.join().unwrap()
+            thrd.join().map_err(stringify)?
         }
+        Ok(())
     }
 
     pub fn nthreads(&self) -> usize {
         self.threads.as_ref().map_or(0, |threads| threads.len())
     }
 
-    pub fn end_all_threads(&mut self) {
+    pub fn end_all_threads(&mut self) -> Result<(), String> {
         for tx in self.s2t_channels_sx.iter() {
-            tx.send(SchedulerMessage::EndThread).unwrap();
+            tx.send(SchedulerMessage::EndThread).map_err(stringify)?
         }
+        Ok(())
     }
 
     pub fn new(nthreads: usize) -> Scheduler {
@@ -124,14 +126,14 @@ impl Scheduler {
         }
     }
 
-    pub fn schedule_stages(&self, env: &Env, flow: &Flow, stage_contexts: &[StageContext]) -> usize {
+    pub fn schedule_stages(&self, env: &Env, flow: &Flow, stage_contexts: &[StageContext]) -> Result<usize, String> {
         let stage_graph = &flow.stage_graph;
 
         let stages = Self::runnable(&stage_graph.stages, stage_contexts);
         for stage in stages.iter() {
-            stage.schedule(env, flow);
+            stage.schedule(env, flow).map_err(stringify)?;
         }
-        stages.len()
+        Ok(stages.len())
     }
 
     pub fn run_flow(&self, env: &Env, flow: &Flow) -> Result<(), String> {
@@ -140,7 +142,7 @@ impl Scheduler {
         let stage_graph = &flow.stage_graph;
         let mut stage_contexts = (0..stage_graph.stages.len()).map(|_| StageContext::default()).collect::<Vec<_>>();
 
-        self.schedule_stages(env, flow, &stage_contexts);
+        self.schedule_stages(env, flow, &stage_contexts)?;
 
         for msg in &self.t2s_channel_rx {
             debug!("run_flow message recv: {:?}", msg);
@@ -157,7 +159,7 @@ impl Scheduler {
                         Self::set_stage_completed(flow, &mut stage_contexts, stage_id);
 
                         debug!("Stage contexts: {:?}", &stage_contexts);
-                        if self.schedule_stages(env, flow, &stage_contexts) == 0 {
+                        if self.schedule_stages(env, flow, &stage_contexts)? == 0 {
                             break;
                         }
                     }

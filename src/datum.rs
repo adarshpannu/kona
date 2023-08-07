@@ -65,6 +65,14 @@ impl Datum {
         }
     }
 
+    pub fn try_as_f64(&self) -> Option<f64> {
+        if let Float64(val) = self {
+            Some(f64::from(*val))
+        } else {
+            None
+        }
+    }
+
     pub fn try_as_str(&self) -> Option<&str> {
         if let Utf8(val) = self {
             Some(val)

@@ -7,7 +7,7 @@ use std::fmt;
 use arrow2::scalar::{PrimitiveScalar, Scalar, Utf8Scalar};
 
 use crate::{
-    datum::{Datum, F64},
+    datum::Datum,
     expr::{ArithOp, Expr, ExprGraph, LogOp, RelOp},
     graph::ExprKey,
     includes::*,

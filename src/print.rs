@@ -5,7 +5,7 @@ use std::{fs::File, io::Write, process::Command};
 use crate::{
     bitset::Bitset,
     expr::Expr,
-    graph::{key_to_id, ExprKey, LOPKey, POPKey},
+    graph::{ExprKey, LOPKey, POPKey},
     includes::*,
     lop::{LOPGraph, VirtCol, LOP},
     pop::{POPGraph, POP},
@@ -62,12 +62,12 @@ impl QGM {
     }
 
     pub fn write_lop_to_graphviz(self: &QGM, lop_graph: &LOPGraph, lop_key: LOPKey, file: &mut File) -> Result<(), String> {
-        let id = lop_key.printable_key();
+        let id = lop_key.id();
         let (lop, props, children) = lop_graph.get3(lop_key);
 
         if let Some(children) = children {
             for &child_key in children.iter() {
-                let child_name = child_key.printable_key();
+                let child_name = child_key.id();
                 fprint!(file, "    lopkey{} -> lopkey{};\n", child_name, id);
                 self.write_lop_to_graphviz(lop_graph, child_key, file)?;
             }
@@ -107,7 +107,7 @@ impl QGM {
             "    lopkey{}[label=\"{}-{}|{:?}|{}|{}|{}|{}\"];\n",
             id,
             label,
-            lop_key.printable_id(),
+            lop_key.id(),
             props.quns.elements(),
             colstring,
             predstring,
@@ -218,7 +218,7 @@ impl Stage {
             "    popkey{}[label=\"{}-{}|p = {}|cols = {}, vcols = #{}|{}\", color=\"{}\"];\n",
             id,
             label,
-            pop_key.printable_id(),
+            pop_key.id(),
             props.npartitions,
             colstr,
             props.virtcols.as_ref().map_or(0, |v| v.len()),
@@ -382,10 +382,5 @@ impl POPKey {
     pub fn printable(&self, pop_graph: &POPGraph) -> String {
         let pop = &pop_graph.get(*self).value;
         format!("{:?}-{:?}", *pop, *self)
-    }
-
-    pub fn printable_id(&self) -> String {
-        let keystr = format!("{:?}", *self);
-        key_to_id(&keystr)
     }
 }

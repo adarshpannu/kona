@@ -14,16 +14,19 @@ use crate::{
 
 /***************************************************************************************************/
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct ParquetContext {
     pop_key: POPKey,
-    file_reader: FileReader<File>,
-    //metadata: FileMetaData,
-    //schema: Schema,
-    //row_groups: RowGroupMetaData,
+    input_projection_final_ordering: Vec<usize>,
     partition_id: PartitionId,
+
+    #[derivative(Debug = "ignore")]
+    file_reader: FileReader<File>,
 }
 
 impl ParquetContext {
+    #[tracing::instrument(fields(pop_key), skip_all)]
     pub fn try_new(pop_key: POPKey, pq: &Parquet, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let mut reader = File::open(&pq.pathname).map_err(stringify)?;
         let metadata = read::read_metadata(&mut reader).map_err(stringify)?;
@@ -33,7 +36,16 @@ impl ParquetContext {
         let row_groups = metadata.row_groups.into_iter().enumerate().map(|(_, row_group)| row_group).collect::<Vec<_>>();
         let file_reader = read::FileReader::new(reader, row_groups, schema, Some(1024 * 8 * 8), None, None);
 
-        let pqctx = ParquetContext { pop_key, file_reader, partition_id };
+        let mut input_projection_pairs: Vec<(ColId, usize)> = pq.ordered_input_projection.iter().cloned().enumerate().collect::<Vec<_>>();
+        input_projection_pairs.sort_by(|a, b| a.1.cmp(&b.1));
+
+        let input_projection_final_ordering: Vec<usize> = input_projection_pairs.iter().map(|e| e.0).collect();
+
+        let pqctx = ParquetContext { pop_key, input_projection_final_ordering, file_reader, partition_id };
+        debug!("input_projection {:?}", pq.ordered_input_projection);
+
+        debug!("{:?}", pqctx);
+
         Ok(Box::new(pqctx))
     }
 }
@@ -43,6 +55,7 @@ impl POPContext for ParquetContext {
         self
     }
 
+    #[tracing::instrument(fields(), skip_all, parent = None)]
     fn next(&mut self, _: &Flow, stage: &Stage) -> Result<Option<ChunkBox>, String> {
         let pop_key = self.pop_key;
         let props = stage.pop_graph.get_properties(pop_key);
@@ -50,8 +63,19 @@ impl POPContext for ParquetContext {
         let chunk = self.file_reader.next();
 
         if let Some(chunk) = chunk {
-            let mut chunk = chunk.map_err(stringify)?;
-            debug!("ParquetContext:next(): \n{}", chunk_to_string(&chunk, "ParquetContext:next()"));
+            let chunk = chunk.map_err(stringify)?;
+
+            debug!("ParquetContext:next(): \n{}", chunk_to_string(&chunk, "ParquetContext:next before reorder"));
+
+            // Parquet readers read columns by ordinal # but the input projection could be unordered
+            // We need to re-build the chunk based on unordered input projection.
+            let mut arrays = chunk.into_arrays().into_iter().zip(self.input_projection_final_ordering.iter()).collect::<Vec<_>>();
+            arrays.sort_by(|a, b| a.1.cmp(&b.1));
+            let arrays = arrays.into_iter().map(|(a, _)| a).collect::<Vec<_>>();
+
+            let mut chunk = Chunk::new(arrays);
+
+            debug!("ParquetContext:next(): \n{}", chunk_to_string(&chunk, "ParquetContext:next after reorder"));
 
             // Run predicates and virtcols, if any
             chunk = POPKey::eval_predicates(props, chunk);

@@ -1,14 +1,16 @@
-SET TRACE = "info,[resolve_expr]=debug,[compile_scan]=debug";
+SET TRACE = "[try_new{pop_key}]=debug";
+
+--SET PARSE_ONLY = "true";
 
 CATALOG TABLE LINEITEM( "TYPE" = "PARQUET",
     --PATH="/Users/adarshrp/Projects/tpch-data/sf0.01/lineitem.parquet");
     PATH="/Users/adarshrp/Downloads/part-0.parquet");
 
+
 DESCRIBE TABLE LINEITEM;
 
-SELECT SUM( - L_DISCOUNT)
+
+SELECT L_RETURNFLAG, L_LINESTATUS, SUM(L_QUANTITY) AS SUM_QTY
 FROM LINEITEM
-GROUP BY L_RETURNFLAG
-;
-
-
+WHERE L_SHIPDATE <= CAST('1992-01-02' AS DATE32)
+GROUP BY L_RETURNFLAG, L_LINESTATUS;

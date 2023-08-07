@@ -214,18 +214,32 @@ impl fmt::Display for QueryBlockKey {
 
 impl fmt::Display for ExprKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.printable_id())
+        write!(f, "{}", self.id())
     }
 }
 
 impl fmt::Display for LOPKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.printable_id())
+        write!(f, "{}", self.id())
     }
 }
 
 impl fmt::Display for POPKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.printable_id())
+        write!(f, "{}", self.id())
     }
 }
+
+pub trait KeyId
+where
+    Self: fmt::Debug, {
+    fn id(&self) -> String {
+        let keystr = format!("{:?}", self);
+        key_to_id(&keystr)
+    }
+}
+
+impl KeyId for POPKey {}
+impl KeyId for LOPKey {}
+impl KeyId for ExprKey {}
+

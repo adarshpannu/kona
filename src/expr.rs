@@ -7,7 +7,7 @@ use regex::Regex;
 use Expr::*;
 
 use crate::{
-    graph::{key_to_id, ExprKey, Graph, QueryBlockKey},
+    graph::{ExprKey, Graph, QueryBlockKey},
     includes::*,
 };
 
@@ -256,11 +256,6 @@ impl ExprKey {
 
     pub fn to_string0(self: &ExprKey) -> String {
         format!("{:?}", *self).replace('(', "").replace(')', "")
-    }
-
-    pub fn printable_id(&self) -> String {
-        let keystr = format!("{:?}", *self);
-        key_to_id(&keystr)
     }
 
     pub fn is_column(&self, graph: &ExprGraph) -> bool {
