@@ -2,48 +2,49 @@ digraph example1 {
     rankdir=BT;
     nodesep=0.5;
     ordering="in";
+    node [shape=record];
   subgraph cluster_QB_1 {
     "QB_1_selectlist"[label="select_list",shape=box,style=filled];
     color = "red"
   subgraph cluster_select_listQB_1 {
-    exprnode1v1[label="R1 ($1.1): 0"];
+    exprnode1v1[label="1v1|R1 ($1.1): 0"];
     exprnode1v1 -> "QB_1_selectlist";
-    exprnode2v1[label="S1 ($2.1): 1"];
+    exprnode2v1[label="2v1|S1 ($2.1): 1"];
     exprnode2v1 -> "QB_1_selectlist";
-    exprnode3v1[label="T1 ($3.1): 2"];
+    exprnode3v1[label="3v1|T1 ($3.1): 2"];
     exprnode3v1 -> "QB_1_selectlist";
 }
     "QUN_3"[label="QUN_3 T/T", fillcolor=black, fontcolor=white, style=filled]
     "QUN_2"[label="QUN_2 S/S", fillcolor=black, fontcolor=white, style=filled]
     "QUN_1"[label="QUN_1 R/R", fillcolor=black, fontcolor=white, style=filled]
   subgraph cluster_pred_listQB_1 {
-    exprnode10v1[label="="];
+    exprnode10v1[label="10v1|="];
     exprnode6v1 -> exprnode10v1;
-    exprnode6v1[label="+"];
+    exprnode6v1[label="6v1|+"];
     exprnode4v1 -> exprnode6v1;
-    exprnode4v1[label="R1 ($1.1)"];
+    exprnode4v1[label="4v1|R1 ($1.1)"];
     exprnode5v1 -> exprnode6v1;
-    exprnode5v1[label="1"];
+    exprnode5v1[label="5v1|1"];
     exprnode9v1 -> exprnode10v1;
-    exprnode9v1[label="+"];
+    exprnode9v1[label="9v1|+"];
     exprnode7v1 -> exprnode9v1;
-    exprnode7v1[label="S1 ($2.1)"];
+    exprnode7v1[label="7v1|S1 ($2.1)"];
     exprnode8v1 -> exprnode9v1;
-    exprnode8v1[label="1"];
+    exprnode8v1[label="8v1|1"];
     exprnode10v1 -> QB_1_pred_list;
-    exprnode17v1[label="="];
+    exprnode17v1[label="17v1|="];
     exprnode13v1 -> exprnode17v1;
-    exprnode13v1[label="+"];
+    exprnode13v1[label="13v1|+"];
     exprnode11v1 -> exprnode13v1;
-    exprnode11v1[label="R1 ($1.1)"];
+    exprnode11v1[label="11v1|R1 ($1.1)"];
     exprnode12v1 -> exprnode13v1;
-    exprnode12v1[label="1"];
+    exprnode12v1[label="12v1|1"];
     exprnode16v1 -> exprnode17v1;
-    exprnode16v1[label="+"];
+    exprnode16v1[label="16v1|+"];
     exprnode14v1 -> exprnode16v1;
-    exprnode14v1[label="T1 ($3.1)"];
+    exprnode14v1[label="14v1|T1 ($3.1)"];
     exprnode15v1 -> exprnode16v1;
-    exprnode15v1[label="1"];
+    exprnode15v1[label="15v1|1"];
     exprnode17v1 -> QB_1_pred_list;
     "QB_1_pred_list"[label="pred_list",shape=box,style=filled];
 }

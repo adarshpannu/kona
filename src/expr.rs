@@ -307,10 +307,14 @@ impl ExprKey {
             }
         };
         if do_escape {
-            let re = Regex::new(r"([><])").unwrap();
-            re.replace_all(&retval[..], "\\$1").to_string()
+            do_escape_fn(&retval)
         } else {
             retval
         }
     }
+}
+
+pub fn do_escape_fn(s: &str) -> String {
+    let re = Regex::new(r"([><])").unwrap();
+    re.replace_all(s, "\\$1").to_string()
 }

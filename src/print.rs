@@ -4,7 +4,7 @@ use std::{fs::File, io::Write, process::Command};
 
 use crate::{
     bitset::Bitset,
-    expr::Expr,
+    expr::{do_escape_fn, Expr},
     graph::{ExprKey, LOPKey, POPKey},
     includes::*,
     lop::{LOPGraph, VirtCol, LOP},
@@ -20,7 +20,8 @@ impl QGM {
         let (expr, _, children) = qgm.expr_graph.get3(expr_key);
         let ix_str = if let Some(ix) = order_ix { format!(": {}", ix) } else { String::from("") };
 
-        fprint!(file, "    exprnode{}[label=\"{}{}\"];\n", id, expr.name(), ix_str);
+        let name = do_escape_fn(&expr.name());
+        fprint!(file, "    exprnode{}[label=\"{}|{}{}\"];\n", id, id, name, ix_str);
 
         if let Expr::Subquery(qbkey) = expr {
             let qblock = &qgm.qblock_graph.get(*qbkey).value;

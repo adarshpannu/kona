@@ -212,8 +212,8 @@ impl QueryBlock {
             let (cid, data_type) = Self::append(expr_graph, select_list, child_key);
             let new_child_key = if aggtype == AggType::AVG {
                 // AVG -> SUM / COUNT
-                let cid = expr_graph.add_node_with_props(CID(qunid, cid), ExprProp::new(data_type), None);
-                let sum = expr_graph.add_node_with_props(AggFunction(AggType::SUM, false), ExprProp::new(DataType::Int64), Some(vec![cid]));
+                let cid = expr_graph.add_node_with_props(CID(qunid, cid), ExprProp::new(data_type.clone()), None);
+                let sum = expr_graph.add_node_with_props(AggFunction(AggType::SUM, false), ExprProp::new(data_type), Some(vec![cid]));
                 let cnt = expr_graph.add_node_with_props(AggFunction(AggType::COUNT, false), ExprProp::new(DataType::Int64), Some(vec![cid]));
                 expr_graph.add_node_with_props(BinaryExpr(ArithOp::Div), ExprProp::new(DataType::Float64), Some(vec![sum, cnt]))
             } else {

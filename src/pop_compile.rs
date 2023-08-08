@@ -44,7 +44,7 @@ impl POP {
         Ok(flow)
     }
 
-    #[tracing::instrument(fields(lop = lop_key.to_string()), skip_all, parent = None)]
+    #[tracing::instrument(fields(lop = %lop_key), skip_all, parent = None)]
     pub fn compile_lop(qgm: &mut QGM, lop_graph: &LOPGraph, lop_key: LOPKey, stage_graph: &mut StageGraph, stage_id: StageId) -> Result<POPKey, String> {
         let (lop, _, lop_children) = lop_graph.get3(lop_key);
 

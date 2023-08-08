@@ -72,7 +72,7 @@ impl HashAggContext {
         Ok(Box::new(ctxt))
     }
 
-    #[tracing::instrument(fields(), skip_all, parent = None)]
+    //#[tracing::instrument(fields(), skip_all, parent = None)]
     fn next_agg(&mut self, flow: &Flow, stage: &Stage, hash_agg: &HashAgg) -> Result<Option<ChunkBox>, String> {
         // Initialize hash-tables
         if self.splits.is_empty() {
@@ -233,7 +233,7 @@ impl HashAggContext {
         return Ok(None);
     }
 
-    #[tracing::instrument(fields(key, value), skip_all, parent = None)]
+    //#[tracing::instrument(fields(key, value), skip_all, parent = None)]
     fn insert(&mut self, hash_agg: &HashAgg, key: Vec<Option<Datum>>, value: Vec<Option<Datum>>) {
         let mut hasher = DefaultHasher::new();
 
@@ -241,7 +241,7 @@ impl HashAggContext {
         let hash_value = hasher.finish();
         let split_id = hash_value as usize % NSPLITS;
 
-        debug!("split_id = {}, key = {:?} value = {:?}", split_id, key, value);
+        //debug!("split_id = {}, key = {:?} value = {:?}", split_id, key, value);
 
         let split = &mut self.splits[split_id];
 

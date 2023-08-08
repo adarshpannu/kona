@@ -282,6 +282,7 @@ impl QGM {
         fprint!(file, "    rankdir=BT;\n"); // direction of DAG
         fprint!(file, "    nodesep=0.5;\n");
         fprint!(file, "    ordering=\"in\";\n");
+        fprint!(file, "    node [shape=record];\n");
 
         //fprint!(file, "    splines=polyline;\n");
         //fprint!(file, "    style=filled;\n");
