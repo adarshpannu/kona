@@ -571,7 +571,7 @@ impl QGM {
                 lop_graph.add_node_with_props(LOP::Aggregation { key_len }, props, children)
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
-                    tabledesc.get_part_desc().npartitions
+                    tabledesc.get_part_desc().unwrap().npartitions
                 } else {
                     env.settings.parallel_degree.unwrap_or(1) * 2 // todo: temporary hack to force different partition counts in a plan
                 };

@@ -59,7 +59,6 @@ pub mod pop_run;
 
 pub mod datum;
 pub mod scheduler;
-pub mod scratch;
 pub mod stage;
 pub mod task;
 
@@ -162,6 +161,7 @@ fn run_job(env: &mut Env, run_trace: bool) -> Result<(), String> {
 /*
 ********************************** main ****************************************************************
 */
+
 fn main() -> Result<(), String> {
     //std::env::set_var("RUST_LOG", "yard::pcode=info");
 
@@ -171,8 +171,15 @@ fn main() -> Result<(), String> {
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     //logging::init("debug");
 
-    let input_pathname = f!("{TOPDIR}/sql/scratch.fsql");
-    let output_dir = f!("{TOPDIR}/tmp");
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 {
+        println!("\n\nUsage: yard sqlfilename");
+        println!("... exiting");
+        return Ok(())
+    }
+
+    let input_pathname = args[1].clone();
+    let output_dir = f!("tmp");
 
     let mut env = Env::new(99, 1, input_pathname, output_dir);
 

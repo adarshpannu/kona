@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use arrow2::scalar::{PrimitiveScalar, Scalar, Utf8Scalar};
+use arrow2::{scalar::{PrimitiveScalar, Scalar, Utf8Scalar}, compute::cast::{CastOptions, self}};
 
 use crate::{
     datum::Datum,
@@ -34,6 +34,7 @@ pub enum PInstruction {
     RelExpr(RelOp),
     LogExpr(LogOp),
     ControlOp(ControlOp),
+    Cast(DataType),
 }
 
 impl ExprKey {
@@ -75,9 +76,10 @@ impl ExprKey {
                         let array_id = proj_map.set_agg(*agg_type, *colid, props.data_type().clone());
                         PInstruction::Column(array_id)
                     } else {
-                        panic!("Malformed agg expression")
+                        panic!("Malformed agg expression. Maybe no GROUP BY clause specified?")
                     }
                 }
+                Expr::Cast => PInstruction::Cast(props.data_type.clone()),
                 _ => panic!("Expression not compilable yet: {:?}", expr),
             }
         };
@@ -123,6 +125,9 @@ impl PCode {
     }
 
     pub fn eval(&self, input: &ChunkBox) -> Box<dyn Array> {
+
+        debug!("eval: {:?}", self);
+        
         let mut stack: Vec<PCodeStack> = vec![];
         for inst in self.instructions.iter() {
             match inst {
@@ -247,6 +252,18 @@ impl PCode {
                         PCodeStack::Column(lhs) => {
                             let lhs = &**lhs.get();
                             let array = arithmetics::neg(lhs);
+                            stack.push(PCodeStack::Column(Column::Owned(array)));
+                        }
+                        _ => todo!(),
+                    }
+                }
+                PInstruction::Cast(to_datatype) => {
+                    let lhs = stack.pop().unwrap();
+                    match lhs {
+                        PCodeStack::Column(lhs) => {
+                            let lhs = &**lhs.get();
+                            let cast_options = CastOptions::default();
+                            let array = cast::cast(lhs, to_datatype, cast_options).unwrap();
                             stack.push(PCodeStack::Column(Column::Owned(array)));
                         }
                         _ => todo!(),

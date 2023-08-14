@@ -20,9 +20,7 @@ pub use crate::{
 };
 
 pub const TOPDIR: &str = "/Users/adarshrp/Projects/yard";
-pub const DATADIR: &str = "/Users/adarshrp/Projects/tpch-data/sf0.01";
 pub const TEMPDIR: &str = "/Users/adarshrp/Projects/yard/tmp";
-pub const GRAPHVIZDIR: &str = "/Users/adarshrp/Projects/yard";
 
 pub type ColId = usize;
 pub type QunId = usize;

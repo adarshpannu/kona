@@ -74,6 +74,14 @@ impl NamedExpr {
     pub fn new(alias: Option<String>, expr_key: ExprKey, _graph: &ExprGraph) -> Self {
         NamedExpr { alias, expr_key }
     }
+
+    pub fn get_name(&self) -> String {
+        if let Some(name) = self.alias.as_ref() {
+            name.clone()
+        } else {
+            format!("col_{:?}", self.expr_key.id())
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]

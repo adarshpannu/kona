@@ -10,6 +10,7 @@ use crate::{expr::ExprGraph, graph::ExprKey, includes::*, Datum};
 pub enum TableType {
     CSV,
     Parquet,
+    Query,
 }
 
 #[derive(Debug, Clone)]
@@ -63,14 +64,14 @@ pub trait TableDesc {
     fn describe(&self) -> String {
         String::from("")
     }
-    fn get_part_desc(&self) -> &PartDesc;
     fn get_column(&self, colname: &str) -> Option<(usize, &Field)>;
-    fn get_stats(&self) -> &TableStats;
+    fn get_part_desc(&self) -> Option<&PartDesc>;
+    fn get_stats(&self) -> Option<&TableStats>;
 }
 
 #[derive(Debug)]
 pub struct CSVDesc {
-    tp: TableType,
+    typ: TableType,
     pathname: Rc<String>,
     header: bool,
     separator: char,
@@ -80,8 +81,10 @@ pub struct CSVDesc {
 }
 
 impl CSVDesc {
-    pub fn new(tp: TableType, pathname: Rc<String>, columns: Vec<Field>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats) -> Result<Self, String> {
-        let csvdesc = CSVDesc { tp, pathname, header, separator, columns, part_desc, table_stats };
+    pub fn new(
+        typ: TableType, pathname: Rc<String>, columns: Vec<Field>, separator: char, header: bool, part_desc: PartDesc, table_stats: TableStats,
+    ) -> Result<Self, String> {
+        let csvdesc = CSVDesc { typ, pathname, header, separator, columns, part_desc, table_stats };
         Ok(csvdesc)
     }
 
@@ -102,7 +105,7 @@ impl CSVDesc {
 
 impl TableDesc for CSVDesc {
     fn get_type(&self) -> TableType {
-        self.tp
+        self.typ
     }
 
     fn fields(&self) -> &Vec<Field> {
@@ -121,8 +124,8 @@ impl TableDesc for CSVDesc {
         self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
     }
 
-    fn get_part_desc(&self) -> &PartDesc {
-        &self.part_desc
+    fn get_part_desc(&self) -> Option<&PartDesc> {
+        Some(&self.part_desc)
     }
 
     fn header(&self) -> bool {
@@ -133,8 +136,8 @@ impl TableDesc for CSVDesc {
         self.separator
     }
 
-    fn get_stats(&self) -> &TableStats {
-        &self.table_stats
+    fn get_stats(&self) -> Option<&TableStats> {
+        Some(&self.table_stats)
     }
 }
 
@@ -170,17 +173,17 @@ impl Metadata {
     }
 
     fn get_table_type(hm: &HashMap<String, Datum>, name: &String) -> Result<TableType, String> {
-        let tp = hm.get("TYPE").ok_or(f!("Table {name} does not specify a TYPE."))?;
-        let tp = tp.try_as_str().ok_or(f!("Table {name} has invalid TYPE."))?;
+        let typ = hm.get("TYPE").ok_or(f!("Table {name} does not specify a TYPE."))?;
+        let typ = typ.try_as_str().ok_or(f!("Table {name} has invalid TYPE."))?;
 
-        let tp = tp.to_uppercase();
-        let tp = tp.as_str();
-        let tp = match tp {
+        let typ = typ.to_uppercase();
+        let typ = typ.as_str();
+        let typ = match typ {
             "CSV" => TableType::CSV,
             "PARQUET" => TableType::Parquet,
             _ => return Err(f!("Table {name} has invalid TYPE.")),
         };
-        Ok(tp)
+        Ok(typ)
     }
 
     fn get_header_parm(hm: &HashMap<String, Datum>) -> Result<bool, String> {
@@ -260,9 +263,9 @@ impl Metadata {
         }
         let hm: HashMap<String, Datum> = options.into_iter().collect();
 
-        let tp = Self::get_table_type(&hm, &name)?;
+        let typ = Self::get_table_type(&hm, &name)?;
 
-        match tp {
+        match typ {
             TableType::CSV => {
                 // PATH, HEADER, SEPARATOR
                 let path = hm.get("PATH").ok_or("Table {name} does not specify a PATH")?.try_as_str().ok_or("PATH does not hold a string for table {name}")?;
@@ -275,13 +278,13 @@ impl Metadata {
 
                 let columns = if hm.get("COLUMNS").is_some() {
                     Self::parse_columns(&hm)?
-                } else if matches!(tp, TableType::CSV) {
+                } else if matches!(typ, TableType::CSV) {
                     CSVDesc::infer_metadata(&path, separator, header)?
                 } else {
                     unimplemented!()
                 };
 
-                let csvdesc = Rc::new(CSVDesc::new(tp, path, columns, separator, header, part_desc, table_stats)?);
+                let csvdesc = Rc::new(CSVDesc::new(typ, path, columns, separator, header, part_desc, table_stats)?);
                 self.tables.insert(name.to_string(), csvdesc);
                 info!("Cataloged table {}", &name);
             }
@@ -304,10 +307,11 @@ impl Metadata {
                 let table_stats = Self::get_table_stats(&hm)?;
 
                 let columns = ParquetDesc::infer_metadata(&path)?;
-                let csvdesc = Rc::new(ParquetDesc::new(tp, path, columns, part_desc, table_stats)?);
+                let csvdesc = Rc::new(ParquetDesc::new(typ, path, columns, part_desc, table_stats)?);
                 self.tables.insert(name.to_string(), csvdesc);
                 info!("Cataloged table {}", &name);
             }
+            unexpected => panic!("Unexpected type: {:?}", unexpected),
         }
         Ok(())
     }
@@ -342,7 +346,7 @@ impl Metadata {
 
 #[derive(Debug)]
 pub struct ParquetDesc {
-    tp: TableType,
+    typ: TableType,
     pathname: Rc<String>,
     columns: Vec<Field>,
     part_desc: PartDesc,
@@ -350,8 +354,8 @@ pub struct ParquetDesc {
 }
 
 impl ParquetDesc {
-    pub fn new(tp: TableType, pathname: Rc<String>, columns: Vec<Field>, part_desc: PartDesc, table_stats: TableStats) -> Result<Self, String> {
-        let csvdesc = ParquetDesc { tp, pathname, columns, part_desc, table_stats };
+    pub fn new(typ: TableType, pathname: Rc<String>, columns: Vec<Field>, part_desc: PartDesc, table_stats: TableStats) -> Result<Self, String> {
+        let csvdesc = ParquetDesc { typ, pathname, columns, part_desc, table_stats };
         Ok(csvdesc)
     }
 
@@ -372,7 +376,7 @@ impl ParquetDesc {
 
 impl TableDesc for ParquetDesc {
     fn get_type(&self) -> TableType {
-        self.tp
+        self.typ
     }
 
     fn fields(&self) -> &Vec<Field> {
@@ -391,8 +395,8 @@ impl TableDesc for ParquetDesc {
         self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
     }
 
-    fn get_part_desc(&self) -> &PartDesc {
-        &self.part_desc
+    fn get_part_desc(&self) -> Option<&PartDesc> {
+        Some(&self.part_desc)
     }
 
     fn header(&self) -> bool {
@@ -403,7 +407,56 @@ impl TableDesc for ParquetDesc {
         todo!()
     }
 
-    fn get_stats(&self) -> &TableStats {
-        &self.table_stats
+    fn get_stats(&self) -> Option<&TableStats> {
+        Some(&self.table_stats)
+    }
+}
+
+#[derive(Debug)]
+pub struct QueryDesc {
+    columns: Vec<Field>,
+}
+
+impl QueryDesc {
+    pub fn new(columns: Vec<Field>) -> Self {
+        QueryDesc { columns }
+    }
+}
+
+impl TableDesc for QueryDesc {
+    fn get_type(&self) -> TableType {
+        TableType::Query
+    }
+
+    fn fields(&self) -> &Vec<Field> {
+        &self.columns
+    }
+
+    fn pathname(&self) -> &String {
+        panic!("No pathname")
+    }
+
+    fn describe(&self) -> String {
+        format!("Type: Query, {:?}", self)
+    }
+
+    fn get_column(&self, colname: &str) -> Option<(usize, &Field)> {
+        self.columns.iter().enumerate().find(|(_, cd)| cd.name == *colname)
+    }
+
+    fn get_part_desc(&self) -> Option<&PartDesc> {
+        None
+    }
+
+    fn header(&self) -> bool {
+        todo!()
+    }
+
+    fn separator(&self) -> char {
+        todo!()
+    }
+
+    fn get_stats(&self) -> Option<&TableStats> {
+        None
     }
 }

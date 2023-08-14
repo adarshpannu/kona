@@ -5,6 +5,9 @@
 			"label": "run main",
 			"type": "cargo",
 			"command": "run",
+			"args": [
+				"sql/scratch.fsql",
+			],
 			"problemMatcher": [
 				"$rustc"
 			],

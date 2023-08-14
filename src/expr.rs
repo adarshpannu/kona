@@ -129,7 +129,7 @@ pub enum Expr {
     Subquery(QueryBlockKey),
     AggFunction(AggType, bool),
     ScalarFunction(String),
-    Cast(String),
+    Cast,
 }
 
 impl Expr {
@@ -160,7 +160,7 @@ impl Expr {
                 format!("{:?}", aggtype)
             }
             ScalarFunction(name) => format!("{}()", name),
-            Cast(_) => String::from("CAST"),
+            Cast => String::from("CAST"),
         }
     }
 
@@ -260,7 +260,7 @@ impl ExprKey {
     }
 
     pub fn describe(&self, graph: &ExprGraph, do_escape: bool) -> String {
-        let (expr, _, children) = graph.get3(*self);
+        let (expr, props, children) = graph.get3(*self);
         let retval = match expr {
             CID(qunid, colid) => {
                 format!("${}.{}", *qunid, *colid)
@@ -302,8 +302,9 @@ impl ExprKey {
             ScalarFunction(name) => {
                 format!("{}()", name)
             }
-            Cast(target_type) => {
-                format!("(CAST AS {})", target_type)
+            Cast => {
+                let child_key = children.unwrap()[0];
+                format!("({}) AS {:?}", child_key.describe(graph, false), props.data_type())
             }
         };
         if do_escape {

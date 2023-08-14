@@ -414,10 +414,14 @@ AggArg: ExprKey = {
 }
 
 ScalarFunction: ExprKey = {
-    <name:Identifier> "(" <args:FunctionArgs?> ")" => parser_state.expr_graph.add_node(ScalarFunction(name), args),
-    "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" => {
+    <name:Identifier> "(" <args:FunctionArgs?> ")" =>? { 
+        Ok(parser_state.expr_graph.add_node(ScalarFunction(name), args))
+    },
+    "CAST" "(" <arg:Expr> "AS" <datatype:Identifier> ")" =>? {
         let args = vec![arg];
-        parser_state.expr_graph.add_node(Cast(datatype), Some(args))
+        let data_type = to_datatype(&datatype).ok_or(ParseError::User { error: "Invalid datatype." })?;
+        let props = ExprProp { data_type: data_type.clone() };
+        Ok(parser_state.expr_graph.add_node_with_props(Cast, props, Some(args)))
     }
 }
 

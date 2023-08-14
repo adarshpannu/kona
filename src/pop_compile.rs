@@ -119,20 +119,15 @@ impl POP {
 
         let pop = match tbldesc.get_type() {
             TableType::CSV => {
-                let inner = CSV::new(
-                    tbldesc.pathname().clone(),
-                    tbldesc.fields().clone(),
-                    tbldesc.header(),
-                    tbldesc.separator(),
-                    lopprops.partdesc.npartitions,
-                    input_projection,
-                );
+                let inner =
+                    CSV::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), tbldesc.header(), tbldesc.separator(), lopprops.partdesc.npartitions, input_projection);
                 POP::CSV(inner)
             }
             TableType::Parquet => {
                 let inner = Parquet::new(tbldesc.pathname().clone(), tbldesc.fields().clone(), lopprops.partdesc.npartitions, input_projection);
                 POP::Parquet(inner)
             }
+            unexpected => panic!("Unexpected type: {:?}", unexpected),
         };
 
         // Compile real + virt columns

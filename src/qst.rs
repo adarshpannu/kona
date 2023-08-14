@@ -3,10 +3,15 @@
 use core::panic;
 use std::rc::Rc;
 
+use arrow2::compute::cast::can_cast_types;
+use itertools::Itertools;
+
 use crate::{
+    datum::{get_rank, is_numeric},
     expr::{AggType, ArithOp, Expr, Expr::*, ExprGraph, ExprProp},
     graph::{ExprKey, Node, QueryBlockKey},
     includes::*,
+    metadata::{QueryDesc, TableDesc},
     qgm::{NamedExpr, QGMMetadata, Quantifier, QueryBlock, QueryBlockGraph, QueryBlockType, QGM},
 };
 
@@ -21,19 +26,30 @@ impl QGM {
 }
 
 impl QueryBlock {
-    pub fn resolve(qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata) -> Result<(), String> {
+    pub fn resolve(
+        qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata,
+    ) -> Result<Rc<dyn TableDesc>, String> {
+        let qblock = &mut qblock_graph.get_mut(qbkey).value;
+
+        // Resolve group-by/having clauses, if they exist
+        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
+        if qblock.group_by.is_some() {
+            Self::split_groupby(qbkey, qblock_graph, expr_graph)?;
+        }
+
         let qblock = &mut qblock_graph.get_mut(qbkey).value;
 
         // Ensure that every quantifier in this qblock is uniquely identifiable
-        let qun_aliases = qblock.quns.iter().filter_map(|qun| qun.get_alias()).collect::<Vec<_>>();
+        let qun_aliases = qblock.quns.iter().filter_map(|qun| qun.get_alias().cloned()).collect::<Vec<_>>();
         if has_duplicates(&qun_aliases) {
             return Err("Query has two or more quantifiers with the same aliases.".to_owned());
         }
 
         // Resolve nested query blocks first
-        let qbkey_children: Vec<QueryBlockKey> = qblock.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
-        for qbkey in qbkey_children {
-            Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata)?;
+        let qbkey_children: Vec<(QunId, QueryBlockKey)> = qblock.quns.iter().filter_map(|qun| qun.get_qblock().map(|qbkey| (qun.id, qbkey))).collect();
+        for (qunid, qbkey) in qbkey_children {
+            let qdesc = Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata)?;
+            metadata.add_tabledesc(qunid, qdesc);
         }
 
         let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
@@ -58,14 +74,14 @@ impl QueryBlock {
         // Resolve select list
         for ne in qblock.select_list.iter() {
             let expr_key = ne.expr_key;
-            qblock.resolve_expr(env, expr_graph, expr_key, true)?;
+            qblock.resolve_expr(env, expr_graph, metadata, expr_key, true)?;
         }
 
         // Resolve predicates
         if let Some(pred_list) = qblock.pred_list.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_key in pred_list {
-                qblock.resolve_expr(env, expr_graph, expr_key, false)?;
+                qblock.resolve_expr(env, expr_graph, metadata, expr_key, false)?;
                 expr_key.get_boolean_factors(expr_graph, &mut boolean_factors)
             }
             qblock.pred_list = Some(boolean_factors);
@@ -74,7 +90,7 @@ impl QueryBlock {
         // Resolve group-by
         if let Some(group_by) = qblock.group_by.as_ref() {
             for &expr_key in group_by.iter() {
-                qblock.resolve_expr(env, expr_graph, expr_key, false)?;
+                qblock.resolve_expr(env, expr_graph, metadata, expr_key, false)?;
             }
         }
 
@@ -82,19 +98,33 @@ impl QueryBlock {
         if let Some(having_clause) = qblock.having_clause.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_key in having_clause {
-                qblock.resolve_expr(env, expr_graph, expr_key, true)?;
+                qblock.resolve_expr(env, expr_graph, metadata, expr_key, true)?;
                 expr_key.get_boolean_factors(expr_graph, &mut boolean_factors)
             }
             qblock.having_clause = Some(boolean_factors);
         }
 
-        // Resolve group-by/having clauses, if they exist
-        // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
-        if qblock.group_by.is_some() {
-            Self::split_groupby(qbkey, qblock_graph, expr_graph)?;
-        }
         info!("Resolved qblock id: {}", qblock_id);
-        Ok(())
+
+        let qdesc = qblock.get_projection(expr_graph);
+
+        Ok(qdesc)
+    }
+
+    pub fn get_projection(&self, expr_graph: &ExprGraph) -> Rc<dyn TableDesc> {
+        let fields = self
+            .select_list
+            .iter()
+            .map(|ne| {
+                let expr_key = ne.expr_key;
+                let name = ne.get_name();
+                let typ = expr_key.get_data_type(expr_graph);
+
+                Field::new(name, typ.clone(), false)
+            })
+            .collect_vec();
+        let qdesc = Rc::new(QueryDesc::new(fields));
+        qdesc
     }
 
     pub fn split_groupby(qbkey: QueryBlockKey, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph) -> Result<(), String> {
@@ -200,6 +230,10 @@ impl QueryBlock {
 
     // transform_groupby_expr: Traverse expression `expr_key` (which is part of aggregate qb select list) such that any subexpressions are replaced with
     // corresponding references to inner/select qb select-list using CID#
+    // SUM(c1) => Outer QB             SUM ($qunid.colid)
+    //                                        |
+    //                                        V
+    //            Inner QB select list    => c1
     pub fn transform_groupby_expr(
         expr_graph: &mut ExprGraph, select_list: &mut Vec<NamedExpr>, group_by_expr_count: usize, qunid: QunId, expr_key: &mut ExprKey,
     ) -> Result<(), String> {
@@ -285,8 +319,45 @@ impl QueryBlock {
         }
     }
 
+    #[tracing::instrument(fields(children = ?children, children_datatypes = ?children_datatypes), skip_all, parent = None)]
+    pub fn harmonize_expr_types(expr_graph: &mut ExprGraph, children: &Vec<ExprKey>, children_datatypes: &Vec<DataType>) -> Result<(DataType, Option<Vec<ExprKey>>), String> {
+        let (lhs, rhs) = (expr_graph.get_value(children[0]), expr_graph.get_value(children[1]));
+        let (lhs_key, rhs_key) = (children[0], children[1]);
+        let (lhs_datatype, rhs_datatype) = (&children_datatypes[0], &children_datatypes[1]);
+        let is_lhs_literal = matches!(lhs, Expr::Literal(_));
+        let is_rhs_literal = matches!(rhs, Expr::Literal(_));
+
+        if children_datatypes[0] != children_datatypes[1] {
+            // Cases:
+            //    Literal vs Literal  (2 == 2.0)
+            //    Expr vs Literal     (intcol vs 2.0) / (floatcol vs 2)
+            //    Literal vs Expr     (same as above, but flipped)
+            //    Expr vs Expr        (intcol = floatcol)
+            match (is_lhs_literal, is_rhs_literal) {
+                (false, false) => {
+                    let (lhs_rank, rhs_rank) = (get_rank(lhs_datatype), get_rank(rhs_datatype));
+                    if lhs_rank > rhs_rank {
+                        if !can_cast_types(rhs_datatype, lhs_datatype) {
+                            return Err(f!("Cannot cast {:?} to {:?}", rhs_datatype, lhs_datatype));
+                        }
+                        // Upcast RHS (e.g. floatcol = intcol) => floatcol = cast(intcol as float)
+                        let cast_props = ExprProp { data_type: lhs_datatype.clone() };
+                        let cast_node = expr_graph.add_node_with_props(Expr::Cast, cast_props, Some(vec![rhs_key]));
+                        return Ok((lhs_datatype.clone(), Some(vec![lhs_key, cast_node])));
+                    } else {
+                        // Upcast LHS (e.g. intcol = floatcol)
+                    }
+                }
+                _ => todo!(),
+            }
+            //return Err(f!("Binary operands don't have identical types: {:?} vs {:?}", children_datatypes[0], children_datatypes[1]));
+        } else {
+        }
+        Ok((children_datatypes[0].clone(), Some(children.clone())))
+    }
+
     #[tracing::instrument(fields(expr = expr_key.to_string()), skip_all, parent = None)]
-    pub fn resolve_expr(&self, env: &Env, expr_graph: &mut ExprGraph, expr_key: ExprKey, agg_fns_allowed: bool) -> Result<(), String> {
+    pub fn resolve_expr(&self, env: &Env, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata, expr_key: ExprKey, agg_fns_allowed: bool) -> Result<(), String> {
         debug!("Unresolved expression: {} ...", expr_key.describe(expr_graph, false));
 
         let children_agg_fns_allowed = if let AggFunction(_, _) = expr_graph.get(expr_key).value {
@@ -299,9 +370,9 @@ impl QueryBlock {
         // Resolve children first
         let mut children_datatypes = vec![];
         let children = expr_graph.get(expr_key).children.clone();
-        if let Some(children) = children {
+        if let Some(children) = children.clone() {
             for child_key in children {
-                self.resolve_expr(env, expr_graph, child_key, children_agg_fns_allowed)?;
+                self.resolve_expr(env, expr_graph, metadata, child_key, children_agg_fns_allowed)?;
                 let datatype = expr_graph.get(child_key).properties.data_type().clone();
                 children_datatypes.push(datatype);
             }
@@ -309,98 +380,103 @@ impl QueryBlock {
 
         // Now resolve current expr node
         let (expr, props, ..) = expr_graph.get3(expr_key);
-        let mut resolved_expr = None;
-        let datatype = match expr {
-            CID(_, _) => props.data_type().clone(),
+
+        let (resolved_expr, resolved_datatype, resolved_children) = match expr {
+            CID(qunid, colid) => {
+                let quncol = QunCol(*qunid, *colid);
+                let datatype = metadata.get_fieldtype(quncol).unwrap();
+                (None, datatype, children)
+            }
             RelExpr(..) => {
                 // Check argument types
                 if children_datatypes[0] != children_datatypes[1] {
                     return Err(f!("Datatype mismatch: {:?} vs {:?}  ({}:{})", children_datatypes[0], children_datatypes[1], file!(), line!()));
-                } else {
-                    DataType::Boolean
                 }
+                (None, DataType::Boolean, children)
             }
             BinaryExpr(arithop) => {
+                let arithop = *arithop;
                 // Check argument types
                 if is_numeric(&children_datatypes[0]) && is_numeric(&children_datatypes[1]) {
-                    if children_datatypes[0] != children_datatypes[1] {
-                        return Err(f!("Binary operands don't have identical types: {:?} vs {:?}", children_datatypes[0], children_datatypes[1]));
-                    }
-                    match arithop {
-                        ArithOp::Add | ArithOp::Sub | ArithOp::Mul => children_datatypes[0].clone(),
+                    let (datatype, children) = Self::harmonize_expr_types(expr_graph, &children.unwrap(), &children_datatypes)?;
+                    let datatype = match arithop {
+                        ArithOp::Add | ArithOp::Sub | ArithOp::Mul => datatype,
                         ArithOp::Div => DataType::Float64,
-                    }
+                    };
+                    (None, datatype, children)
                 } else {
                     return Err("Binary operands must be numeric types".to_string());
                 }
             }
             Column { prefix, colname, .. } => {
                 let (quncol, datatype, ..) = self.resolve_column(env, prefix.as_ref(), colname)?;
-                resolved_expr = Some(Column { prefix: prefix.clone(), colname: colname.clone(), qunid: quncol.0, colid: quncol.1 });
-                datatype
+                let resolved_expr = Some(Column { prefix: prefix.clone(), colname: colname.clone(), qunid: quncol.0, colid: quncol.1 });
+                (resolved_expr, datatype, None)
             }
-            LogExpr(..) => DataType::Boolean,
-            Literal(Utf8(_)) => DataType::Utf8,
-            Literal(Int64(_)) => DataType::Int64,
-            Literal(Float64(_)) => DataType::Float64,
-            Literal(Boolean(_)) => DataType::Boolean,
+            LogExpr(..) => (None, DataType::Boolean, children),
+            Literal(Utf8(_)) => (None, DataType::Utf8, children),
+            Literal(Int64(_)) => (None, DataType::Int64, children),
+            Literal(Float64(_)) => (None, DataType::Float64, children),
+            Literal(Boolean(_)) => (None, DataType::Boolean, children),
             AggFunction(aggtype, ..) => {
                 if !agg_fns_allowed {
                     return Err(format!("Aggregate function {:?} not allowed.", aggtype));
                 }
-                match aggtype {
+                let datatype = match aggtype {
                     AggType::COUNT => DataType::Int64,
                     AggType::MIN | AggType::MAX => children_datatypes[0].clone(),
                     AggType::SUM | AggType::AVG => {
-                        if is_numeric(&children_datatypes[0]) {
-                            children_datatypes[0].clone()
-                        } else {
-                            return Err(format!("SUM() {:?} only allowed for numeric datatypes.", aggtype));
-                        }
+                        DataType::Float64 /*
+                                          if is_numeric(&children_datatypes[0]) {
+                                              children_datatypes[0].clone()
+                                          } else {
+                                              return Err(format!("SUM() {:?} only allowed for numeric datatypes.", aggtype));
+                                          }
+                                          */
                     }
-                }
+                };
+                (None, datatype, children)
             }
             NegatedExpr => {
                 if is_numeric(&children_datatypes[0]) {
-                    children_datatypes[0].clone()
+                    (None, children_datatypes[0].clone(), children)
                 } else {
                     return Err(String::from("Only numeric datatypes can be negated."));
                 }
             }
-            Cast(to_datatype) => {
+            Cast => {
                 // Perform cast
                 let child_expr_key = expr_graph.get(expr_key).children.as_ref().unwrap()[0];
                 let from_expr = expr_graph.get_value(child_expr_key);
-                let new_value = Self::resolve_cast(from_expr, to_datatype)?;
+                let new_value = Self::resolve_cast(from_expr, props.data_type())?;
                 let datatype = new_value.datatype();
-                resolved_expr = Some(Literal(new_value));
-                datatype
+                (Some(Literal(new_value)), datatype, None)
             }
             _ => {
                 panic!("Unexpected expression found: {:?}", &expr);
             }
         };
 
-        debug!("Resolved expression: {}: {:?}", expr_key.describe(expr_graph, false), datatype);
+        debug!("Resolved expression: {:?} {}: {:?}", expr_key, expr_key.describe(expr_graph, false), resolved_datatype);
 
         let node: &mut Node<ExprKey, Expr, ExprProp> = expr_graph.get_mut(expr_key);
-        node.properties.set_data_type(datatype);
         if let Some(resolved_expr) = resolved_expr {
             node.value = resolved_expr;
-            node.children = None;
         }
+        node.properties.set_data_type(resolved_datatype);
+        node.children = resolved_children;
 
         Ok(())
     }
 
-    pub fn resolve_cast(from_expr: &Expr, to_datatype: &str) -> Result<Datum, String> {
+    pub fn resolve_cast(from_expr: &Expr, to_datatype: &DataType) -> Result<Datum, String> {
         if let Literal(from_value) = from_expr {
             let to_value = match (from_value, to_datatype) {
-                (Utf8(s), "INT64") => {
+                (Utf8(s), DataType::Int64) => {
                     let to_value: i64 = s.parse::<i64>().map_err(stringify)?;
                     Int64(to_value)
                 }
-                (Utf8(s), "DATE32") => {
+                (Utf8(s), DataType::Date32) => {
                     let date: chrono::NaiveDate = s.parse::<chrono::NaiveDate>().map_err(stringify)?;
                     let date: i32 = chrono::Datelike::num_days_from_ce(&date) - arrow2::temporal_conversions::EPOCH_DAYS_FROM_CE;
                     Date32(date)
@@ -443,22 +519,5 @@ impl QueryBlock {
         }
         self.select_list = new_select_list;
         Ok(())
-    }
-}
-
-fn is_numeric(dt: &DataType) -> bool {
-    match dt {
-        DataType::Int8
-        | DataType::Int16
-        | DataType::Int32
-        | DataType::Int64
-        | DataType::UInt8
-        | DataType::UInt16
-        | DataType::UInt32
-        | DataType::UInt64
-        | DataType::Float16
-        | DataType::Float32
-        | DataType::Float64 => true,
-        _ => false,
     }
 }

@@ -288,14 +288,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clp"
-version = "0.1.0"
-source = "git+https://github.com/adarshpannu/clp#744d4df121bfb3cd086bc9538ca10cd92d846fc4"
-dependencies = [
- "regex",
-]
-
-[[package]]
 name = "core-foundation-sys"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1782,7 +1774,6 @@ dependencies = [
  "bincode",
  "bitmaps",
  "chrono",
- "clp",
  "csv",
  "derivative",
  "fstrings",

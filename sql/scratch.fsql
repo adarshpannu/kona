@@ -1,16 +1,11 @@
-SET TRACE = "debug,[compile_lop]=debug,[next]=info,[{input}]=info";
+SET TRACE = "info";
 
---SET PARSE_ONLY = "true";
+CATALOG TABLE emp ( "TYPE" = "PaRQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.parquet");
 
-CATALOG TABLE LINEITEM( "TYPE" = "PARQUET",
-    --PATH="/Users/adarshrp/Projects/tpch-data/sf0.01/lineitem.parquet");
-    PATH="/Users/adarshrp/Downloads/part-0.parquet");
+DESCRIBE TABLE emp;
 
+SELECT emp_dept_id, avg(salary)
+from emp
+group by emp_dept_id
+;
 
-DESCRIBE TABLE LINEITEM;
-
-
-SELECT SUM(L_QUANTITY) / COUNT(L_QUANTITY) AS SUM_QTY
-FROM LINEITEM
-WHERE L_SHIPDATE <= CAST('1992-01-02' AS DATE32)
-GROUP BY L_RETURNFLAG;

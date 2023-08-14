@@ -170,23 +170,3 @@ impl fmt::Debug for CSV {
         fmt.debug_struct("").field("file", &pathname).finish()
     }
 }
-
-/*
-#[test]
-fn test() {
-    debug!("Hello, world!");
-    let pathname = format!("{}/{}", DATADIR, "emp.csv").to_string();
-
-    let partitions = compute_partitions(&pathname, 4).unwrap();
-    for partition in partitions.iter() {
-        debug!("split = {:?}", partition);
-    }
-
-    let ptniter = CSVPartitionIter::new(&pathname, &partitions[1]);
-    for line in ptniter {
-        debug!("line = {:?}", line);
-    }
-
-    debug!("Done");
-}
-*/

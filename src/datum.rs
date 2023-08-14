@@ -6,15 +6,92 @@ use lazy_static::lazy_static;
 
 use crate::includes::*;
 
+#[allow(dead_code)]
+pub struct DataTypeDesc<'a> {
+    name: &'a str,
+    is_numeric: bool,
+    rank: usize,
+}
+
+impl<'a> DataTypeDesc<'a> {
+    fn new(name: &'a str, is_numeric: bool, rank: usize) -> Self {
+        DataTypeDesc { name, is_numeric, rank }
+    }
+}
+
 lazy_static! {
-    static ref DATA_TYPE_PAIRS: Vec<(&'static str, DataType)> = vec![("BOOL", DataType::Boolean), ("INT64", DataType::Int64), ("STRING", DataType::Utf8)];
-    static ref STR_TO_DATATYPE: HashMap<String, DataType> = {
-        let mut m = HashMap::new();
-        for (type_str, typ) in DATA_TYPE_PAIRS.iter() {
-            m.insert(type_str.to_string(), typ.clone());
+    pub static ref DATATYPE_PROPS: HashMap<DataType, DataTypeDesc<'static>> = {
+        let mut map = HashMap::new(); // datatype -> (name, is_numeric, rank)
+        let type_metadata = vec![
+            (DataType::Int8, DataTypeDesc::new("INT8", true, 1)),
+            (DataType::Int16, DataTypeDesc::new("INT16", true, 2)),
+            (DataType::Int32, DataTypeDesc::new("INT32", true, 3)),
+            (DataType::Int64, DataTypeDesc::new("INT64", true, 4)),
+            (DataType::UInt8, DataTypeDesc::new("UINT8", true, 5)),
+            (DataType::UInt16, DataTypeDesc::new("UINT16", true, 6)),
+            (DataType::UInt32, DataTypeDesc::new("UINT32", true, 7)),
+            (DataType::UInt64, DataTypeDesc::new("UINT64", true, 8)),
+            (DataType::Float16, DataTypeDesc::new("FLOAT16", true, 9)),
+            (DataType::Float32, DataTypeDesc::new("FLOAT32", true, 10)),
+            (DataType::Float64, DataTypeDesc::new("FLOAT64", true, 11)),
+            (DataType::Date32, DataTypeDesc::new("DATE32", true, 12)),
+            (DataType::Date64, DataTypeDesc::new("DATE64", true, 13)),
+        ];
+        for (typ, metadata) in type_metadata.into_iter() {
+            map.insert(typ, metadata);
         }
-        m
+        map
     };
+
+    pub static ref STR_TO_DATATYPE: HashMap<String, DataType> = {
+        let mut map = HashMap::new();
+        for (typ, type_str) in DATATYPE_PROPS.iter() {
+            map.insert(type_str.name.to_string(), typ.clone());
+        }
+        map
+    };
+}
+
+pub fn is_numeric(dt: &DataType) -> bool {
+    let metadata = DATATYPE_PROPS.get(dt);
+    if let Some(metadata) = metadata {
+        metadata.is_numeric
+    } else {
+        panic!("is_numeric() passed invalid datatype")
+    }
+}
+
+pub fn to_datatype(name: &str) -> Option<&DataType> {
+    let name = name.to_uppercase();
+    STR_TO_DATATYPE.get(&name)
+}
+
+pub fn get_rank(dt: &DataType) -> usize {
+    let metadata = DATATYPE_PROPS.get(dt);
+    if let Some(metadata) = metadata {
+        metadata.rank
+    } else {
+        panic!("get_rank() passed invalid datatype")
+    }
+}
+
+// Cast
+// Ref: https://learn.microsoft.com/en-us/sql/t-sql/data-types/data-type-conversion-database-engine?view=sql-server-ver16
+#[derive(Debug, Clone, Copy)]
+pub enum CastResult {
+    CannotCast,
+    Implicit,
+    Explicit,
+}
+
+pub fn check_castability(from: &DataType, to: &DataType) -> CastResult {
+    if *from == *to {
+        CastResult::Implicit
+    } else if is_numeric(from) && is_numeric(to) {
+        CastResult::Explicit
+    } else {
+        CastResult::CannotCast
+    }
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Hash)]
@@ -114,15 +191,4 @@ impl fmt::Display for Datum {
             Float64(value) => write!(f, "{:?}", Into::<F64>::into(*value)),
         }
     }
-}
-
-#[test]
-fn foo() {
-    let orig_float: f64 = 1.456;
-    let ff = F64::from(orig_float);
-    let new_float = f64::from(ff);
-
-    dbg!(&ff);
-    dbg!(&orig_float);
-    dbg!(&new_float);
 }
