@@ -348,7 +348,11 @@ impl QueryBlock {
                         // Upcast LHS (e.g. intcol = floatcol)
                     }
                 }
-                _ => todo!(),
+                _ => {
+                    let lhsstr = lhs_key.describe(&expr_graph, false);
+                    let rhsstr = rhs_key.describe(&expr_graph, false);
+                    panic!("Cannot harmonize {}: {:?} and {}: {:?}", lhsstr, lhs_datatype, rhsstr, rhs_datatype);
+                }
             }
             //return Err(f!("Binary operands don't have identical types: {:?} vs {:?}", children_datatypes[0], children_datatypes[1]));
         } else {

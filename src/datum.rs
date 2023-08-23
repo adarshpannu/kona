@@ -36,6 +36,7 @@ lazy_static! {
             (DataType::Float64, DataTypeDesc::new("FLOAT64", true, 11)),
             (DataType::Date32, DataTypeDesc::new("DATE32", true, 12)),
             (DataType::Date64, DataTypeDesc::new("DATE64", true, 13)),
+            (DataType::Decimal(15, 2), DataTypeDesc::new("DECIMAL(15,2)", true, 13)),
         ];
         for (typ, metadata) in type_metadata.into_iter() {
             map.insert(typ, metadata);

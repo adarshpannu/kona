@@ -14,7 +14,9 @@ impl QGM {
         let props = lop_graph.get_properties(lop_key);
         let actual_partitioning = &props.partdesc;
 
-        if Self::compare_part_descs(&self.expr_graph, expected_partitioning, actual_partitioning, eqclass) {
+        if (expected_partitioning.npartitions == 1 && actual_partitioning.npartitions == 1)
+            || Self::compare_part_descs(&self.expr_graph, expected_partitioning, actual_partitioning, eqclass)
+        {
             lop_key
         } else {
             let mut partdesc = expected_partitioning.clone();

@@ -1,9 +1,6 @@
 SET TRACE = "info";
 
-CATALOG TABLE LINEITEM( "TYPE" = "PARQUET",
-    --PATH="/Users/adarshrp/Projects/tpch-data/sf0.01/lineitem.parquet");
-    PATH="/Users/adarshrp/Downloads/part-0.parquet");
-
+CATALOG TABLE LINEITEM( "TYPE" = "PARQUET", PATH="/Users/adarshrp/Projects/tpch-data/sf3/lineitem.parquet");
 DESCRIBE TABLE LINEITEM;
 
 SELECT L_RETURNFLAG, L_LINESTATUS, SUM(L_QUANTITY) AS SUM_QTY,

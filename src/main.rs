@@ -66,6 +66,10 @@ pub mod print;
 
 pub use tracing::{debug, event, info, Level};
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
 /***************************************************************************************************/
 pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     // Clear output directories
@@ -163,6 +167,9 @@ fn run_job(env: &mut Env, run_trace: bool) -> Result<(), String> {
 */
 
 fn main() -> Result<(), String> {
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap();
+
     //std::env::set_var("RUST_LOG", "yard::pcode=info");
 
     //std::env::set_var("RUST_LOG", "yard=info,yard::pop_repartition=debug,yard::flow=debug");
@@ -175,7 +182,7 @@ fn main() -> Result<(), String> {
     if args.len() != 2 {
         println!("\n\nUsage: yard sqlfilename");
         println!("... exiting");
-        return Ok(())
+        return Ok(());
     }
 
     let input_pathname = args[1].clone();
@@ -260,3 +267,9 @@ fn display_output_dir(flow: &Flow) {
     println!("----------------------------");
     println!("");
 }
+
+/*
+fn test(from: PrimitiveArray<i128>) {
+    cast::integer_to_decimal(&from, 5, 2);
+}
+*/

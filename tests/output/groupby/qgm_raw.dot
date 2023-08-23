@@ -19,7 +19,7 @@ digraph example1 {
     exprnode2v1 -> exprnode3v1;
     exprnode2v1[label="2v1|10"];
     exprnode5v1 -> exprnode6v1;
-    exprnode5v1[label="5v1|99"];
+    exprnode5v1[label="5v1|99 (4636666922610458624)"];
     exprnode10v1 -> exprnode11v1;
     exprnode10v1[label="10v1|COUNT"];
     exprnode9v1 -> exprnode10v1;

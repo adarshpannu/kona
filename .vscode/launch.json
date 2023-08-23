@@ -12,14 +12,16 @@
                 "args": [
                     "build",
                     "--bin=yard",
-                    "--package=yard"
+                    "--package=yard",
                 ],
                 "filter": {
                     "name": "yard",
                     "kind": "bin"
                 }
             },
-            "args": [],
+			"args": [
+				"sql/groupby.fsql",
+			],
             "cwd": "${workspaceFolder}"
         },
         {

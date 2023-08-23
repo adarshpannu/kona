@@ -3,7 +3,7 @@
 //#![allow(warnings)]
 
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
 
@@ -25,6 +25,8 @@ use crate::{
     Datum,
 };
 
+type DataRow = Vec<Option<Datum>>;
+
 /***************************************************************************************************/
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HashAgg {
@@ -38,14 +40,15 @@ impl HashAgg {
         self.keycols[0].len()
     }
 }
+
 /***************************************************************************************************/
 struct HashAggSplit {
-    hash_map: HashMap<Vec<Option<Datum>>, Vec<Option<Datum>>>, // Hash-of-keys -> Accumulators
+    hash_map: MyHashTable<DataRow, DataRow>, // Hash-of-keys -> Accumulators
 }
 
 impl HashAggSplit {
     fn new() -> Self {
-        HashAggSplit { hash_map: HashMap::new() }
+        HashAggSplit { hash_map: MyHashTable::new(1000) }
     }
 }
 /***************************************************************************************************/
@@ -57,7 +60,7 @@ pub struct HashAggContext {
 
     #[derivative(Debug = "ignore")]
     splits: Vec<HashAggSplit>,
-    
+
     output_split: usize,
 
     #[derivative(Debug = "ignore")]
@@ -95,11 +98,11 @@ impl HashAggContext {
     fn perform_aggregation(&mut self, _: &Flow, _stage: &Stage, hash_agg: &HashAgg, chunk: ChunkBox) -> Result<(), String> {
         let keycols = &hash_agg.keycols[0];
 
-        let mut iters = chunk.arrays().iter().map(|array| array_to_iter(&**array)).collect::<Vec<_>>();
+        let mut iters = chunk.arrays().iter().map(|array| array_to_datum_iter(&**array)).collect::<Vec<_>>();
         for _ in 0..chunk.len() {
             let key = iters.iter_mut().take(keycols.len()).map(|it| it.next().unwrap()).collect::<Vec<_>>();
-            let value = iters.iter_mut().skip(keycols.len()).map(|it| it.next().unwrap()).collect::<Vec<_>>();
-            self.insert(hash_agg, key.clone(), value.clone());
+            let non_key = iters.iter_mut().skip(keycols.len()).map(|it| it.next().unwrap()).collect::<Vec<_>>();
+            self.insert(hash_agg, key, non_key);
         }
 
         Ok(())
@@ -234,7 +237,7 @@ impl HashAggContext {
     }
 
     //#[tracing::instrument(fields(key, value), skip_all, parent = None)]
-    fn insert(&mut self, hash_agg: &HashAgg, key: Vec<Option<Datum>>, value: Vec<Option<Datum>>) {
+    fn insert(&mut self, hash_agg: &HashAgg, key: DataRow, nonkey: DataRow) {
         let mut hasher = DefaultHasher::new();
 
         key.hash(&mut hasher);
@@ -243,17 +246,22 @@ impl HashAggContext {
 
         //debug!("split_id = {}, key = {:?} value = {:?}", split_id, key, value);
 
+        let keylen = hash_agg.keylen();
+
         let split = &mut self.splits[split_id];
 
-        let accumulators = split.hash_map.entry(key.clone()).or_insert_with(|| vec![]);
-        let do_init = accumulators.len() == 0;
-        let keylen = hash_agg.keylen();
+        let entry = split.hash_map.find(key, hash_value as usize, || vec![]);
+        let do_init = matches!(entry, MyEntry::Vacant(_));
+
+        let bucket = entry.bucket();
+        let mut key_value = split.hash_map.key_value_mut(bucket);
+        let (key, accumulators) = &mut key_value.as_mut().unwrap();
 
         let get_input = |colid: ColId| {
             if colid < keylen {
                 key[colid].as_ref()
             } else {
-                value[colid - keylen].as_ref()
+                nonkey[colid - keylen].as_ref()
             }
         };
 
@@ -386,7 +394,7 @@ impl HashAggContext {
     }
 }
 
-fn array_to_iter(array: &dyn Array) -> Box<dyn Iterator<Item = Option<Datum>> + '_> {
+fn array_to_datum_iter(array: &dyn Array) -> Box<dyn Iterator<Item = Option<Datum>> + '_> {
     match array.data_type() {
         DataType::Date32 => {
             let basearr = array.as_any().downcast_ref::<PrimitiveArray<i32>>().unwrap();
@@ -434,17 +442,81 @@ impl POPContext for HashAggContext {
     }
 }
 
-#[test]
-fn foo() {
-    use std::collections::HashMap;
+#[derive(Debug)]
+struct MyHashTable<K, V>
+where
+    K: PartialEq + Eq + Hash + Clone,
+    V: Clone, {
+    noccupied: usize,
+    hvec: Vec<Option<(K, V)>>,
+}
 
-    let mut map: HashMap<&str, u32> = HashMap::new();
+#[derive(Debug, Clone, Copy)]
+enum MyEntry {
+    Occupied(usize),
+    Vacant(usize),
+}
 
-    let e = map.entry("poneyland");
+impl MyEntry {
+    fn bucket(&self) -> usize {
+        match self {
+            MyEntry::Occupied(ix) => *ix,
+            MyEntry::Vacant(ix) => *ix,
+        }
+    }
+}
 
-    e.and_modify(|e| {
-        *e += 1;
-    })
-    .or_insert(42);
-    assert_eq!(map["poneyland"], 42);
+impl<K, V> MyHashTable<K, V>
+where
+    K: PartialEq + Eq + Hash + Clone,
+    V: Clone,
+{
+    fn new(default_size: usize) -> Self {
+        MyHashTable { noccupied: 0, hvec: vec![None; default_size] }
+    }
+
+    fn len(&self) -> usize {
+        self.noccupied
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = &(K, V)> + '_> {
+        let it = self.hvec.iter().filter_map(|e| e.as_ref());
+        Box::new(it)
+    }
+
+    fn key_value_mut(&mut self, bucket: usize) -> Option<&mut (K, V)> {
+        let r = self.hvec[bucket].as_mut();
+        r
+    }
+
+    fn find<F>(&mut self, key: K, hsh: usize, default_v: F) -> MyEntry
+    where
+        F: Fn() -> V, {
+        // Ensure minimum 50% occupancy
+        assert!(self.noccupied < self.hvec.len() / 2);
+
+        // Compute hash bucket
+        let mut bucket = hsh % self.hvec.len();
+
+        // Linear probing
+        loop {
+            if let Some(entry) = &mut self.hvec[bucket] {
+                if entry.0 == key {
+                    return MyEntry::Occupied(bucket);
+                } else {
+                    if bucket == self.hvec.len() - 1 {
+                        // Wrap-around
+                        bucket = 0;
+                    } else {
+                        bucket += 1;
+                    }
+                }
+            } else {
+                // Not found ... insert
+                self.hvec[bucket] = Some((key, default_v()));
+                self.noccupied += 1;
+                return MyEntry::Vacant(bucket);
+            }
+        }
+    }
 }

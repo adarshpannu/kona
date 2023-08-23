@@ -259,8 +259,8 @@ impl ExprKey {
         matches!(expr, Column { .. })
     }
 
-    pub fn describe(&self, graph: &ExprGraph, do_escape: bool) -> String {
-        let (expr, props, children) = graph.get3(*self);
+    pub fn describe(&self, expr_graph: &ExprGraph, do_escape: bool) -> String {
+        let (expr, props, children) = expr_graph.get3(*self);
         let retval = match expr {
             CID(qunid, colid) => {
                 format!("${}.{}", *qunid, *colid)
@@ -276,19 +276,19 @@ impl ExprKey {
             Literal(v) => format!("{}", v).replace('"', r#"\""#),
             BinaryExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!("{} {} {}", lhs_key.describe(graph, false), op, rhs_key.describe(graph, false),)
+                format!("{} {} {}", lhs_key.describe(expr_graph, false), op, rhs_key.describe(expr_graph, false),)
             }
             NegatedExpr => {
                 let lhs_key = children.unwrap()[0];
-                format!("-{}", lhs_key.describe(graph, false))
+                format!("-{}", lhs_key.describe(expr_graph, false))
             }
             RelExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!("{} {} {}", lhs_key.describe(graph, false), op, rhs_key.describe(graph, false),)
+                format!("{} {} {}", lhs_key.describe(expr_graph, false), op, rhs_key.describe(expr_graph, false),)
             }
             LogExpr(op) => {
                 let (lhs_key, rhs_key) = (children.unwrap()[0], children.unwrap()[1]);
-                format!("{} {} {}", lhs_key.describe(graph, false), op, rhs_key.describe(graph, false),)
+                format!("{} {} {}", lhs_key.describe(expr_graph, false), op, rhs_key.describe(expr_graph, false),)
             }
             BetweenExpr => String::from("BETWEEEN"),
             InListExpr => String::from("IN"),
@@ -297,14 +297,14 @@ impl ExprKey {
             Subquery(_) => String::from("(subquery)"),
             AggFunction(aggtype, _) => {
                 let child_id = children.unwrap()[0];
-                format!("{:?}({})", aggtype, child_id.describe(graph, false))
+                format!("{:?}({})", aggtype, child_id.describe(expr_graph, false))
             }
             ScalarFunction(name) => {
                 format!("{}()", name)
             }
             Cast => {
                 let child_key = children.unwrap()[0];
-                format!("({}) AS {:?}", child_key.describe(graph, false), props.data_type())
+                format!("({}) AS {:?}", child_key.describe(expr_graph, false), props.data_type())
             }
         };
         if do_escape {

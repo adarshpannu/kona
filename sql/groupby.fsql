@@ -5,7 +5,7 @@ DESCRIBE TABLE emp;
 --set PARSE_ONLY = "true";
 set PARALLEL_DEGREE = 1;
 
-select sum(age + 10)*99 / count(age + 50), avg(age + 50), emp_dept_id + 55, max(distinct age), emp_dept_id * 2, max(emp_dept_id * 2), max(name)
+select sum(age + 10)*99.0 / count(age + 50), avg(age + 50), emp_dept_id + 55, max(distinct age), emp_dept_id * 2, max(emp_dept_id * 2), max(name)
 from emp E
 where 
     age > 30 
