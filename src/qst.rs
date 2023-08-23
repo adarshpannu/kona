@@ -143,7 +143,7 @@ impl QueryBlock {
         let having_clause = replace(&mut outer_qb.having_clause, None);
 
         // Construct inner select-list by first adding GROUP-BY clause expressions
-        let mut inner_select_list = group_by.iter().map(|&expr_key| NamedExpr::new(None, expr_key, expr_graph)).collect::<Vec<NamedExpr>>();
+        let mut inner_select_list = group_by.iter().map(|&expr_key| NamedExpr::new(None, expr_key)).collect::<Vec<NamedExpr>>();
 
         // Augment inner select-list by extracting parameters from `agg(parameter)` expressions
         for ne in outer_qb.select_list.iter_mut() {

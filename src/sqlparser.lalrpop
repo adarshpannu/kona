@@ -284,9 +284,9 @@ correlation_clause: String = "AS"? <id:Identifier> => id;
 NamedExpr: NamedExpr = {
     <prefix:(Identifier ".")?> "*" => {
         let star = parser_state.expr_graph.add_node(Star { prefix: prefix.map(|e| e.0) }, None);
-        NamedExpr::new(None, star, &parser_state.expr_graph)
+        NamedExpr::new(None, star)
     },
-    <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr, &parser_state.expr_graph)
+    <expr:Expr> <alias:("AS" Identifier)?> => NamedExpr::new(alias.map(|e| e.1), expr)
 }
 
 pub LogExpr: ExprKey = {

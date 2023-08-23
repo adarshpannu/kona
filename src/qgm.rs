@@ -71,7 +71,7 @@ pub struct NamedExpr {
 }
 
 impl NamedExpr {
-    pub fn new(alias: Option<String>, expr_key: ExprKey, _graph: &ExprGraph) -> Self {
+    pub fn new(alias: Option<String>, expr_key: ExprKey) -> Self {
         NamedExpr { alias, expr_key }
     }
 
@@ -269,6 +269,12 @@ impl QueryBlock {
 pub struct ParserState {
     pub qblock_graph: QueryBlockGraph,
     pub expr_graph: ExprGraph,
+}
+
+impl QueryBlockGraph {
+    pub fn foo(&self) {
+        println!("Hello")
+    }
 }
 
 impl QGM {
