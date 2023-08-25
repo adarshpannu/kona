@@ -19,25 +19,32 @@ impl QGM {
     pub fn resolve(&mut self, env: &Env) -> Result<(), String> {
         // Resolve top-level QB
         let qbkey = self.main_qblock_key;
-        QueryBlock::resolve(qbkey, env, &mut self.qblock_graph, &mut self.expr_graph, &mut self.metadata)?;
+        QueryBlock::resolve(qbkey, env, self)?;
 
         Ok(())
+    }
+
+    pub fn borrow_parts(&mut self) -> (&mut QueryBlockGraph, &mut ExprGraph, &mut QGMMetadata) {
+        (&mut self.qblock_graph, &mut self.expr_graph, &mut self.metadata)
     }
 }
 
 impl QueryBlock {
-    pub fn resolve(
-        qbkey: QueryBlockKey, env: &Env, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph, metadata: &mut QGMMetadata,
-    ) -> Result<Rc<dyn TableDesc>, String> {
-        let qblock = &mut qblock_graph.get_mut(qbkey).value;
-
+    pub fn resolve(qbkey: QueryBlockKey, env: &Env, qgm: &mut QGM) -> Result<Rc<dyn TableDesc>, String> {
         // Resolve group-by/having clauses, if they exist
         // If a GROUP BY is present, all select_list expressions must either by included in the group_by, or they must be aggregate functions
+        let qblock = &mut qgm.qblock_graph.get_mut(qbkey).value;
+        //let qbid = qblock.id;
+
         if qblock.group_by.is_some() {
-            Self::split_groupby(qbkey, qblock_graph, expr_graph)?;
+            Self::split_groupby(qbkey, qgm)?;
         }
 
-        let qblock = &mut qblock_graph.get_mut(qbkey).value;
+        //let qgm_postsplit_pathname = format!("{}/QB_{}-{}", env.output_dir, qbid, "qgm_postsplit.dot");
+        //qgm.write_qgm_to_graphviz(&qgm_postsplit_pathname, false)?;
+
+        let qblock = &mut qgm.qblock_graph.get_mut(qbkey).value;
+        let is_group_by = qblock.qbtype == QueryBlockType::GroupBy;
 
         // Ensure that every quantifier in this qblock is uniquely identifiable
         let qun_aliases = qblock.quns.iter().filter_map(|qun| qun.get_alias().cloned()).collect::<Vec<_>>();
@@ -48,10 +55,11 @@ impl QueryBlock {
         // Resolve nested query blocks first
         let qbkey_children: Vec<(QunId, QueryBlockKey)> = qblock.quns.iter().filter_map(|qun| qun.get_qblock().map(|qbkey| (qun.id, qbkey))).collect();
         for (qunid, qbkey) in qbkey_children {
-            let qdesc = Self::resolve(qbkey, env, qblock_graph, expr_graph, metadata)?;
-            metadata.add_tabledesc(qunid, qdesc);
+            let qdesc = Self::resolve(qbkey, env, qgm)?;
+            qgm.metadata.add_tabledesc(qunid, qdesc);
         }
 
+        let (qblock_graph, expr_graph, metadata) = qgm.borrow_parts();
         let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
         let qblock_id = qblock.id;
 
@@ -74,14 +82,14 @@ impl QueryBlock {
         // Resolve select list
         for ne in qblock.select_list.iter() {
             let expr_key = ne.expr_key;
-            qblock.resolve_expr(env, expr_graph, metadata, expr_key, true)?;
+            qblock.resolve_expr(env, expr_graph, metadata, expr_key, is_group_by)?;
         }
 
         // Resolve predicates
         if let Some(pred_list) = qblock.pred_list.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_key in pred_list {
-                qblock.resolve_expr(env, expr_graph, metadata, expr_key, false)?;
+                qblock.resolve_expr(env, expr_graph, metadata, expr_key, is_group_by)?;
                 expr_key.get_boolean_factors(expr_graph, &mut boolean_factors)
             }
             qblock.pred_list = Some(boolean_factors);
@@ -98,7 +106,7 @@ impl QueryBlock {
         if let Some(having_clause) = qblock.having_clause.as_ref() {
             let mut boolean_factors = vec![];
             for &expr_key in having_clause {
-                qblock.resolve_expr(env, expr_graph, metadata, expr_key, true)?;
+                qblock.resolve_expr(env, expr_graph, metadata, expr_key, is_group_by)?;
                 expr_key.get_boolean_factors(expr_graph, &mut boolean_factors)
             }
             qblock.having_clause = Some(boolean_factors);
@@ -127,7 +135,9 @@ impl QueryBlock {
         qdesc
     }
 
-    pub fn split_groupby(qbkey: QueryBlockKey, qblock_graph: &mut QueryBlockGraph, expr_graph: &mut ExprGraph) -> Result<(), String> {
+    pub fn split_groupby(qbkey: QueryBlockKey, qgm: &mut QGM) -> Result<(), String> {
+        let (qblock_graph, expr_graph, ..) = qgm.borrow_parts();
+
         let inner_qb_key = qblock_graph.add_node(QueryBlock::new0(expr_graph.next_id(), QueryBlockType::Select), None);
         //let [outer_qb_node, inner_qb_node] = qblock_graph.get_disjoint_mut([qbkey, inner_qb_key]);
         let outer_qb_node = qblock_graph.get_mut(qbkey);
@@ -429,15 +439,14 @@ impl QueryBlock {
                 let datatype = match aggtype {
                     AggType::COUNT => DataType::Int64,
                     AggType::MIN | AggType::MAX => children_datatypes[0].clone(),
-                    AggType::SUM | AggType::AVG => {
-                        DataType::Float64 /*
-                                          if is_numeric(&children_datatypes[0]) {
-                                              children_datatypes[0].clone()
-                                          } else {
-                                              return Err(format!("SUM() {:?} only allowed for numeric datatypes.", aggtype));
-                                          }
-                                          */
+                    AggType::SUM => {
+                        if is_numeric(&children_datatypes[0]) {
+                            children_datatypes[0].clone()
+                        } else {
+                            return Err(format!("SUM() {:?} only allowed for numeric datatypes.", aggtype));
+                        }
                     }
+                    AggType::AVG => DataType::Float64,
                 };
                 (None, datatype, children)
             }

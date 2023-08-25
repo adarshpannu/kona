@@ -20,7 +20,7 @@
                 }
             },
 			"args": [
-				"sql/groupby.fsql",
+				"sql/scratch.fsql",
 			],
             "cwd": "${workspaceFolder}"
         },

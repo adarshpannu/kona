@@ -1,11 +1,16 @@
-SET TRACE = "info";
+SET TRACE = "info,[resolve_expr]=debug";
 
-CATALOG TABLE emp ( "TYPE" = "PaRQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.parquet");
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = ",", PARTITIONS = 1);
 
 DESCRIBE TABLE emp;
 
-SELECT emp_dept_id, avg(salary)
-from emp
+--set PARSE_ONLY = "true";
+set PARALLEL_DEGREE = 1;
+
+select sum(age)
+from emp E 
 group by emp_dept_id
+having sum(age) > 100 
 ;
+
 
