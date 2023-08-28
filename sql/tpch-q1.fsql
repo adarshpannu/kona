@@ -1,4 +1,5 @@
 SET TRACE = "info";
+//SET TRACE = "info,[resolve_expr]=debug,[compile_scan]=debug";
 
 CATALOG TABLE LINEITEM( "TYPE" = "PARQUET", PATH="/Users/adarshrp/Projects/tpch-data/sf3/lineitem.parquet");
 DESCRIBE TABLE LINEITEM;
@@ -12,4 +13,3 @@ WHERE L_SHIPDATE <= CAST('1998-12-01' AS DATE32)
 GROUP BY L_RETURNFLAG, L_LINESTATUS;
 
 --ORDER BY L_RETURNFLAG,L_LINESTATUS;
-

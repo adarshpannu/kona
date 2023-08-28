@@ -20,7 +20,7 @@
                 }
             },
 			"args": [
-				"sql/scratch.fsql",
+				"sql/tpch-q1.fsql",
 			],
             "cwd": "${workspaceFolder}"
         },

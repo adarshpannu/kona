@@ -135,6 +135,7 @@ pub enum Datum {
 }
 
 impl Datum {
+    #[inline]
     pub fn try_as_i64(&self) -> Option<i64> {
         if let Int64(val) = self {
             Some(*val)
@@ -143,6 +144,15 @@ impl Datum {
         }
     }
 
+    pub fn add_i64(&mut self, other: i64) {
+        if let Int64(val) = self {
+            *val += other
+        } else {
+            panic!("add_i64: Datum {:?} does not hold Int64", self)
+        }
+    }
+
+    #[inline]
     pub fn try_as_f64(&self) -> Option<f64> {
         if let Float64(val) = self {
             Some(f64::from(*val))
@@ -151,6 +161,17 @@ impl Datum {
         }
     }
 
+    #[inline]
+    pub fn add_f64(&mut self, other: f64) {
+        if let Float64(val) = self {
+            let newval = f64::from(*val) + other;
+            *val = F64::from(newval);
+        } else {
+            panic!("add_f64: Datum {:?} does not hold F64", self)
+        }
+    }
+
+    #[inline]
     pub fn try_as_str(&self) -> Option<&str> {
         if let Utf8(val) = self {
             Some(val)
@@ -159,6 +180,7 @@ impl Datum {
         }
     }
 
+    #[inline]
     pub fn try_as_i32(&self) -> Option<i32> {
         match *self {
             Int32(val) => Some(val),
