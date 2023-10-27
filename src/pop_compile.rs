@@ -391,7 +391,7 @@ impl POP {
             let child_lop_key = children.unwrap()[0];
             let child_data_types = child_lop_key.get_types(qgm, lop_graph);
 
-            let pop_inner = pop_hashagg::HashAgg { keycols, child_data_types, aggs };
+            let pop_inner = pop_hashagg::HashAgg::new(keycols, child_data_types, aggs);
 
             let pop_graph = &mut stage_graph.stages[stage_id].pop_graph;
             let pop_key = pop_graph.add_node_with_props(POP::HashAgg(pop_inner), props, Some(pop_children));

@@ -33,10 +33,16 @@ type DataRow = Vec<Option<Datum>>;
 pub struct HashAgg {
     pub keycols: Vec<Vec<ColId>>, // Maintain a list of key columns for each child. len() == 2 for joins
     pub child_data_types: Vec<DataType>,
+    pub child_physical_types: Vec<PhysicalType>,
     pub aggs: Vec<(Agg, ColId)>, // ColId represents the ordering of each aggregator and starts at keylen
 }
 
 impl HashAgg {
+    pub fn new(keycols: Vec<Vec<ColId>>, child_data_types: Vec<DataType>, aggs: Vec<(Agg, ColId)>) -> Self {
+        let child_physical_types = child_data_types.iter().map(|typ| typ.to_physical_type()).collect::<Vec<_>>();
+        HashAgg { keycols, child_data_types, child_physical_types, aggs }
+    }
+
     pub fn keylen(&self) -> usize {
         self.keycols[0].len()
     }
@@ -96,19 +102,6 @@ impl HashAggContext {
         self.contruct_internal_output(stage, hash_agg)
     }
 
-    fn perform_aggregation(&mut self, _: &Flow, _stage: &Stage, hash_agg: &HashAgg, chunk: ChunkBox) -> Result<(), String> {
-        let keycols = &hash_agg.keycols[0];
-
-        let mut iters = chunk.arrays().iter().map(|array| array_to_datum_iter(&**array)).collect::<Vec<_>>();
-        for _ in 0..chunk.len() {
-            let key = iters.iter_mut().take(keycols.len()).map(|it| it.next().unwrap()).collect::<Vec<_>>();
-            let non_key = iters.iter_mut().skip(keycols.len()).map(|it| it.next().unwrap()).collect::<Vec<_>>();
-            //self.insert(hash_agg, key, non_key);
-        }
-
-        Ok(())
-    }
-
     fn hash_chunk(chunk: &ChunkBox, hash_agg: &HashAgg) -> Vec<u64> {
         let mut hasharr = vec![0u64; chunk.len()];
         let keylen = hash_agg.keycols[0].len();
@@ -135,18 +128,18 @@ impl HashAggContext {
         let keylen = hash_agg.keylen();
         let hash_arr = Self::hash_chunk(&chunk, hash_agg);
         let split_arr = hash_arr.iter().map(|&hash_value| hash_value as usize % NSPLITS).collect::<Vec<_>>();
-        //let mut vec_iters = chunk.arrays().iter().take(keycols.len()).map(|array| array_to_datum_iter(&**array)).collect::<Vec<_>>();
 
         for ix in 0..chunk.len() {
             let hash_value = hash_arr[ix];
             let split_id = split_arr[ix];
             let split = &mut self.splits[split_id];
-            //let key = vec_iters.iter_mut().map(|it| it.next().unwrap()).collect::<Vec<_>>();
-            let key = build_key(&chunk, keylen, ix);
+
+            let cmp_key = |key: &DataRow| -> bool { compare_key(&chunk, ix, key) };
+            let gen_key = || -> DataRow { build_key(&chunk, keylen, ix) };
 
             // PERF TODO: Only allocate key if it's not in hash table
-            let entry = split.hash_map.find(key, hash_value as usize, || Self::init_accumulators(hash_agg, &chunk, ix));
-            let do_init = matches!(entry, MyEntry::Vacant(_));
+            let entry = split.hash_map.find(hash_value as usize, cmp_key, gen_key, || Self::init_accumulators(hash_agg, &chunk, ix));
+            let do_init = matches!(entry, MyEntry::Inserted(_));
             if do_init {
                 continue;
             }
@@ -158,7 +151,7 @@ impl HashAggContext {
             //for (accnum, &(Agg { agg_type, input_colid, .. }, _)) in hash_agg.aggs.iter().enumerate() {
             for (acc, &(Agg { agg_type, input_colid, .. }, _)) in accumulators.iter_mut().zip(hash_agg.aggs.iter()) {
                 let array = &chunk.arrays()[input_colid].as_any();
-                let input_type = &hash_agg.child_data_types[input_colid].to_physical_type();
+                let input_type = &hash_agg.child_physical_types[input_colid];
                 match (agg_type, input_type) {
                     (AggType::COUNT, _) => {
                         acc.as_mut().unwrap().add_i64(1);
@@ -226,7 +219,7 @@ impl HashAggContext {
         let mut accumulators = vec![];
         for &(Agg { agg_type, input_colid, .. }, _) in hash_agg.aggs.iter() {
             let array = &chunk.arrays()[input_colid].as_any();
-            let input_type = &hash_agg.child_data_types[input_colid].to_physical_type();
+            let input_type = &hash_agg.child_physical_types[input_colid];
 
             match (agg_type, input_type) {
                 (AggType::COUNT, _) => {
@@ -266,163 +259,6 @@ impl HashAggContext {
             }
         }
         accumulators
-    }
-
-    //#[tracing::instrument(fields(key, value), skip_all, parent = None)]
-    fn insert0(&mut self, hash_agg: &HashAgg, key: DataRow, nonkey: DataRow) {
-        let mut hasher = DefaultHasher::new();
-
-        key.hash(&mut hasher);
-        let hash_value = hasher.finish();
-        let split_id = hash_value as usize % NSPLITS;
-
-        //debug!("split_id = {}, key = {:?} value = {:?}", split_id, key, value);
-
-        let keylen = hash_agg.keylen();
-
-        let split = &mut self.splits[split_id];
-
-        let entry = split.hash_map.find(key, hash_value as usize, || vec![]);
-        let do_init = matches!(entry, MyEntry::Vacant(_));
-
-        let bucket = entry.bucket();
-        let mut key_value = split.hash_map.key_value_mut(bucket);
-        let (key, accumulators) = &mut key_value.as_mut().unwrap();
-
-        let get_input = |colid: ColId| {
-            if colid < keylen {
-                key[colid].as_ref()
-            } else {
-                nonkey[colid - keylen].as_ref()
-            }
-        };
-
-        for (accnum, &(Agg { agg_type, input_colid, .. }, _)) in hash_agg.aggs.iter().enumerate() {
-            let input_type = &hash_agg.child_data_types[input_colid].to_physical_type();
-            match (agg_type, input_type) {
-                (AggType::COUNT, _) => {
-                    if do_init {
-                        accumulators.push(Some(Int64(1)));
-                    } else {
-                        let acc = &mut accumulators[accnum];
-                        let new_count = acc.as_ref().unwrap().try_as_i64().unwrap() + 1;
-                        *acc = Some(Int64(new_count))
-                    }
-                }
-                (AggType::SUM, PhysicalType::Primitive(PrimitiveType::Int64)) => {
-                    let cur_value = get_input(input_colid).map_or(0, |e| e.try_as_i64().unwrap());
-                    if do_init {
-                        accumulators.push(Some(Int64(cur_value)));
-                    } else {
-                        let acc = &mut accumulators[accnum];
-                        let old_sum = acc.as_ref().map_or(0, |e| e.try_as_i64().unwrap());
-                        *acc = Some(Int64(old_sum + cur_value));
-                    }
-                }
-                (AggType::SUM, PhysicalType::Primitive(PrimitiveType::Float64)) => {
-                    let cur_value = get_input(input_colid).map_or(0f64, |e| e.try_as_f64().unwrap());
-                    if do_init {
-                        accumulators.push(Some(Float64(F64::from(cur_value))));
-                    } else {
-                        let acc = &mut accumulators[accnum];
-                        let old_sum = acc.as_ref().map_or(0f64, |e| e.try_as_f64().unwrap());
-                        let new_sum = old_sum + cur_value;
-                        let new_sum = F64::from(new_sum);
-                        *acc = Some(Float64(new_sum));
-                    }
-                }
-                (AggType::MAX | AggType::MIN, PhysicalType::Primitive(PrimitiveType::Int64)) => {
-                    let cur_datum = get_input(input_colid);
-                    if do_init {
-                        if cur_datum.is_some() {
-                            accumulators.push(cur_datum.cloned());
-                        } else {
-                            // Current value is NULL
-                            accumulators.push(None);
-                        }
-                    } else {
-                        if let Some(Int64(cur_int)) = cur_datum {
-                            let acc = &mut accumulators[accnum];
-                            if let Some(Int64(acc_int)) = acc {
-                                if (agg_type == AggType::MAX) && (cur_int > acc_int) {
-                                    *acc = cur_datum.cloned()
-                                } else if (agg_type == AggType::MIN) && (cur_int < acc_int) {
-                                    *acc = cur_datum.cloned()
-                                }
-                            } else {
-                                // Accumulator is NULL
-                                todo!("What to do here?")
-                            }
-                        } else {
-                            // Current value is NULL
-                            todo!("What to do here?")
-                        }
-                    }
-                }
-                (AggType::MAX | AggType::MIN, PhysicalType::Primitive(PrimitiveType::Int32)) => {
-                    let cur_datum = get_input(input_colid);
-                    if do_init {
-                        if cur_datum.is_some() {
-                            accumulators.push(cur_datum.cloned());
-                        } else {
-                            // Current value is NULL
-                            accumulators.push(None);
-                        }
-                    } else {
-                        if let Some(cur_int) = cur_datum {
-                            let cur_int = cur_int.try_as_i32();
-                            let acc = &mut accumulators[accnum];
-                            if let Some(acc_int) = acc {
-                                let acc_int = acc_int.try_as_i32();
-                                if (agg_type == AggType::MAX) && (cur_int > acc_int) {
-                                    *acc = cur_datum.cloned()
-                                } else if (agg_type == AggType::MIN) && (cur_int < acc_int) {
-                                    *acc = cur_datum.cloned()
-                                }
-                            } else {
-                                // Accumulator is NULL
-                                todo!("What to do here?")
-                            }
-                        } else {
-                            // Current value is NULL ... How do you compare NULLs to something else?
-                            todo!("What to do here?")
-                        }
-                    }
-                }
-
-                (AggType::MAX | AggType::MIN, PhysicalType::Utf8) => {
-                    let cur_datum = get_input(input_colid);
-                    if do_init {
-                        if cur_datum.is_some() {
-                            accumulators.push(cur_datum.cloned());
-                        } else {
-                            // Current value is NULL
-                            accumulators.push(None);
-                        }
-                    } else {
-                        if let Some(Utf8(cur_str)) = cur_datum {
-                            let acc = &mut accumulators[accnum];
-                            if let Some(Utf8(acc_str)) = acc {
-                                let cur_str = cur_str.as_str();
-                                let acc_str = acc_str.as_str();
-                                if (agg_type == AggType::MAX) && (cur_str > acc_str) {
-                                    *acc = cur_datum.cloned()
-                                } else if (agg_type == AggType::MIN) && (cur_str < acc_str) {
-                                    *acc = cur_datum.cloned()
-                                }
-                            } else {
-                                // Accumulator is NULL
-                                todo!("What to do here?")
-                            }
-                        } else {
-                            // Current value is NULL
-                            todo!("What to do here?")
-                        }
-                    }
-                }
-                _ => panic!("HashAggContext::insert(): Combination of {:?} not yet supported", (agg_type, input_type)),
-            }
-        }
     }
 
     fn init_mutable_array(data_type: &DataType, len: usize) -> Box<dyn MutableArray> {
@@ -554,35 +390,28 @@ impl HashAggContext {
     }
 }
 
-fn array_to_datum_iter(array: &dyn Array) -> Box<dyn Iterator<Item = Option<Datum>> + '_> {
-    match array.data_type() {
-        DataType::Date32 => {
-            let basearr = array.as_any().downcast_ref::<PrimitiveArray<i32>>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|&e| Date32(e)));
-            Box::new(it)
+fn compare_key(chunk: &ChunkBox, ix: usize, key: &DataRow) -> bool {
+    let keylen = key.len();
+    for (array, keydatum) in chunk.arrays().iter().take(keylen).zip(key.iter()) {
+        let keydatum = keydatum.as_ref();
+        let cmpstat = match array.data_type() {
+            DataType::Utf8 => {
+                let basearr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
+                let e = basearr.get(ix);
+                match (&e, &keydatum) {
+                    (Some(s1), Some(Utf8(s2))) => (s1 == s2),
+                    (None, None) => true,
+                    _ => false,
+                }
+            }
+            typ => panic!("array_to_iter(), todo: {:?}", typ),
+        };
+        if !cmpstat {
+            // Comparison failed ... bail out
+            return false;
         }
-        DataType::Int64 => {
-            let basearr = array.as_any().downcast_ref::<PrimitiveArray<i64>>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|&e| Int64(e)));
-            Box::new(it)
-        }
-        DataType::Utf8 => {
-            let basearr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|e| Utf8(e.to_string())));
-            Box::new(it)
-        }
-        DataType::Boolean => {
-            let basearr = array.as_any().downcast_ref::<BooleanArray>().unwrap();
-            let it = basearr.iter().map(|e| e.map(|e| Boolean(e)));
-            Box::new(it)
-        }
-        DataType::Float64 => {
-            let basearr = array.as_any().downcast_ref::<PrimitiveArray<f64>>().unwrap();
-            let it = basearr.iter().map(|opt_f64_value| opt_f64_value.map(|&f64_value| Float64(F64::from(f64_value))));
-            Box::new(it)
-        }
-        typ => panic!("array_to_iter(), todo: {:?}", typ),
     }
+    true
 }
 
 fn build_key(chunk: &ChunkBox, keylen: usize, ix: usize) -> Vec<Option<Datum>> {
@@ -648,15 +477,15 @@ where
 
 #[derive(Debug, Clone, Copy)]
 enum MyEntry {
-    Occupied(usize),
-    Vacant(usize),
+    Found(usize),
+    Inserted(usize),
 }
 
 impl MyEntry {
     fn bucket(&self) -> usize {
         match self {
-            MyEntry::Occupied(ix) => *ix,
-            MyEntry::Vacant(ix) => *ix,
+            MyEntry::Found(ix) => *ix,
+            MyEntry::Inserted(ix) => *ix,
         }
     }
 }
@@ -684,9 +513,11 @@ where
         r
     }
 
-    fn find<F>(&mut self, key: K, hsh: usize, default_v: F) -> MyEntry
+    fn find<C, G, D>(&mut self, hsh: usize, cmp_key: C, gen_key: G, default_v: D) -> MyEntry
     where
-        F: Fn() -> V, {
+        C: Fn(&K) -> bool,
+        G: Fn() -> K,
+        D: Fn() -> V, {
         // Ensure minimum 50% occupancy
         debug_assert!(self.noccupied < self.hvec.len() / 2);
 
@@ -696,8 +527,8 @@ where
         // Linear probing
         loop {
             if let Some(entry) = &mut self.hvec[bucket] {
-                if entry.0 == key {
-                    return MyEntry::Occupied(bucket);
+                if cmp_key(&entry.0) {
+                    return MyEntry::Found(bucket);
                 } else {
                     if bucket == self.hvec.len() - 1 {
                         // Wrap-around
@@ -708,9 +539,10 @@ where
                 }
             } else {
                 // Not found ... insert
+                let key = gen_key();
                 self.hvec[bucket] = Some((key, default_v()));
                 self.noccupied += 1;
-                return MyEntry::Vacant(bucket);
+                return MyEntry::Inserted(bucket);
             }
         }
     }

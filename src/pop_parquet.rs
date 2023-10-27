@@ -74,18 +74,24 @@ impl POPContext for ParquetContext {
             let arrays = arrays.into_iter().map(|(a, _)| a).collect::<Vec<_>>();
 
             let chunk = Chunk::new(arrays);
+
+            #[cfg(debug_assertions)]
             if !chunk.is_empty() {
                 debug!(input = 0, "{}", chunk_to_string(&chunk, "input"));
             }
 
             // Compute predicates, if any
             let chunk = POPKey::eval_predicates(props, chunk);
+
+            #[cfg(debug_assertions)]
             if !chunk.is_empty() {
                 debug!(filtered = 1, "{}", chunk_to_string(&chunk, "filtered"));
             }
 
             // Project and return
             let chunk = POPKey::eval_projection(props, &chunk);
+
+            #[cfg(debug_assertions)]
             if !chunk.is_empty() {
                 //let headerstr = format!("ParquetContext::next Stage = {}, {:?}, Partition = {}", stage.stage_id, pop_key, self.partition_id);
                 debug!(projected = 2, "{}", chunk_to_string(&chunk, ""));

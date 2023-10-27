@@ -1,16 +1,15 @@
-SET TRACE = "info,[resolve_expr]=debug";
+--SET TRACE = "info,[resolve_expr]=debug";
+SET TRACE = "error";
 
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "HEADER" = "YES", "SEPARATOR" = ",", PARTITIONS = 1);
-
+CATALOG TABLE emp ( "TYPE" = "PARQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.parquet");
 DESCRIBE TABLE emp;
 
 --set PARSE_ONLY = "true";
 set PARALLEL_DEGREE = 1;
 
-select sum(age)
+select age, age, age, age, age, age, age, age, age, age, age, age, age, age, age
 from emp E 
-group by emp_dept_id
-having sum(age) > 100 
+where age < 1
 ;
 
 

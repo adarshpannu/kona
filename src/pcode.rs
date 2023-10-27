@@ -199,6 +199,10 @@ impl PCode {
 
                             let lhs = &**lhs.get();
                             let rhs: &dyn Scalar = match d {
+                                Datum::Int32(i) => {
+                                    scalar_i32 = PrimitiveScalar::new(DataType::Int32, Some(i as i32));
+                                    &scalar_i32
+                                }
                                 Datum::Int64(i) => {
                                     scalar_i64 = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
                                     &scalar_i64

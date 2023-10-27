@@ -1,0 +1,10 @@
+SET TRACE = "error";
+--SET TRACE = "info,[resolve_expr]=debug,[compile_scan]=debug";
+
+CATALOG TABLE LINEITEM( "TYPE" = "PARQUET", PATH="/Users/adarshrp/Projects/tpch-data/sf10/lineitem.parquet");
+--DESCRIBE TABLE LINEITEM;
+
+SELECT l_partkey, L_EXTENDEDPRICE, L_DISCOUNT, L_TAX, L_RETURNFLAG, L_SHIPDATE
+FROM LINEITEM
+where L_EXTENDEDPRICE < -(L_EXTENDEDPRICE);
+
