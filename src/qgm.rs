@@ -319,7 +319,7 @@ impl QGM {
         let oflag = format!("-o{}.jpg", pathname);
 
         // dot -Tjpg -oex.jpg exampl1.dot
-        let _cmd = Command::new("dot").arg("-Tjpg").arg(oflag).arg(pathname).status().expect("failed to execute process");
+        let _cmd = Command::new("/usr/local/bin/dot").arg("-Tjpg").arg(oflag).arg(pathname).status().expect("failed to execute process");
 
         if open_jpg {
             let _cmd = Command::new("open").arg(opathname).status().expect("failed to execute process");
