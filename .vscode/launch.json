@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'yard'",
+            "name": "Debug executable 'kona'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=yard",
-                    "--package=yard",
+                    "--bin=kona",
+                    "--package=kona",
                 ],
                 "filter": {
-                    "name": "yard",
+                    "name": "kona",
                     "kind": "bin"
                 }
             },
@@ -27,16 +27,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'yard'",
+            "name": "Debug unit tests in executable 'kona'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=yard",
-                    "--package=yard"
+                    "--bin=kona",
+                    "--package=kona"
                 ],
                 "filter": {
-                    "name": "yard",
+                    "name": "kona",
                     "kind": "bin"
                 }
             },
@@ -46,8 +46,8 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "run yard",
-            "program": "${workspaceRoot}/target/debug/yard",
+            "name": "run kona",
+            "program": "${workspaceRoot}/target/debug/kona",
             "args": [],
             "cwd": "${workspaceRoot}",
             "sourceMap": {},

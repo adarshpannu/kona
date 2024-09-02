@@ -1,6 +1,6 @@
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 4,
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/emp.csv", PARTITIONS = 4,
  COLUMNS = "NAME=STRING,AGE=INT,EMP_DEPT_ID=INT");
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/dept.csv", PARTITIONS = 3,
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/dept.csv", PARTITIONS = 3,
 COLUMNS = "DEPT_ID=INT,NAME=STRING,ORG_ID=INT");
 
 

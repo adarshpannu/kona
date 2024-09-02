@@ -1,7 +1,7 @@
-CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/R.csv", "PARTITIONS" = 3, NROWS = 10, AVG_ROW_SIZE = 64);
-CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/S.csv", "PARTITIONS" = 3 );
-CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/T.csv", "PARTITIONS" = 3);
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", "PARTITIONS" = 3);
+CATALOG TABLE R ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/R.csv", "PARTITIONS" = 3, NROWS = 10, AVG_ROW_SIZE = 64);
+CATALOG TABLE S ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/S.csv", "PARTITIONS" = 3 );
+CATALOG TABLE T ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/T.csv", "PARTITIONS" = 3);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/emp.csv", "PARTITIONS" = 3);
 
 DESCRIBE TABLE R;
 DESCRIBE TABLE S;

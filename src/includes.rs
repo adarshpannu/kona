@@ -19,8 +19,8 @@ pub use crate::{
     *,
 };
 
-pub const TOPDIR: &str = "/Users/adarshrp/Projects/yard";
-pub const TEMPDIR: &str = "/Users/adarshrp/Projects/yard/tmp";
+pub const TOPDIR: &str = "/Users/adarshrp/Projects/kona";
+pub const TEMPDIR: &str = "/Users/adarshrp/Projects/kona/tmp";
 
 pub type ColId = usize;
 pub type QunId = usize;

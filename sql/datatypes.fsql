@@ -1,6 +1,6 @@
 SET TRACE = "info,[resolve_expr]=debug";
 
-CATALOG TABLE datatypes ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/datatypes.csv", COLUMNS="C1=INT,C2=STRING,C3=STRING", PARTITIONS = 1);
+CATALOG TABLE datatypes ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/datatypes.csv", COLUMNS="C1=INT,C2=STRING,C3=STRING", PARTITIONS = 1);
 
 DESCRIBE TABLE datatypes;
 

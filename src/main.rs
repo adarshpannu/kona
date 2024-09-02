@@ -171,17 +171,17 @@ fn main() -> Result<(), String> {
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
 
-    //std::env::set_var("RUST_LOG", "yard::pcode=info");
+    //std::env::set_var("RUST_LOG", "kona::pcode=info");
 
-    //std::env::set_var("RUST_LOG", "yard=info,yard::pop_repartition=debug,yard::flow=debug");
-    //std::env::set_var("RUST_LOG", "yard=info,yard::pop_compile=debug,yard::pop_repartition=debug");
+    //std::env::set_var("RUST_LOG", "kona=info,kona::pop_repartition=debug,kona::flow=debug");
+    //std::env::set_var("RUST_LOG", "kona=info,kona::pop_compile=debug,kona::pop_repartition=debug");
 
     // Initialize logger with default setting. This is overridden by RUST_LOG?
     //logging::init("debug");
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
-        println!("\n\nUsage: yard sqlfilename");
+        println!("\n\nUsage: kona sqlfilename");
         println!("... exiting");
         return Ok(());
     }

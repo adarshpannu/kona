@@ -1,9 +1,9 @@
 --SET TRACE = "info,[compile_aggregation{lop_key=.*1v1.*}]=debug";
 SET TRACE = "info,[compile_aggregation]=debug";
 
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 3);
-CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/dept.csv", PARTITIONS = 3);
-CATALOG TABLE dept_details ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/dept_details.csv", PARTITIONS = 3);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/emp.csv", PARTITIONS = 3);
+CATALOG TABLE dept ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/dept.csv", PARTITIONS = 3);
+CATALOG TABLE dept_details ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/dept_details.csv", PARTITIONS = 3);
 
 DESCRIBE TABLE emp;
 DESCRIBE TABLE dept;

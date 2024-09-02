@@ -2,7 +2,7 @@
 authors = ["Adarsh Pannu <13154869+adarshpannu@users.noreply.github.com>"]
 build = "build.rs"
 edition = "2018"
-name = "yard"
+name = "kona"
 version = "0.1.0"
 
 [profile.release]

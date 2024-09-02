@@ -843,6 +843,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "kona"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "arrow2",
+ "bimap",
+ "bincode",
+ "bitmaps",
+ "chrono",
+ "csv",
+ "derivative",
+ "dhat",
+ "fasthash",
+ "fstrings",
+ "getset",
+ "itertools 0.12.0",
+ "lalrpop",
+ "lalrpop-util",
+ "lazy_static",
+ "partitions",
+ "regex",
+ "self_cell",
+ "serde",
+ "slotmap",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lalrpop"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1944,35 +1973,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0eeda34baec49c4f1eb2c04d59b761582fd6330010f9330ca696ca1a355dfcd"
 dependencies = [
  "rand",
-]
-
-[[package]]
-name = "yard"
-version = "0.1.0"
-dependencies = [
- "ahash",
- "arrow2",
- "bimap",
- "bincode",
- "bitmaps",
- "chrono",
- "csv",
- "derivative",
- "dhat",
- "fasthash",
- "fstrings",
- "getset",
- "itertools 0.12.0",
- "lalrpop",
- "lalrpop-util",
- "lazy_static",
- "partitions",
- "regex",
- "self_cell",
- "serde",
- "slotmap",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

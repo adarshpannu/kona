@@ -1,6 +1,6 @@
 SET TRACE = "info,[compile_scan{expr=11v1}]=debug";
 
-CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.csv", PARTITIONS = 1);
+CATALOG TABLE emp ( "TYPE" = "CSV", "PATH" = "/Users/adarshrp/Projects/kona/data/emp.csv", PARTITIONS = 1);
 
 DESCRIBE TABLE emp;
 

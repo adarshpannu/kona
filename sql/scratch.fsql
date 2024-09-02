@@ -1,7 +1,7 @@
 --SET TRACE = "info,[resolve_expr]=debug";
 SET TRACE = "error";
 
-CATALOG TABLE emp ( "TYPE" = "PARQUET", "PATH" = "/Users/adarshrp/Projects/yard/data/emp.parquet");
+CATALOG TABLE emp ( "TYPE" = "PARQUET", "PATH" = "/Users/adarshrp/Projects/kona/data/emp.parquet");
 DESCRIBE TABLE emp;
 
 --set PARSE_ONLY = "true";
