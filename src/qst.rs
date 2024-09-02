@@ -60,7 +60,7 @@ impl QueryBlock {
         }
 
         let (qblock_graph, expr_graph, metadata) = qgm.borrow_parts();
-        let mut qblock = &mut qblock_graph.get_mut(qbkey).value;
+        let qblock = &mut qblock_graph.get_mut(qbkey).value;
         let qblock_id = qblock.id;
 
         // Resolve base table QUNs next

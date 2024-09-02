@@ -23,7 +23,7 @@ pub enum ArithOp {
 }
 
 impl fmt::Display for ArithOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display_str = match self {
             ArithOp::Add => '+',
             ArithOp::Sub => '-',
@@ -44,7 +44,7 @@ pub enum LogOp {
 
 impl fmt::Display for LogOp {
     // This trait requires `fmt` with this exact signature.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display_str = match self {
             LogOp::And => "AND",
             LogOp::Or => "OR",
@@ -69,7 +69,7 @@ pub enum RelOp {
 
 impl fmt::Display for RelOp {
     // This trait requires `fmt` with this exact signature.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display_str = match self {
             RelOp::Eq => "=",
             RelOp::Ne => "!=",

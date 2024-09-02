@@ -109,7 +109,7 @@ enum PCodeStack<'a> {
 }
 
 impl<'a> fmt::Debug for PCodeStack<'a> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display_str = match self {
             PCodeStack::Column(col) => f!("{:?}", col.get().data_type()),
             PCodeStack::Datum(datum) => f!("{:?}", datum),
@@ -128,7 +128,7 @@ impl PCode {
 
         debug!("eval: {:?}", self);
         
-        let mut stack: Vec<PCodeStack> = vec![];
+        let mut stack: Vec<PCodeStack<'_>> = vec![];
         for inst in self.instructions.iter() {
             match inst {
                 PInstruction::Column(id) => stack.push(PCodeStack::Column(Column::Ref(&input[*id]))),
@@ -196,15 +196,16 @@ impl PCode {
                             let scalar_i64; // = PrimitiveScalar::new(DataType::Int64, Some(0 as i64));
                             let scalar_utf8; // = PrimitiveScalar::new(DataType::Int64, Some(0 as i64));
                             let scalar_i32;
+                            let scalar_f64;
 
                             let lhs = &**lhs.get();
                             let rhs: &dyn Scalar = match d {
                                 Datum::Int32(i) => {
-                                    scalar_i32 = PrimitiveScalar::new(DataType::Int32, Some(i as i32));
+                                    scalar_i32 = PrimitiveScalar::new(DataType::Int32, Some(i));
                                     &scalar_i32
                                 }
                                 Datum::Int64(i) => {
-                                    scalar_i64 = PrimitiveScalar::new(DataType::Int64, Some(i as i64));
+                                    scalar_i64 = PrimitiveScalar::new(DataType::Int64, Some(i));
                                     &scalar_i64
                                 }
                                 Datum::Utf8(s) => {
@@ -215,6 +216,11 @@ impl PCode {
                                 Datum::Date32(d) => {
                                     scalar_i32 = PrimitiveScalar::new(DataType::Date32, Some(d as i32));
                                     &scalar_i32
+                                }
+                                Datum::Float64(fvalue) => {
+                                    let f = &f64::from(fvalue);
+                                    scalar_f64 = PrimitiveScalar::new(DataType::Float64, Some(*f));
+                                    &scalar_f64
                                 }
                                 _ => todo!(),
                             };

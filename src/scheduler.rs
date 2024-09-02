@@ -149,7 +149,7 @@ impl Scheduler {
 
             match msg {
                 SchedulerMessage::TaskCompleted { stage_id, .. } => {
-                    let mut ss = &mut stage_contexts[stage_id];
+                    let ss = &mut stage_contexts[stage_id];
                     let stage = &stage_graph.stages[stage_id];
 
                     // If this was the last task in a stage, schedule any dependent stages

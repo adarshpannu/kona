@@ -117,7 +117,7 @@ where
     pub fn replace_many(&mut self, parent_key: K, key: K, mut children: Vec<K>) {
         // Node#key is deleted
         // children already present in graph although not connected
-        let mut node = self.sm.get_mut(parent_key).unwrap();
+        let node = self.sm.get_mut(parent_key).unwrap();
         let mut new_children: Vec<K> = vec![];
 
         for &child_key in node.children.as_ref().unwrap() {
@@ -207,25 +207,25 @@ pub fn key_to_id(keystr: &str) -> String {
 }
 
 impl fmt::Display for QueryBlockKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
 impl fmt::Display for ExprKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.id())
     }
 }
 
 impl fmt::Display for LOPKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.id())
     }
 }
 
 impl fmt::Display for POPKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.id())
     }
 }

@@ -44,7 +44,7 @@ impl QGMMetadata {
 }
 
 impl fmt::Debug for QGMMetadata {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("QGMMetadata").finish()
     }
 }
@@ -127,7 +127,7 @@ pub struct Quantifier {
 }
 
 impl fmt::Debug for Quantifier {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("Quantifier").field("id", &self.id).field("name", &self.get_basename()).field("alias", &self.get_alias()).finish()
     }
 }

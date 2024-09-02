@@ -118,7 +118,7 @@ impl Parquet {
 }
 
 impl fmt::Debug for Parquet {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         let pathname = self.pathname.split('/').last().unwrap();
         fmt.debug_struct("").field("file", &pathname).finish()
     }

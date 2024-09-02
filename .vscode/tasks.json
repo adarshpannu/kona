@@ -6,7 +6,7 @@
 			"type": "cargo",
 			"command": "run",
 			"args": [
-				"sql/tpch-q1.fsql",
+				"sql/scan.fsql",
 			],
 			"problemMatcher": [
 				"$rustc"

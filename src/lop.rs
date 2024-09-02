@@ -410,7 +410,7 @@ impl QGM {
             }
 
             // Only the select-list expressions flow out of a queryblock. We can clear the column bitset.
-            let mut props = &mut lop_graph.get_mut(root_lop_key).properties;
+            let props = &mut lop_graph.get_mut(root_lop_key).properties;
             let virtcols = qblock.select_list.iter().map(|ne| ne.expr_key).collect::<Vec<_>>();
             props.virtcols = Some(virtcols);
             props.cols = props.cols.clone_metadata();

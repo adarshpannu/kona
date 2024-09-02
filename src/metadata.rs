@@ -323,17 +323,17 @@ impl Metadata {
             return Err(format!("Table {} does not exist.", name));
         }
         let tbldesc = tbldesc.unwrap();
-        info!("Table {}", name);
-        info!("  pathname = \"{}\"", tbldesc.pathname());
+        println!("Table {}", name);
+        println!("  pathname = \"{}\"", tbldesc.pathname());
         if tbldesc.get_type() == TableType::CSV {
             info!("  HEADER = {}", tbldesc.header());
             info!("  SEPARATOR = '{}'", tbldesc.separator());
         }
-        info!("  PARTITIONS = {:?}", tbldesc.get_part_desc());
-        info!("  STATS = {:?}", tbldesc.get_stats());
-        info!("  {} COLUMNS", tbldesc.fields().len());
+        println!("  PARTITIONS = {:?}", tbldesc.get_part_desc());
+        println!("  STATS = {:?}", tbldesc.get_stats());
+        println!("  {} COLUMNS", tbldesc.fields().len());
         for cd in tbldesc.fields() {
-            info!("      {} {:?}", cd.name, cd.data_type);
+            println!("      {} {:?}", cd.name, cd.data_type);
         }
         Ok(())
     }

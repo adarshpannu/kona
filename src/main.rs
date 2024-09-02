@@ -2,6 +2,7 @@
 
 //#![allow(warnings)]
 #![allow(clippy::too_many_arguments)]
+#![deny(elided_lifetimes_in_paths)]
 
 #[cfg(test)]
 use std::{fs, process::Command};

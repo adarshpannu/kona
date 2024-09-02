@@ -110,14 +110,14 @@ impl From<F64> for f64 {
 }
 
 impl fmt::Display for F64 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let f64_value = f64::from(*self);
         write!(f, "{}", f64_value)
     }
 }
 
 impl fmt::Debug for F64 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let f64_value = f64::from(*self);
         write!(f, "{} ({})", f64_value, self.0)
     }
@@ -203,7 +203,7 @@ impl Datum {
 }
 
 impl fmt::Display for Datum {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Null => write!(f, "NULL"),
             Boolean(bl) => write!(f, "{}", bl),
