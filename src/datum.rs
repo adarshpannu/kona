@@ -119,7 +119,8 @@ impl fmt::Display for F64 {
 impl fmt::Debug for F64 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let f64_value = f64::from(*self);
-        write!(f, "{} ({})", f64_value, self.0)
+        //write!(f, "{} ({})", f64_value, self.0)
+        write!(f, "{}", f64_value)
     }
 }
 

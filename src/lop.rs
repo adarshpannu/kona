@@ -154,7 +154,7 @@ pub struct EqJoinDesc {
 pub struct PredDesc {
     quncols: Bitset<QunCol>,
     quns: Bitset<QunId>,
-    eqjoin_desc: Option<Box<EqJoinDesc>>,
+    eqjoin_desc: Option<EqJoinDesc>,
 }
 
 pub struct ExprEqClass {
@@ -282,6 +282,7 @@ impl QGM {
     pub fn build_qblock_logical_plan(
         self: &QGM, env: &Env, qblock_key: QueryBlockKey, aps_context: &APSContext, lop_graph: &mut LOPGraph, expected_partitioning: Option<&PartDesc>,
     ) -> Result<LOPKey, String> {
+
         let qblock = &self.qblock_graph.get(qblock_key).value;
         let mut worklist: Vec<LOPKey> = vec![];
 
@@ -423,93 +424,6 @@ impl QGM {
         }
     }
 
-    pub fn classify_predicate(eqjoin_desc: &EqJoinDesc, lhs_props: &LOPProps, rhs_props: &LOPProps) -> (PredicateType, PredicateAlignment) {
-        let (lhs_pred_quns, rhs_pred_quns) = (&eqjoin_desc.lhs_quns, &eqjoin_desc.rhs_quns);
-
-        // pred-quns must be subset of plan quns
-        if lhs_pred_quns.is_subset_of(&lhs_props.quns) && rhs_pred_quns.is_subset_of(&rhs_props.quns) {
-            (PredicateType::EquiJoin, PredicateAlignment::Aligned)
-        } else if lhs_pred_quns.is_subset_of(&rhs_props.quns) && rhs_pred_quns.is_subset_of(&lhs_props.quns) {
-            // Swapped scenario
-            (PredicateType::EquiJoin, PredicateAlignment::Reversed)
-        } else {
-            (PredicateType::Other, PredicateAlignment::Inapplicable)
-        }
-    }
-
-    fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
-        let mut select_list_quncol = aps_context.all_quncols.clone_metadata();
-        qblock.select_list.iter().flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph)).for_each(|quncol| select_list_quncol.set(quncol));
-        select_list_quncol
-    }
-
-    fn collect_preds(&self, aps_context: &APSContext, qblock: &QueryBlock) -> (PredMap, ExprEqClass) {
-        let expr_graph = &self.expr_graph;
-        let mut pred_map: PredMap = HashMap::new();
-
-        let mut eqclass = ExprEqClass::default();
-        let mut eqpred_legs = vec![];
-
-        if let Some(pred_list) = qblock.pred_list.as_ref() {
-            for &pred_key in pred_list.iter() {
-                // Collect quns and quncols for each predicate
-                let mut quncols = aps_context.all_quncols.clone_metadata();
-                let mut quns = aps_context.all_quns.clone_metadata();
-
-                for quncol in pred_key.iter_quncols(&self.expr_graph) {
-                    quncols.set(quncol);
-                    quns.set(quncol.0);
-                }
-
-                // For equijoin candidates, collect lhs and rhs quns
-                let expr = expr_graph.get(pred_key);
-                let eqjoin_desc = if let RelExpr(RelOp::Eq) = expr.value {
-                    let children = expr.children.as_ref().unwrap();
-                    let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
-                    let lhs_quns = aps_context.all_quns.clone_metadata().init(lhs_child_key.iter_quns(expr_graph));
-                    let rhs_quns = aps_context.all_quns.clone_metadata().init(rhs_child_key.iter_quns(expr_graph));
-
-                    if !lhs_quns.is_empty() && !rhs_quns.is_empty() {
-                        let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
-                        eqpred_legs.push((lhs_hash, lhs_child_key));
-                        eqpred_legs.push((rhs_hash, rhs_child_key));
-                        eqclass.set_eq(lhs_child_key, rhs_child_key);
-                        Some(Box::new(EqJoinDesc { lhs_quns, rhs_quns }))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                pred_map.insert(pred_key, PredDesc { quncols, quns, eqjoin_desc });
-            }
-        }
-
-        // SELECT expressions are also added to eq-class. These come into play when determining partitioning.
-        for ne in qblock.select_list.iter() {
-            let expr_key = ne.expr_key;
-            let expr_hash = expr_key.hash(expr_graph);
-
-            eqpred_legs.push((expr_hash, expr_key));
-        }
-
-        let mut visited = vec![false; eqpred_legs.len()];
-
-        // Go over all eqjoin legs and equate all the ones that are structurally equivalent
-        for (ix, &(expr_hash1, expr_key1)) in eqpred_legs.iter().enumerate() {
-            if !visited[ix] {
-                for (jx, &(expr_hash2, expr_key2)) in eqpred_legs.iter().enumerate() {
-                    if jx > ix && expr_hash1 == expr_hash2 && Expr::isomorphic(expr_graph, expr_key1, expr_key1) {
-                        eqclass.set_eq(expr_key1, expr_key2);
-                        visited[jx] = true;
-                    }
-                }
-            }
-        }
-
-        (pred_map, eqclass)
-    }
-
     pub fn build_unary_plans(
         self: &QGM, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph, pred_map: &mut PredMap, select_list_quncol: &Bitset<QunCol>,
         worklist: &mut Vec<LOPKey>,
@@ -585,5 +499,92 @@ impl QGM {
             worklist.push(lopkey);
         }
         Ok(())
+    }
+
+    pub fn classify_predicate(eqjoin_desc: &EqJoinDesc, lhs_props: &LOPProps, rhs_props: &LOPProps) -> (PredicateType, PredicateAlignment) {
+        let (lhs_pred_quns, rhs_pred_quns) = (&eqjoin_desc.lhs_quns, &eqjoin_desc.rhs_quns);
+
+        // pred-quns must be subset of plan quns
+        if lhs_pred_quns.is_subset_of(&lhs_props.quns) && rhs_pred_quns.is_subset_of(&rhs_props.quns) {
+            (PredicateType::EquiJoin, PredicateAlignment::Aligned)
+        } else if lhs_pred_quns.is_subset_of(&rhs_props.quns) && rhs_pred_quns.is_subset_of(&lhs_props.quns) {
+            // Swapped scenario
+            (PredicateType::EquiJoin, PredicateAlignment::Reversed)
+        } else {
+            (PredicateType::Other, PredicateAlignment::Inapplicable)
+        }
+    }
+
+    fn collect_selectlist_quncols(&self, aps_context: &APSContext, qblock: &QueryBlock) -> Bitset<QunCol> {
+        let mut select_list_quncol = aps_context.all_quncols.clone_metadata();
+        qblock.select_list.iter().flat_map(|ne| ne.expr_key.iter_quncols(&self.expr_graph)).for_each(|quncol| select_list_quncol.set(quncol));
+        select_list_quncol
+    }
+
+    fn collect_preds(&self, aps_context: &APSContext, qblock: &QueryBlock) -> (PredMap, ExprEqClass) {
+        let expr_graph = &self.expr_graph;
+        let mut pred_map: PredMap = HashMap::new();
+
+        let mut eqclass = ExprEqClass::default();
+        let mut eqpred_legs = vec![];
+
+        if let Some(pred_list) = qblock.pred_list.as_ref() {
+            for &pred_key in pred_list.iter() {
+                // Collect quns and quncols for each predicate
+                let mut quncols = aps_context.all_quncols.clone_metadata();
+                let mut quns = aps_context.all_quns.clone_metadata();
+
+                for quncol in pred_key.iter_quncols(&self.expr_graph) {
+                    quncols.set(quncol);
+                    quns.set(quncol.0);
+                }
+
+                // For equijoin candidates, collect lhs and rhs quns
+                let expr = expr_graph.get(pred_key);
+                let eqjoin_desc = if let RelExpr(RelOp::Eq) = expr.value {
+                    let children = expr.children.as_ref().unwrap();
+                    let (lhs_child_key, rhs_child_key) = (children[0], children[1]);
+                    let lhs_quns = aps_context.all_quns.clone_metadata().init(lhs_child_key.iter_quns(expr_graph));
+                    let rhs_quns = aps_context.all_quns.clone_metadata().init(rhs_child_key.iter_quns(expr_graph));
+
+                    if !lhs_quns.is_empty() && !rhs_quns.is_empty() {
+                        let (lhs_hash, rhs_hash) = (lhs_child_key.hash(expr_graph), rhs_child_key.hash(expr_graph));
+                        eqpred_legs.push((lhs_hash, lhs_child_key));
+                        eqpred_legs.push((rhs_hash, rhs_child_key));
+                        eqclass.set_eq(lhs_child_key, rhs_child_key);
+                        Some(EqJoinDesc { lhs_quns, rhs_quns })
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                pred_map.insert(pred_key, PredDesc { quncols, quns, eqjoin_desc });
+            }
+        }
+
+        // SELECT expressions are also added to eq-class. These come into play when determining partitioning.
+        for ne in qblock.select_list.iter() {
+            let expr_key = ne.expr_key;
+            let expr_hash = expr_key.hash(expr_graph);
+
+            eqpred_legs.push((expr_hash, expr_key));
+        }
+
+        let mut visited = vec![false; eqpred_legs.len()];
+
+        // Go over all eqjoin legs and equate all the ones that are structurally equivalent
+        for (ix, &(expr_hash1, expr_key1)) in eqpred_legs.iter().enumerate() {
+            if !visited[ix] {
+                for (jx, &(expr_hash2, expr_key2)) in eqpred_legs.iter().enumerate() {
+                    if jx > ix && expr_hash1 == expr_hash2 && Expr::isomorphic(expr_graph, expr_key1, expr_key1) {
+                        eqclass.set_eq(expr_key1, expr_key2);
+                        visited[jx] = true;
+                    }
+                }
+            }
+        }
+
+        (pred_map, eqclass)
     }
 }

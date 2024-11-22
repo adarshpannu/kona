@@ -34,6 +34,12 @@ impl ParquetContext {
         let schema = schema.filter(|ix, _field| pq.input_projection.iter().find(|&&jx| ix == jx).is_some());
 
         let row_groups = metadata.row_groups.into_iter().enumerate().map(|(_, row_group)| row_group).collect::<Vec<_>>();
+
+        // Partition selection (temporary)
+        //let n_row_groups = metadata.row_groups.len();
+        //let row_groups = metadata.row_groups.into_iter().enumerate().filter(|(ix, _)| (*ix + 1) % (partition_id + 1) == 0).map(|(_, row_group)| row_group).collect::<Vec<_>>();
+        //debug!("partition_id = {}, # metadata.row_groups {}, # row_groups {:?}", partition_id, n_row_groups, row_groups.len());
+
         let file_reader = read::FileReader::new(reader, row_groups, schema, Some(1024 * 8 * 8), None, None);
 
         let mut input_projection_pairs: Vec<(ColId, usize)> = pq.input_projection.iter().cloned().enumerate().collect::<Vec<_>>();

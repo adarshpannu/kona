@@ -52,3 +52,6 @@ lazy_static = "1.4.0"
 derivative = "2.2.0"
 dhat = "0.3.2"
 fasthash = "0.4"
+#futures = { version = "0.3", optional = true }
+#tokio = { version = "1", features = ["macros", "rt", "fs", "io-util"] }
+#tokio-util = { version = "0.7", features = ["compat"] }

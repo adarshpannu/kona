@@ -1,6 +1,6 @@
 // main
 
-//#![allow(warnings)]
+#![allow(warnings)]
 #![allow(clippy::too_many_arguments)]
 #![deny(elided_lifetimes_in_paths)]
 

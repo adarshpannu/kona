@@ -20,7 +20,7 @@
                 }
             },
 			"args": [
-				"sql/scan.fsql",
+				"sql/agg.fsql",
 			],
             "cwd": "${workspaceFolder}"
         },
