@@ -27,18 +27,31 @@ pub struct ParquetContext {
 
 impl ParquetContext {
     #[tracing::instrument(fields(pop_key), skip_all)]
-    pub fn try_new(pop_key: POPKey, pq: &Parquet, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
+    pub fn try_new(pop_key: POPKey, pq: &Parquet, npartitions: usize, partition_id: PartitionId) -> Result<Box<dyn POPContext>, String> {
         let mut reader = File::open(&pq.pathname).map_err(stringify)?;
         let metadata = read::read_metadata(&mut reader).map_err(stringify)?;
         let schema = read::infer_schema(&metadata).map_err(stringify)?;
         let schema = schema.filter(|ix, _field| pq.input_projection.iter().find(|&&jx| ix == jx).is_some());
 
-        let row_groups = metadata.row_groups.into_iter().enumerate().map(|(_, row_group)| row_group).collect::<Vec<_>>();
+        //let row_groups = metadata.row_groups.into_iter().enumerate().map(|(_, row_group)| row_group).collect::<Vec<_>>();
 
         // Partition selection (temporary)
-        //let n_row_groups = metadata.row_groups.len();
-        //let row_groups = metadata.row_groups.into_iter().enumerate().filter(|(ix, _)| (*ix + 1) % (partition_id + 1) == 0).map(|(_, row_group)| row_group).collect::<Vec<_>>();
-        //debug!("partition_id = {}, # metadata.row_groups {}, # row_groups {:?}", partition_id, n_row_groups, row_groups.len());
+        let n_row_groups = metadata.row_groups.len();
+        let npartitions = n_row_groups.min(npartitions);
+        let n_row_groups_per_partition = n_row_groups / npartitions;
+
+        //dbg!(n_row_groups);
+        //dbg!(npartitions);
+        //dbg!(n_row_groups_per_partition);
+
+        let (lo, mut hi) = (n_row_groups_per_partition * partition_id, n_row_groups_per_partition * (partition_id + 1));
+        if partition_id == npartitions - 1 {
+            hi = n_row_groups;
+        }
+        //dbg!((lo, hi));
+
+        let row_groups = metadata.row_groups.into_iter().enumerate().filter(|&(ix, _)| lo <= ix && ix < hi).map(|(_, row_group)| row_group).collect::<Vec<_>>();
+        debug!("partition_id = {}, # metadata.row_groups {}, # row_groups {:?}", partition_id, n_row_groups, row_groups.len());
 
         let file_reader = read::FileReader::new(reader, row_groups, schema, Some(1024 * 8 * 8), None, None);
 

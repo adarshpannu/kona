@@ -226,7 +226,8 @@ pub struct QueryBlock {
 impl QueryBlock {
     pub fn new(
         id: QBId, name: Option<String>, qbtype: QueryBlockType, select_list: Vec<NamedExpr>, quns: Vec<Quantifier>, pred_list: Option<Vec<ExprKey>>,
-        group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>, order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty, top_n: Option<usize>,
+        group_by: Option<Vec<ExprKey>>, having_clause: Option<Vec<ExprKey>>, order_by: Option<Vec<(ExprKey, Ordering)>>, distinct: DistinctProperty,
+        top_n: Option<usize>,
     ) -> Self {
         QueryBlock { id, name, qbtype, select_list, quns, pred_list, group_by, having_clause, order_by, distinct, top_n }
     }

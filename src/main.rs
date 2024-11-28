@@ -79,7 +79,10 @@ pub fn run_flow(env: &mut Env, flow: &Flow) -> Result<(), String> {
     std::fs::remove_dir_all(dirname).unwrap_or_default();
 
     // Run the flow
+    info!("Runnng flow: {}", flow.id);
     env.scheduler.run_flow(env, flow)?;
+    info!("End flow: {}", flow.id);
+
     Ok(())
 }
 
@@ -189,7 +192,7 @@ fn main() -> Result<(), String> {
     let input_pathname = args[1].clone();
     let output_dir = f!("tmp");
 
-    let mut env = Env::new(99, 1, input_pathname, output_dir);
+    let mut env = Env::new(99, 12, input_pathname, output_dir);
 
     let jobres = run_job(&mut env, true);
     if let Err(errstr) = &jobres {
@@ -221,7 +224,7 @@ fn run_unit_tests() -> Result<(), String> {
         std::fs::create_dir_all(&output_dir).map_err(stringify)?;
 
         ntotal = ntotal + 1;
-        let mut env = Env::new(id, 1, input_pathname, output_dir.clone());
+        let mut env = Env::new(id, 12, input_pathname, output_dir.clone());
         env.set_option("PARSE_ONLY".to_string(), Utf8(String::from("true"))).unwrap();
 
         let jobres = run_job(&mut env, false);

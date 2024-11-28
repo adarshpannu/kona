@@ -85,7 +85,7 @@ impl Task {
 
         let ctxt = match &pop {
             POP::CSV(csv) => CSVContext::try_new(popkey, csv, self.partition_id)?,
-            POP::Parquet(pq) => ParquetContext::try_new(popkey, pq, self.partition_id)?,
+            POP::Parquet(pq) => ParquetContext::try_new(popkey, pq, stage.npartitions, self.partition_id)?,
             POP::RepartitionWrite(rpw) => RepartitionWriteContext::try_new(popkey, rpw, child_contexts.unwrap(), self.partition_id)?,
             POP::RepartitionRead(rpr) => RepartitionReadContext::try_new(flow.id, popkey, rpr, self.partition_id)?,
             POP::HashMatch(hj) => HashMatchContext::try_new(popkey, hj, child_contexts.unwrap(), self.partition_id)?,

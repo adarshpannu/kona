@@ -7,15 +7,16 @@ use crate::{
     lop::{ExprEqClass, LOPGraph, LOPProps, PredicateAlignment, VirtCol, LOP},
     metadata::{PartDesc, PartType},
     QGM,
+    qgm::{QueryBlockGraph}
 };
 
 impl QGM {
-    pub fn repartition_if_needed(self: &QGM, lop_graph: &mut LOPGraph, lop_key: LOPKey, expected_partitioning: &PartDesc, eqclass: &ExprEqClass) -> LOPKey {
+    pub fn repartition_if_needed(qblock_graph: &QueryBlockGraph, expr_graph: &ExprGraph, lop_graph: &mut LOPGraph, lop_key: LOPKey, expected_partitioning: &PartDesc, eqclass: &ExprEqClass) -> LOPKey {
         let props = lop_graph.get_properties(lop_key);
         let actual_partitioning = &props.partdesc;
 
         if (expected_partitioning.npartitions == 1 && actual_partitioning.npartitions == 1)
-            || Self::compare_part_descs(&self.expr_graph, expected_partitioning, actual_partitioning, eqclass)
+            || Self::compare_part_descs(expr_graph, expected_partitioning, actual_partitioning, eqclass)
         {
             lop_key
         } else {
@@ -29,7 +30,7 @@ impl QGM {
     }
 
     pub fn repartition_join_legs(
-        self: &QGM, env: &Env, lop_graph: &mut Graph<LOPKey, LOP, LOPProps>, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, equi_join_preds: &[(ExprKey, PredicateAlignment)],
+        qblock_graph: &QueryBlockGraph, expr_graph: &ExprGraph, env: &Env, lop_graph: &mut LOPGraph, lhs_plan_key: LOPKey, rhs_plan_key: LOPKey, equi_join_preds: &[(ExprKey, PredicateAlignment)],
         eqclass: &ExprEqClass,
     ) -> (LOPKey, LOPKey, Vec<ExprKey>, Vec<ExprKey>, usize) {
         let lhs_props = &lop_graph.get(lhs_plan_key).properties;
@@ -37,7 +38,7 @@ impl QGM {
 
         // Repartition join legs as needed
         let (lhs_partdesc, rhs_partdesc, lhs_join_keys, rhs_join_keys, cpartitions) =
-            Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, &self.expr_graph, equi_join_preds, eqclass);
+            Self::harmonize_partitions(env, lop_graph, lhs_plan_key, rhs_plan_key, expr_graph, equi_join_preds, eqclass);
 
         let lhs_repart_props = lhs_partdesc.map(|partdesc| {
             let virtcols = None;

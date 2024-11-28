@@ -112,7 +112,7 @@ impl std::default::Default for ExprProp {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum Expr {
     CID(QunId, ColId),
     Column { prefix: Option<String>, colname: String, qunid: QunId, colid: ColId },
@@ -187,6 +187,25 @@ impl Expr {
         }
     }
 
+    /*
+           CID(QunId, ColId),
+       Column { prefix: Option<String>, colname: String, qunid: QunId, colid: ColId },
+       Star { prefix: Option<String> },
+       Literal(Datum),
+       NegatedExpr,
+       BinaryExpr(ArithOp),
+       RelExpr(RelOp),
+       BetweenExpr,
+       InListExpr,
+       InSubqExpr,
+       ExistsExpr,
+       LogExpr(LogOp),
+       Subquery(QueryBlockKey),
+       AggFunction(AggType, bool),
+       ScalarFunction(String),
+       Cast,
+    */
+    // FIXME: Add all cases!
     pub fn equals(&self, other: &Expr) -> bool {
         match (self, other) {
             (CID(qunid1, colid1), CID(qunid2, colid2)) => qunid1 == qunid2 && colid1 == colid2,
@@ -198,6 +217,7 @@ impl Expr {
             (NegatedExpr, NegatedExpr) => true,
             (BetweenExpr, BetweenExpr) => true,
             (InListExpr, InListExpr) => true,
+            (AggFunction(aggtype1, distinct1), AggFunction(aggtype2, distinct2)) => aggtype1 == aggtype2 && distinct1 == distinct2,
             _ => false,
         }
     }
@@ -307,6 +327,8 @@ impl ExprKey {
                 format!("({}) AS {:?}", child_key.describe(expr_graph, false), props.data_type())
             }
         };
+
+        let retval = format!("{}: {:?}", retval, props.data_type());
         if do_escape {
             do_escape_fn(&retval)
         } else {
