@@ -183,9 +183,17 @@ impl Quantifier {
         }
     }
 
-    pub fn get_qblock(&self) -> Option<QueryBlockKey> {
-        if let QuantifierSource::QueryBlock(qblock) = self.source {
-            Some(qblock)
+    pub fn get_qblock_key(&self) -> Option<QueryBlockKey> {
+        if let QuantifierSource::QueryBlock(qblock_key) = self.source {
+            Some(qblock_key)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_qblock<'a>(&self, qgraph: &'a QueryBlockGraph) -> Option<&'a QueryBlock> {
+        if let Some(qblock_key) = self.get_qblock_key() {
+            Some(qgraph.get_value(qblock_key))
         } else {
             None
         }

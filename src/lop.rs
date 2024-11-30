@@ -11,7 +11,7 @@ use crate::{
     graph::{ExprKey, Graph, LOPKey, QueryBlockKey},
     includes::*,
     metadata::{PartDesc, PartType},
-    qgm::{QueryBlock, QueryBlockGraph, QueryBlockType},
+    qgm::{Quantifier, QueryBlock, QueryBlockGraph, QueryBlockType},
     QGM,
 };
 
@@ -300,7 +300,7 @@ impl QGM {
         let (mut pred_map, eqclass) = Self::collect_preds(qblock_graph, expr_graph, aps_context, qblock);
 
         // Build unary plans first (i.e. baseline single table scans)
-        Self::build_unary_plans(qblock_graph, expr_graph, env, aps_context, qblock, lop_graph, &mut pred_map, &select_list_quncol, &mut worklist)?;
+        Self::build_unary_plans(qblock_graph, expr_graph, env, aps_context, qblock, lop_graph, &mut pred_map, &eqclass, &select_list_quncol, &mut worklist)?;
 
         // Run greedy join enumeration
         let n = qblock.quns.len();
@@ -417,29 +417,9 @@ impl QGM {
             }
 
             if qblock.qbtype == QueryBlockType::GroupBy {
-                // Build Pre-Aggregation POP, if needed
-                let (pre_exprs, post_exprs) = Self::build_pre_and_post_aggs_virt_cols(env, qblock_graph, expr_graph, lop_graph, aps_context, qblock)?;
-
-                // Build Aggregation POP
-                let root_node = &mut lop_graph.get_mut(root_lop_key);
-                let (root_lop, root_props, root_children) = (&mut root_node.value, &mut root_node.properties, root_node.children.as_mut());
-                let root_child = root_children.unwrap()[0];
-                let LOP::Aggregation { key_len } = root_lop else { return Err("Bad!".to_string()) };
-                let preagg_lop = LOP::Aggregation { key_len: *key_len };
-                let mut preagg_props = root_props.clone(); // FIXME?
-                preagg_props.virtcols = Some(pre_exprs);
-                preagg_props.cols = root_props.cols.clone_metadata();
-
-                let preagg_children = Some(vec![root_child]);
-                let preagg_node = lop_graph.add_node_with_props(preagg_lop, preagg_props, preagg_children);
-
-                let root_node = &mut lop_graph.get_mut(root_lop_key);
-                let (root_lop, root_props, root_children) = (&mut root_node.value, &mut root_node.properties, root_node.children.as_mut());
-
-                root_props.virtcols = Some(post_exprs);
-                root_props.cols = root_props.cols.clone_metadata();
-
-                root_node.children = Some(vec![preagg_node]);
+                // Only the select-list expressions flow out of a queryblock. We can clear the column bitset.
+                let props = &mut lop_graph.get_mut(root_lop_key).properties;
+                props.cols = props.cols.clone_metadata();
             } else {
                 // Only the select-list expressions flow out of a queryblock. We can clear the column bitset.
                 let props = &mut lop_graph.get_mut(root_lop_key).properties;
@@ -458,7 +438,7 @@ impl QGM {
 
     pub fn build_unary_plans(
         qblock_graph: &QueryBlockGraph, expr_graph: &mut ExprGraph, env: &Env, aps_context: &APSContext, qblock: &QueryBlock, lop_graph: &mut LOPGraph,
-        pred_map: &mut PredMap, select_list_quncol: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
+        pred_map: &mut PredMap, eqclass: &ExprEqClass, select_list_quncol: &Bitset<QunCol>, worklist: &mut Vec<LOPKey>,
     ) -> Result<(), String> {
         let APSContext { all_quncols, all_quns, all_preds } = aps_context;
 
@@ -497,30 +477,53 @@ impl QGM {
 
             // Build plan for nested query blocks
             let lopkey = if qblock.qbtype == QueryBlockType::GroupBy {
-                let child_qblock_key = qun.get_qblock().unwrap();
-                let child_qblock = &qblock_graph.get(child_qblock_key).value;
+                let child_qblock_key = qun.get_qblock_key().unwrap();
+                let child_qblock = qblock_graph.get_value(child_qblock_key);
                 let key_len = qblock.group_by.as_ref().unwrap().len();
-                let expected_partitioning_expr = child_qblock.select_list.iter().take(key_len).map(|ne| ne.expr_key).collect::<Vec<_>>();
 
-                // child == subplan that we'll be aggregating.
-                for e in expected_partitioning_expr.iter() {
-                    debug!("expected: {:?}", e.describe(expr_graph, false))
-                }
-                let expected_partitioning =
-                    PartDesc { npartitions: env.settings.parallel_degree.unwrap_or(1), part_type: PartType::HASHEXPR(expected_partitioning_expr) };
-
-                //let expected_partitioning = Some(&expected_partitioning);
-                //let expected_partitioning = None;
-
-                // Build Pre-Aggregation POP, if needed
-                // Self::build_pre_and_post_aggs_virt_cols(env, qblock_graph, expr_graph, lop_graph, aps_context, qblock);
+                // Build Scan POP
+                let child_lop_key = Self::build_qblock_logical_plan(qblock_graph, expr_graph, env, child_qblock_key, aps_context, lop_graph, None)?;
+                let (_, child_props, _) = lop_graph.get3(child_lop_key);
+                let child_props = child_props.clone();
 
                 // Build Aggregation POP
-                let child_lop_key =
-                    Self::build_qblock_logical_plan(qblock_graph, expr_graph, env, child_qblock_key, aps_context, lop_graph, None)?;
-                let children = Some(vec![child_lop_key]);
-                let props = LOPProps::new(quns, output_quncols, None, preds, expected_partitioning);
-                lop_graph.add_node_with_props(LOP::Aggregation { key_len }, props, children)
+                if child_props.partdesc.npartitions == 1 {
+                    // Underlying aggregation input has one partition. Aggregate directly. No pre-agg needed.
+                    let expected_partitioning = PartDesc { npartitions: 1, part_type: PartType::RAW };
+
+                    let children = Some(vec![child_lop_key]);
+                    let props = LOPProps::new(quns, output_quncols, None, preds, expected_partitioning);
+                    lop_graph.add_node_with_props(LOP::Aggregation { key_len }, props, children)
+                } else {
+                    // Underlying aggregation input has multiple partitions. We aggregate in two steps.
+                    let (pre_exprs, post_exprs) = Self::build_pre_and_post_aggs_virt_cols(env, qblock_graph, expr_graph, lop_graph, aps_context, qblock)?;
+                    let expected_partitioning_expr = pre_exprs.iter().take(key_len).cloned().collect::<Vec<_>>();
+
+                    // Build pre-aggregation POP
+                    let preagg_lop = LOP::Aggregation { key_len };
+                    let mut preagg_props = child_props.clone();
+                    preagg_props.virtcols = Some(pre_exprs);
+                    preagg_props.cols = child_props.cols.clone_metadata();
+                    let preagg_children = Some(vec![child_lop_key]);
+                    let preagg_lop_key = lop_graph.add_node_with_props(preagg_lop, preagg_props, preagg_children);
+
+                    // Repartition: partition keys <= aggregation keys
+                    let expected_partitioning =
+                        PartDesc { npartitions: env.settings.parallel_degree.unwrap_or(1), part_type: PartType::HASHEXPR(expected_partitioning_expr) };
+                    let repart_lop_key = Self::repartition_if_needed(qblock_graph, expr_graph, lop_graph, preagg_lop_key, &expected_partitioning, &eqclass);
+                    let (repart_lop, repart_props, _) = lop_graph.get3(repart_lop_key);
+
+                    // Build post-aggregation POP
+                    let postagg_lop = LOP::Aggregation { key_len };
+                    let mut postagg_props = repart_props.clone();
+                    postagg_props.virtcols = Some(post_exprs);
+                    postagg_props.cols = repart_props.cols.clone_metadata();
+                    postagg_props.partdesc = expected_partitioning.clone();
+
+                    let postagg_children = Some(vec![repart_lop_key]);
+                    let postagg_lop_key = lop_graph.add_node_with_props(postagg_lop, postagg_props, postagg_children);
+                    postagg_lop_key
+                }
             } else {
                 let npartitions = if let Some(tabledesc) = qun.tabledesc.as_ref() {
                     tabledesc.get_part_desc().unwrap().npartitions
@@ -541,26 +544,29 @@ impl QGM {
     fn build_pre_and_post_aggs_virt_cols(
         env: &Env, qblock_graph: &QueryBlockGraph, expr_graph: &mut ExprGraph, lop_graph: &mut LOPGraph, aps_context: &APSContext, qblock: &QueryBlock,
     ) -> Result<(Vec<ExprKey>, Vec<ExprKey>), String> {
-        let mut preagg: Vec<(ExprKey, ExprKey)> = vec![]; // orig -> pre map
-        let mut postagg: Vec<ExprKey> = vec![];
+        let mut preaggs: Vec<(ExprKey, ExprKey)> = vec![]; // orig -> pre map
+        let mut postaggs: Vec<ExprKey> = vec![];
+
+        // Prime pre-agg list by adding grouping columns.
+        let key_len = qblock.group_by.as_ref().unwrap().len();
+        let child_qun = &qblock.quns[0];
+        let qid = child_qun.id;
+        let Some(child_qblock) = child_qun.get_qblock(qblock_graph) else { return Err("Bad!".to_string()) };
+        for (cid, ek) in child_qblock.select_list.iter().take(key_len).map(|ne| ne.expr_key).enumerate() {
+            let (expr, props, _) = expr_graph.get3(ek);
+            let pre_expr = Expr::CID(qid, cid);
+            let pre_expr_key = expr_graph.add_node_with_props(pre_expr, props.clone(), None);
+            preaggs.push((pre_expr_key, pre_expr_key));
+        }
+
+        // Now translate original select list into new list, referencing outer expressions with references to inner ones
         let exprs = qblock.select_list.iter().map(|ne| ne.expr_key).collect::<Vec<_>>();
         for expr_key in exprs {
-            let postagge = Self::build_one_pre_and_post_virt_col(qblock_graph, expr_graph, expr_key, &mut preagg)?;
-            postagg.push(postagge);
+            let postagge = Self::build_one_pre_and_post_virt_col(qblock_graph, expr_graph, expr_key, &mut preaggs)?;
+            postaggs.push(postagge);
         }
-        /*
-        println!("");
-        for &(expr_key, _) in preagg.iter() {
-            println!("pre_agg: {:?}", expr_key.describe(expr_graph, false));
-        }
-        println!("");
-        for expr_key in postagg.iter() {
-            println!("postagg: {:?}", expr_key.describe(expr_graph, false));
-        }
-        */
-
-        let preagg = preagg.iter().map(|&(e, _)| e).collect::<Vec<_>>();
-        Ok((preagg, postagg))
+        let preagg = preaggs.iter().map(|&(e, _)| e).collect::<Vec<_>>();
+        Ok((preagg, postaggs))
     }
 
     fn build_one_pre_and_post_virt_col(

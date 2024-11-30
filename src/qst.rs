@@ -53,7 +53,7 @@ impl QueryBlock {
         }
 
         // Resolve nested query blocks first
-        let qbkey_children: Vec<(QunId, QueryBlockKey)> = qblock.quns.iter().filter_map(|qun| qun.get_qblock().map(|qbkey| (qun.id, qbkey))).collect();
+        let qbkey_children: Vec<(QunId, QueryBlockKey)> = qblock.quns.iter().filter_map(|qun| qun.get_qblock_key().map(|qbkey| (qun.id, qbkey))).collect();
         for (qunid, qbkey) in qbkey_children {
             let qdesc = Self::resolve(qbkey, env, qgm)?;
             qgm.metadata.add_tabledesc(qunid, qdesc);

@@ -328,7 +328,8 @@ impl ExprKey {
             }
         };
 
-        let retval = format!("{}: {:?}", retval, props.data_type());
+        //let retval = format!("{}: {:?}", retval, props.data_type());
+        let retval = format!("{}", retval);
         if do_escape {
             do_escape_fn(&retval)
         } else {

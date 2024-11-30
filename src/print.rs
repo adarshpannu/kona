@@ -304,7 +304,7 @@ impl QueryBlock {
 
         // Write referenced query blocks
         for qun in self.quns.iter().rev() {
-            if let Some(qbkey) = qun.get_qblock() {
+            if let Some(qbkey) = qun.get_qblock_key() {
                 let qblock = &qgm.qblock_graph.get(qbkey).value;
                 fprint!(file, "    \"{}\" -> \"{}_selectlist\";\n", qun.name(), qblock.name());
                 //qblock.write_qblock_to_graphviz(qgm, file)?

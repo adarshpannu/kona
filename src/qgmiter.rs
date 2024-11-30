@@ -27,7 +27,7 @@ impl<'a> Iterator for QueryBlockIter<'a> {
                 self.queue.append(&mut children.clone());
             }
             */
-            let mut children: Vec<QueryBlockKey> = qblocknode.quns.iter().filter_map(|qun| qun.get_qblock()).collect();
+            let mut children: Vec<QueryBlockKey> = qblocknode.quns.iter().filter_map(|qun| qun.get_qblock_key()).collect();
             self.queue.append(&mut children);
             return Some(qbkey);
         }
