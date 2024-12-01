@@ -129,16 +129,15 @@ impl HashAggContext {
         let hash_arr = Self::hash_chunk(&chunk, hash_agg);
         let split_arr = hash_arr.iter().map(|&hash_value| hash_value as usize % NSPLITS).collect::<Vec<_>>();
 
-        for ix in 0..chunk.len() {
-            let hash_value = hash_arr[ix];
-            let split_id = split_arr[ix];
+        for row_ix in 0..chunk.len() {
+            let hash_value = hash_arr[row_ix];
+            let split_id = split_arr[row_ix];
             let split = &mut self.splits[split_id];
 
-            let cmp_key = |key: &DataRow| -> bool { compare_key(&chunk, ix, key) };
-            let gen_key = || -> DataRow { build_key(&chunk, keylen, ix) };
-
-            // PERF TODO: Only allocate key if it's not in hash table
-            let entry = split.hash_map.find(hash_value as usize, cmp_key, gen_key, || Self::init_accumulators(hash_agg, &chunk, ix));
+            // Find/init the accumulators
+            let cmp_key = |key: &DataRow| -> bool { compare_key(&chunk, row_ix, key) };
+            let gen_key = || -> DataRow { build_key(&chunk, keylen, row_ix) };
+            let entry = split.hash_map.find(hash_value as usize, cmp_key, gen_key, || Self::init_accumulators(hash_agg, &chunk, row_ix));
             let do_init = matches!(entry, MyEntry::Inserted(_));
             if do_init {
                 continue;
@@ -158,18 +157,18 @@ impl HashAggContext {
                     }
                     (AggType::SUM, PhysicalType::Primitive(PrimitiveType::Int64)) => {
                         let primarr = array.downcast_ref::<PrimitiveArray<i64>>().unwrap();
-                        let cur_value = primarr.get(ix).unwrap();
+                        let cur_value = primarr.get(row_ix).unwrap();
                         let old_sum = acc.as_ref().map_or(0, |e| e.try_as_i64().unwrap());
                         *acc = Some(Int64(old_sum + cur_value));
                     }
                     (AggType::SUM, PhysicalType::Primitive(PrimitiveType::Float64)) => {
                         let primarr = array.downcast_ref::<PrimitiveArray<f64>>().unwrap();
-                        let cur_value = primarr.get(ix).unwrap();
+                        let cur_value = primarr.get(row_ix).unwrap();
                         acc.as_mut().unwrap().add_f64(cur_value);
                     }
                     (AggType::MAX | AggType::MIN, PhysicalType::Primitive(PrimitiveType::Int64)) => {
                         let primarr = array.downcast_ref::<PrimitiveArray<i64>>().unwrap();
-                        let cur_datum = primarr.get(ix).map(|ival| Int64(ival));
+                        let cur_datum = primarr.get(row_ix).map(|ival| Int64(ival));
                         if let Some(Int64(cur_int)) = cur_datum {
                             if let Some(Int64(acc_int)) = acc {
                                 if (agg_type == AggType::MAX) && (cur_int > *acc_int) {
@@ -188,7 +187,7 @@ impl HashAggContext {
                     }
                     (AggType::MAX | AggType::MIN, PhysicalType::Utf8) => {
                         let primarr = array.downcast_ref::<Utf8Array<i32>>().unwrap();
-                        let cur_datum = primarr.get(ix).map(|sval| Utf8(sval.to_string()));
+                        let cur_datum = primarr.get(row_ix).map(|sval| Utf8(sval.to_string()));
                         if let Some(Utf8(cur_str)) = cur_datum.as_ref() {
                             if let Some(Utf8(acc_str)) = acc {
                                 let cur_str = cur_str.as_str();
@@ -390,16 +389,16 @@ impl HashAggContext {
     }
 }
 
-fn compare_key(chunk: &ChunkBox, ix: usize, key: &DataRow) -> bool {
+fn compare_key(chunk: &ChunkBox, row_ix: usize, key: &DataRow) -> bool {
     let keylen = key.len();
     for (array, keydatum) in chunk.arrays().iter().take(keylen).zip(key.iter()) {
         let keydatum = keydatum.as_ref();
         let cmpstat = match array.data_type() {
             DataType::Utf8 => {
                 let basearr = array.as_any().downcast_ref::<Utf8Array<i32>>().unwrap();
-                let e = basearr.get(ix);
-                match (&e, &keydatum) {
-                    (Some(s1), Some(Utf8(s2))) => (s1 == s2),
+                let e = basearr.get(row_ix);
+                match (e, &keydatum) {
+                    (Some(s1), Some(Utf8(s2))) => (s1 == s2.as_str()),
                     (None, None) => true,
                     _ => false,
                 }
