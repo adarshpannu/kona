@@ -492,7 +492,8 @@ impl QGM {
                     let expected_partitioning = PartDesc { npartitions: 1, part_type: PartType::RAW };
 
                     let children = Some(vec![child_lop_key]);
-                    let props = LOPProps::new(quns, output_quncols, None, preds, expected_partitioning);
+                    let virtcols = qblock.select_list.iter().map(|ne| ne.expr_key).collect::<Vec<_>>();
+                    let mut props = LOPProps::new(quns, output_quncols, Some(virtcols), preds, expected_partitioning);
                     lop_graph.add_node_with_props(LOP::Aggregation { key_len }, props, children)
                 } else {
                     // Underlying aggregation input has multiple partitions. We aggregate in two steps.
